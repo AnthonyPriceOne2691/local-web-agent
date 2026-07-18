@@ -18,6 +18,8 @@ class RunConfig(BaseModel):
     respect_robots: bool = True
     capture_screenshots: Literal["auto", "always", "never"] = "auto"
     use_sitemap: Literal["auto", "always", "never"] = "auto"  # P2.5 (doc 21)
+    consent_handling: Literal["auto", "hide_only", "never"] = "auto"  # D-11 (doc 22)
+    consent_click: Literal["reject_first", "accept", "never"] = "reject_first"
 
 
 class Violation(BaseModel):

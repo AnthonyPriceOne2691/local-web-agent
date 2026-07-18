@@ -39,6 +39,22 @@ class PlaywrightSession:
     async def screenshot(self, path: str) -> None:
         await self._page.screenshot(path=path, type="png", animations="disabled", caret="hide")
 
+    async def eval_js(self, script: str):
+        return await self._page.evaluate(script)
+
+    async def click_first(self, selectors: list[str], *, timeout_ms: int) -> str | None:
+        deadline_per_sel = max(200, timeout_ms // max(len(selectors), 1))
+        for sel in selectors:
+            try:
+                locator = self._page.locator(sel).first
+                if await locator.is_visible(timeout=deadline_per_sel):
+                    await locator.click(timeout=deadline_per_sel)
+                    await self._page.wait_for_timeout(300)  # banner teardown settle
+                    return sel
+            except Exception:  # noqa: BLE001 — селектор мимо, пробуем следующий
+                continue
+        return None
+
     async def close(self) -> None:
         if self._browser:
             await self._browser.close()

@@ -29,7 +29,8 @@ hide_selectors:
   - "[id*='cookie-banner'], [class*='cookie-banner']"
   - "[id*='cookie-consent'], [class*='cookie-consent']"
   - "[aria-label*='cookie' i][role='dialog']"
-  unlock_scroll: true                # сброс overflow:hidden на html/body + удаление backdrop
+
+unlock_scroll: true                # сброс overflow:hidden на html/body + удаление backdrop
 
 click_selectors:
   # Ступень 2 (fallback): 1 попытка на САЙТ, timeout 2s. Порядок: reject → accept (если consent_click: accept).

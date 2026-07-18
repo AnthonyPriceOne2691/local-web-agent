@@ -46,6 +46,10 @@ class FakeBrowserSession:
         self.visited_log: list[str] = []
         self.screenshots: list[str] = []
         self.closed = False
+        # consent (D-11): очередь ответов detect-скрипта и результат click
+        self.consent_js_detects: list[bool] = []
+        self.consent_click_result: str | None = None
+        self.click_attempts: list[list[str]] = []
 
     async def start(self) -> None:  # pragma: no cover - trivial
         pass
@@ -70,6 +74,18 @@ class FakeBrowserSession:
     async def screenshot(self, path: str) -> None:
         Path(path).write_bytes(b"PNG")
         self.screenshots.append(path)
+
+    async def eval_js(self, script: str):
+        """Consent-скрипты (D-11): detect → сценарий из consent_js_detects, hide → True."""
+        if "getBoundingClientRect" in script:  # detect-скрипт
+            if self.consent_js_detects:
+                return self.consent_js_detects.pop(0)
+            return False
+        return True  # hide-скрипт
+
+    async def click_first(self, selectors: list[str], *, timeout_ms: int) -> str | None:
+        self.click_attempts.append(list(selectors))
+        return self.consent_click_result
 
     async def close(self) -> None:
         self.closed = True

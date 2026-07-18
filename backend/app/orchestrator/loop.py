@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import httpx
 
 from app.browser.base import BrowserSession
+from app.browser.consent import ConsentHandler
 from app.config import Settings
 from app.contracts import guards
 from app.contracts.context import ActionContext
@@ -73,6 +74,8 @@ class CrawlOrchestrator:
         self._hints = hints
         self._enforcer = enforcer or ContractEnforcer.load(settings.contracts_dir)
         self._synth_validator = SynthesisValidator.load(settings.contracts_dir)
+        self._consent = ConsentHandler.load(settings.navigation_dir)
+        self._consent_click_used = False  # 1 попытка click на сайт (D-11)
 
     # ------------------------------------------------------------------ run
     async def run(
@@ -311,6 +314,7 @@ class CrawlOrchestrator:
         spa_fallback = len(snapshot.main_text) < SPA_TEXT_THRESHOLD  # docs 03/22
         if mode == "never" or (mode == "auto" and not spa_fallback):
             return
+        await self._dismiss_consent(record, snapshot.url)  # D-11: перед скриншотом
         rel = f"screenshots/{step_index:03d}_desktop.png"
         path = self._store.artifacts_dir(record.id) / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -332,6 +336,21 @@ class CrawlOrchestrator:
             visited=visited, hops=hops, max_pages=record.config.max_pages,
             max_depth=record.config.max_depth, pages_visited=len(visited), robots=robots,
         )
+
+    async def _dismiss_consent(self, record: RunRecord, url: str) -> None:
+        """D-11: detect → hide → click(reject-first); статус в metadata (честность UC-1)."""
+        cfg = record.config
+        try:
+            status = await self._consent.dismiss(
+                self._browser, mode=cfg.consent_handling, click_mode=cfg.consent_click,
+                site_click_used=self._consent_click_used,
+            )
+        except Exception:  # noqa: BLE001 — consent не должен валить скриншот
+            status = "failed"
+        if status.startswith("clicked"):
+            self._consent_click_used = True
+        if status != "none":
+            record.metadata.setdefault("consent", {})[url] = status
 
     async def _plan_validated(
         self,
