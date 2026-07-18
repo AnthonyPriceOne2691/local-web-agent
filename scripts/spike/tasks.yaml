@@ -1,0 +1,56 @@
+# Phase 0 Part A — task manifest (doc 19 § Tasks, doc 06 Phase 0)
+# site: имя папки в tests/fixtures/sites/ (поднимается fixtures_server'ом автоматически)
+# expect: подстроки для авто-скоринга (ищутся в result JSON без учёта регистра)
+# real: true — реальные сайты, гоняются только с --include-real (сеть, ToS — вручную)
+
+tasks:
+  - id: 1
+    site: simple_contact
+    task: "Find the phone number for sales on the contact page"
+    intent_expected: contact
+    expect: ["+1 (555) 010-7788"]
+
+  - id: 2
+    site: pricing
+    task: "Find the price of the Pro plan"
+    intent_expected: pricing
+    expect: ["$29"]
+
+  - id: 2b
+    site: pricing
+    task: "Найди цену тарифа Pro и контакт для Enterprise"   # RU-задача — тест intent_keywords RU
+    intent_expected: pricing
+    expect: ["$29"]
+
+  - id: 6
+    site: geo_kontak
+    task: "Find the editorial contact email of this Indonesian news site"
+    intent_expected: contact
+    expect: ["redaksi@beritakita.example"]
+    note: "Контакт ТОЛЬКО на /page/kontak (не слинкован) — тест slug-словаря; llm-only должен буксовать (A/B task #7)"
+
+  - id: 8
+    site: spa_price
+    task: "Find the monthly price of the Team plan"
+    intent_expected: pricing
+    expect: ["$49"]
+    note: "Цена в CSS ::after — DOM-extraction её не видит. DOM-only должен дать not_found; DOM+vision (Phase 2) — найти. Пока меряем честность not_found"
+
+  # ----- реальные сайты (запускать с --include-real, выбрать свои) -----
+  - id: 3
+    real: true
+    url: "https://www.python.org/"
+    task: "Find the page describing how to contribute to CPython development"
+    expect: ["devguide"]
+
+  - id: 4
+    real: true
+    url: "https://playwright.dev/"
+    task: "Find the API documentation link for the Python version of this tool"
+    expect: ["playwright.dev/python"]
+
+  - id: 5
+    real: true
+    url: "https://ollama.com/"
+    task: "Find the URL of the model library / search page"
+    expect: ["ollama.com/library", "ollama.com/search"]

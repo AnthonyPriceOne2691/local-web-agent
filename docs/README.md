@@ -1,0 +1,84 @@
+# Design Documents Index
+
+Планирование проекта ведётся через design docs в этой папке. Код пишется только после закрытия Phase 0 benchmark (см. [06-mvp-phases.md](06-mvp-phases.md)).
+
+## Document map
+
+| Doc | Status | Description |
+|-----|--------|-------------|
+| [00-project-overview.md](00-project-overview.md) | ✅ **v0.3** | Two-layer arch; Research Chat UX |
+| [01-requirements.md](01-requirements.md) | ✅ **v0.4** | FR/NFR incl. FR-6; SSRF, cancel, D-12, hop depth |
+| [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
+| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.7** | Playwright; URL norm; redirect/landing policy; trafilatura |
+| [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
+| [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
+| [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.4** | Phases 0–4; model A/B; thermal |
+| [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
+| [12-session-storage.md](12-session-storage.md) | ✅ **v0.4** | runs + sessions; metadata_json; startup sweep |
+| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.6** | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
+| [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.4** | + Meta + Compare; swap mechanics; A/B |
+| [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.5** | + /sessions, cancel, 409, ollama_version |
+| [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.4.1** | Params: structured outputs, think; top-10 |
+| [17-ui-screens.md](17-ui-screens.md) | ✅ **v0.3.1** | Research Chat Flow 5 |
+| [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.2.1** | 500 LOC, SOLID, DRY, coverage; new fixtures |
+| [19-phase0-benchmark-results.md](19-phase0-benchmark-results.md) | ✅ **v1.0 DONE** | Все гейты ✅; qwen3 single-model рекомендация |
+| [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.2.1** | Token budget; non-Latin; compare N>3 |
+| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.6** | + content_search, sitemap P2.5, RU keywords |
+| [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
+| [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
+| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.3** | Multi-site chat, compare; partial failure |
+
+> Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
+
+## Project status
+
+| Phase | Status |
+|-------|--------|
+| Design docs | ✅ v0.5 review pass 2 (hop depth D-13, RU keywords, article candidates D-14, startup sweep, partial failure) + D-11 closed |
+| Phase 0 Benchmark | ✅ **DONE 2026-07-13** — все exit-критерии пройдены ([doc 19](19-phase0-benchmark-results.md) v1.0); хвосты: real re-check p50, qwen3 на real перед финалом D-2/D-3 |
+| **Phase 1 Agent loop** | 🔲 **Next** — гейт «код после Phase 0» открыт |
+| Phase 1 Agent loop | 🔲 |
+| Phase 2 Full MVP | 🔲 |
+| Phase 3 Research Agent | 🔲 |
+| Phase 4 Chat UI | 🔲 |
+
+## Conventions
+
+- Версия в шапке: `v0.x`
+- **Changelog** в конце каждого документа
+- Статусы: ✅ зафиксировано · 🔲 TBD · ❌ out of scope
+- Новые docs: `21-`, `22-`, … по мере необходимости
+
+## Review order (recommended)
+
+1. Overview → Requirements
+2. Architecture → Browser pipeline → **Context/token budget (20)**
+3. Crawl orchestrator → **Navigation hints (21)** → Extraction schema
+4. Behavioral contracts → MVP phases → **Vision (23)** → **Research Chat (24)** → Tech stack
+5. Benchmark results (19) — перед стартом Phase 1
+
+## Pending decisions
+
+| ID | Decision | Status |
+|----|----------|--------|
+| D-1 | Browser runtime | ✅ Playwright (Chromium headless, **async_api**) — **подтверждён Phase 0** (0 браузерных сбоев) |
+| D-2 | LLM planning + navigation | 🔶 **Phase 0 рекомендация: `qwen3:14b` (`think:false`)** — паритет с qwen2.5 + открывает single-model; финализировать после повтора на real-сайтах (doc 19 § A/B) |
+| D-3 | LLM structured extraction | 🔶 **Phase 0 рекомендация: `qwen3:14b` (`think:true`) — single-model split** (ноль свопов, −22–45% wall, synth 31–43 s vs 45–71 s у r1); r1:14b остаётся fallback |
+| D-4 | Observation mode MVP | ✅ DOM-first + screenshots (doc 22) |
+| D-5 | Interface Layer 1 | ✅ CLI + REST Phase 1–2 |
+| D-5b | Primary product UX | ✅ **Research Chat UI Phase 4** ([doc 24](24-research-chat-agent.md)) |
+| D-6a | Page screenshot capture | ✅ **CLOSED** ([doc 22](22-page-screenshots.md)) |
+| D-6b | Vision LLM on screenshots | ✅ **CLOSED + подтверждён Phase 0:** `qwen2.5vl:7b` — 5/5 рубрика, JSON 100%, p95 14.3 s ([doc 19](19-phase0-benchmark-results.md) Part B) |
+| D-7 | Multi-site execution | ✅ **CLOSED:** sequential queue only ([doc 24](24-research-chat-agent.md)) |
+| D-8 | Two-layer architecture | ✅ **CLOSED** ([doc 24](24-research-chat-agent.md)) |
+| D-9 | Chat as primary UX | ✅ **CLOSED** Phase 4 ([doc 24](24-research-chat-agent.md)) |
+| **D-10** | **Site navigation strategy** | ✅ **CLOSED:** hybrid hints + LLM top-K ([doc 21](21-navigation-hints.md), ref SEOLB) |
+| **D-11** | **Cookie-banner dismissal (design audit)** | ✅ **CLOSED:** detect → CSS-hide (default, без согласия) → CMP-click reject-first (fallback); Phase 1 honest capture ([doc 22](22-page-screenshots.md)) |
+| **D-12** | **API concurrency** | ✅ **CLOSED:** 1 активный crawl глобально; 409 на второй POST; startup sweep ([doc 15](15-api-cli-spec.md), [doc 12](12-session-storage.md)) |
+| **D-13** | **max_depth semantics** | ✅ **CLOSED:** hop depth (навигационные переходы), не сегменты URL — иначе UC-2/sitemap нерабочие ([doc 04](04-crawl-orchestrator.md) policy #2) |
+| **D-14** | **content_search: сколько статей искать** | ✅ **CLOSED:** до 3 кандидатов per site, R1 выбирает лучшую — «самая полная», не «первая найденная» ([doc 21](21-navigation-hints.md)) |
+
+## Reference
+
+- **Agent Behavioral Contracts:** Bhardwaj, arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) · локально: `/Users/anthony/Documents/2602.22302v1.pdf`
+- **Navigation hints (боевой референс):** Linkbuilding `CONTACT_SCRAPER_FALLBACK_DESIGN.md` (SEOLB-499) → [doc 21](21-navigation-hints.md)

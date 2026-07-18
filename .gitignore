@@ -1,0 +1,23 @@
+# Local data — not committed when populated
+data/runs/
+*.db
+
+# Phase 0 benchmark artifacts (сырые прогоны; выводы фиксируются в docs/19)
+scripts/spike/results/
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Env
+.env
+
+# Playwright
+playwright/.cache/
+
+# OS
+.DS_Store

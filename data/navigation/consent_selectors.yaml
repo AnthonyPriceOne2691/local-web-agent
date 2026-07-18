@@ -1,0 +1,49 @@
+# Cookie/consent banner handling — D-11 (doc 22): detect → hide → click(reject-first)
+# Используется детерминированным шагом оркестратора в OBSERVE (Phase 2), не LLM (doc 13).
+# Снапшот селекторов EasyList-Cookie-класса; обновлять руками по мере встречаемости.
+# version: "1.0"
+
+detect:
+  # DOM-эвристика ступени 0: fixed/sticky + z-index >= 1000 + покрытие > 25% viewport
+  # + любой из keywords в тексте/id/class элемента
+  keywords_en: [cookie, consent, gdpr, privacy preferences, we use cookies]
+  keywords_ru: [куки, cookie-файл, согласие, персональных данных]
+  keywords_other: [kuki, persetujuan]      # ID/MY GEO donors
+  min_viewport_coverage: 0.25
+  min_z_index: 1000
+
+hide_selectors:
+  # Ступень 1 (default): CSS `display:none !important` + снятие scroll-lock с html/body.
+  # Per-CMP containers
+  - "#onetrust-consent-sdk"          # OneTrust
+  - "#CybotCookiebotDialog"          # Cookiebot
+  - "#usercentrics-root"             # Usercentrics
+  - "#didomi-host, #didomi-popup"    # Didomi
+  - "#cmplz-cookiebanner-container"  # Complianz
+  - ".cc-window, .cc-banner"         # cookieconsent (osano old)
+  - "#cookiescript_injected"         # CookieScript
+  - ".qc-cmp2-container"             # Quantcast
+  - "#sp_message_container_*"        # Sourcepoint (substring match)
+  - ".fc-consent-root"               # Google Funding Choices
+  # Generic
+  - "[id*='cookie-banner'], [class*='cookie-banner']"
+  - "[id*='cookie-consent'], [class*='cookie-consent']"
+  - "[aria-label*='cookie' i][role='dialog']"
+  unlock_scroll: true                # сброс overflow:hidden на html/body + удаление backdrop
+
+click_selectors:
+  # Ступень 2 (fallback): 1 попытка на САЙТ, timeout 2s. Порядок: reject → accept (если consent_click: accept).
+  reject:
+    - "#onetrust-reject-all-handler"                       # OneTrust
+    - "#CybotCookiebotDialogBodyButtonDecline"             # Cookiebot
+    - "[data-testid='uc-deny-all-button']"                 # Usercentrics
+    - "#didomi-notice-disagree-button"                     # Didomi
+    - ".cmplz-deny"                                        # Complianz
+    - ".fc-cta-do-not-consent"                             # Funding Choices
+  accept:
+    - "#onetrust-accept-btn-handler"
+    - "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll"
+    - "[data-testid='uc-accept-all-button']"
+    - "#didomi-notice-agree-button"
+    - ".cmplz-accept"
+    - ".fc-cta-consent"

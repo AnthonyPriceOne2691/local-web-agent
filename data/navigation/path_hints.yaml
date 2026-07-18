@@ -1,0 +1,130 @@
+# Navigation path hints — slug dictionaries for site access
+# Source: battle-tested lists from SEOLB-499 / CONTACT_SCRAPER_FALLBACK_DESIGN.md (991 GEO donors)
+# Used by: backend/app/navigation/path_hints.py (Phase 1)
+# version: "1.0"
+
+contact:
+  # English / generic
+  - /contact
+  - /contact-us
+  - /contactus
+  - /contacts
+  - /get-in-touch
+  - /support
+  # European
+  - /kontakt
+  - /kontak
+  - /impressum
+  - /contacto
+  # Indonesian / Malay
+  - /hubungi-kami
+  - /hubungi
+  - /tentang-kami
+  - /page/kontak
+  - /redaksi
+  # Spanish / Portuguese
+  - /contato
+  - /fale-conosco
+  # Arabic (URL-encoded paths also matched by substring)
+  - /اتصل
+  - /contact-us-ar
+  # Thai
+  - /ติดต่อ
+
+contact_legal:
+  # Operator / data-controller contact — boost ONLY when task intent=contact
+  - /terms
+  - /terms-of-service
+  - /terms-and-conditions
+  - /privacy
+  - /privacy-policy
+  - /disclaimer
+  - /user-agreement
+  - /legal
+  - /dmca
+  - /syarat-ketentuan
+  - /kebijakan-privasi
+  - /syarat
+  - /ketentuan
+  - /الشروط-والأحكام
+
+about:
+  - /about
+  - /about-us
+  - /company
+  - /team
+  - /our-team
+  - /who-we-are
+  - /tentang-kami
+  - /impressum
+
+pricing:
+  - /pricing
+  - /plans
+  - /prices
+  - /packages
+  - /subscribe
+  - /enterprise
+
+careers:
+  - /careers
+  - /jobs
+  - /work-with-us
+  - /join-us
+  - /vacancies
+
+docs:
+  - /docs
+  - /documentation
+  - /developers
+  - /developer
+  - /api
+  - /help
+
+commercial:
+  - /advertise
+  - /advertising
+  - /iklan
+  - /media-kit
+  - /partners
+
+blog:
+  # content_search intent (UC-2 — find article); sitemap tier дополняет (doc 21 P2.5)
+  - /blog
+  - /articles
+  - /article
+  - /news
+  - /guides
+  - /guide
+  - /resources
+  - /insights
+  # Indonesian / Malay
+  - /berita
+  - /artikel
+  # Spanish / Portuguese
+  - /noticias
+  - /articulos
+  # Russian
+  - /stati
+  - /novosti
+
+# Intent keyword hints (used by intent.py — not URL paths)
+# Matching: casefold + substring («вакансии» матчится по «ваканс»).
+# RU-ключи обязательны: задачи пользователя формулируются по-русски (UC-1/UC-2, doc 24).
+intent_keywords:
+  contact: [contact, email, phone, sales, support, reach, write us, redaksi, hubungi,
+            контакт, почт, email, телефон, связаться, написать, продаж, поддержк]
+  pricing: [pricing, price, plan, enterprise, cost, subscription,
+            цена, цены, тариф, прайс, стоимост, подписк, план]
+  about: [about, team, company, who we are,
+          о нас, о компании, команда, кто мы]
+  careers: [jobs, careers, hiring, vacancy, work with us,
+            ваканс, работа у нас, найм, карьер]
+  docs: [documentation, docs, api, developer, guide,
+         документац, апи, разработчик]
+  design_audit: [design, layout, colors, fonts, ui, visual, look and feel,
+                 дизайн, вёрстк, верстк, макет, цвет, шрифт, внешний вид, выгляд]
+  site_map: [map site, page types, site structure, all pages, sections,
+             структура сайта, карта сайта, раздел, типы страниц]
+  content_search: [article, blog, guide, post, betting,
+                   статья, статьи, блог, гайд, пост, найди текст, ставки, обзор]

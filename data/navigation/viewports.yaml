@@ -1,0 +1,35 @@
+# Viewport profiles for page screenshots (and optional browse context)
+# Used by: backend/app/browser/viewports.py
+# version: "1.0"
+
+# Navigation (DOM + LLM) always uses `desktop` — stable link layout.
+# Screenshots may capture multiple profiles per OBSERVE (doc 22).
+
+desktop:
+  width: 1440
+  height: 900
+  device_scale_factor: 1
+  is_mobile: false
+  has_touch: false
+  # user_agent: default Chromium desktop (Playwright default)
+
+tablet:
+  width: 834
+  height: 1194
+  device_scale_factor: 2
+  is_mobile: false
+  has_touch: true
+  user_agent: "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+mobile:
+  width: 390
+  height: 844
+  device_scale_factor: 3
+  is_mobile: true
+  has_touch: true
+  user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+# Presets for screenshot_viewports config
+presets:
+  desktop_only: [desktop]
+  all: [desktop, tablet, mobile]

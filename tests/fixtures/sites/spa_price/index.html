@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>FlowDesk</title>
+<style>
+  /* Цена задана через CSS-контент: НЕ попадает в innerText/DOM-extraction,
+     но видна на скриншоте — фикстура для doc 19 task #8 (DOM-only vs DOM+vision). */
+  .price::after { content: "$49/mo"; font-size: 42px; font-weight: 700; color: #0f766e; }
+  .plan-name::after { content: "FlowDesk Team plan"; font-size: 20px; color: #333; }
+  body { font-family: -apple-system, sans-serif; margin: 40px; }
+  .card { border: 1px solid #ddd; border-radius: 12px; padding: 32px; width: 360px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="card">
+    <div class="plan-name"></div>
+    <div class="price"></div>
+    <div class="cta"></div>
+  </div>
+</div>
+<script>
+  // Минимальный JS-рендер: кнопка появляется после задержки (SPA-паттерн).
+  setTimeout(function () {
+    document.querySelector('.cta').innerHTML = '<button>Start free trial</button>';
+  }, 800);
+</script>
+</body>
+</html>
