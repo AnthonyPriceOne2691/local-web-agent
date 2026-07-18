@@ -1,6 +1,6 @@
 # 21 — Navigation Hints (deterministic site access)
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-05  
+> Local Web Agent · Design doc · **v0.7** · 2026-07-18
 > **Референс (боевой опыт):** Linkbuilding CRM — [CONTACT_SCRAPER_FALLBACK_DESIGN.md](../../../Shared%20Works/internal/seo/hide-linkbuilding-application-crm/Linkbuilding%20Automatization%20P/docs/CONTACT_SCRAPER_FALLBACK_DESIGN.md) (SEOLB-499, прогон 991 GEO-донора, 2026-07-03/04)
 
 ## Назначение
@@ -346,3 +346,4 @@ Gate: hints mode ≤ same pages, ≥ same success on localized fixtures.
 | 2026-07-05 | **v0.4:** content_search intent; research intents Layer 2 (doc 24) |
 | 2026-07-05 | **v0.5 (review):** Sitemap tier P2.5 (robots `Sitemap:` → CandidateQueue) — закрывает пагинацию/infinite-scroll для UC-2; page_budget = max_pages (уточнение); RSS и site-search probe в backlog; `blog:` slugs добавлены в path_hints.yaml |
 | 2026-07-05 | **v0.6 (review-2):** RU+EN intent keywords (casefold+substring, стемы) — EN-only роняло русские задачи в generic; hop depth для slug/sitemap кандидатов (D-13); content_search — до 3 article candidates вместо первой попавшейся |
+| 2026-07-18 | **v0.7 (Phase 2 exit-бенчмарк):** docs-класс расширен на contributor-страницы — keywords `develop`/`contribut` (стемы: developer/development/contribute/contributing) + RU `разработ`/`вклад`, slugs `/dev`, `/contribute`, `/contributing` (кейс python.org: «contribute to CPython development» падал в generic). Sitemap P2.5 и полный F1 tier реализованы; стоп-слова task-keywords для sitemap-фильтра (about/find/article… не сигнал в `<loc>`) |

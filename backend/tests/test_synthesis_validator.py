@@ -69,6 +69,51 @@ def test_vision_only_high_downgraded_sh6(validator):
     assert out.facts[0].confidence == "medium"
 
 
+def test_vision_quote_not_in_dom_survives_sh3b(validator):
+    """S-H3b: vision-цитата (текст со скриншота, в DOM отсутствует) не режется S-H3."""
+    fact = Fact(key="price", value="$49/mo", confidence="high",
+                evidence=[Evidence(url=URL, quote="Team $49/mo", source="vision")])
+    out = validator.validate(ExtractionResult(facts=[fact]), _snapshots())
+    assert out.facts and out.facts[0].value == "$49/mo"
+    assert out.facts[0].confidence == "medium"  # S-H6: vision-only ≠ high
+    assert out.facts[0].evidence  # evidence сохранён
+    assert not out.not_found
+
+
+def test_dom_quote_matching_vision_reclassified(validator):
+    """Модель не поставила source=vision — цитата из vision-инсайта переклассифицируется."""
+    snap = PageSnapshot(url=URL, title="SPA", main_text="tiny",
+                        vision_insights=[{"status": "ok", "profile": "desktop",
+                                          "description": "Team plan card shows $49/month",
+                                          "extracted": [{"key": "team_price",
+                                                         "value": "$49/month"}]}])
+    fact = Fact(key="price", value="$49/month", confidence="high",
+                evidence=[Evidence(url=URL, quote="Team plan $49/month", source="dom")])
+    out = validator.validate(ExtractionResult(facts=[fact]), [snap])
+    assert out.facts and out.facts[0].evidence[0].source == "vision"  # reclass S-H3b
+    assert out.facts[0].confidence == "medium"  # S-H6 после reclass
+    assert not out.not_found
+
+
+def test_url_fact_survives_as_self_evidence_sh3c(validator):
+    """S-H3c: value = URL посещённой страницы; провал цитаты → medium, не смерть."""
+    snap = PageSnapshot(url="https://x.com/search", title="Search",
+                        main_text="model cards grid")
+    fact = Fact(key="search_url", value="The search page is https://x.com/search",
+                confidence="high",
+                evidence=[Evidence(url="https://x.com/search",
+                                   quote="totally paraphrased nonsense quote")])
+    out = validator.validate(ExtractionResult(facts=[fact]), [snap])
+    assert out.facts and out.facts[0].confidence == "medium"
+    assert out.facts[0].evidence[0].url == "https://x.com/search"
+    assert not out.not_found
+    # негатив: URL НЕ из visited → факт по-прежнему режется
+    bad = Fact(key="u", value="see https://x.com/invented-page", confidence="high",
+               evidence=[Evidence(url="https://x.com/search", quote="nonsense")])
+    out = validator.validate(ExtractionResult(facts=[bad]), [snap])
+    assert not out.facts and out.not_found
+
+
 def test_facts_truncated_to_contract_max(validator):
     facts = [_fact("Call us at +1 555 123 4567", key=f"k{i}", confidence="medium")
              for i in range(25)]

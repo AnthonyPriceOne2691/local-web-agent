@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8001
 
-    # LLM (канон doc 16; single-model qwen3 — рекомендация Phase 0, doc 19:
-    #   LWA_NAV_MODEL=qwen3:14b LWA_SYNTH_MODEL=qwen3:14b)
+    # LLM (канон doc 16 v0.5: qwen3:14b single-model — D-2/D-3 closed 2026-07-18;
+    #   fallback-пара: LWA_NAV_MODEL=qwen2.5:14b-instruct LWA_SYNTH_MODEL=deepseek-r1:14b)
     ollama_url: str = "http://localhost:11434"
-    nav_model: str = "qwen2.5:14b-instruct"
-    synth_model: str = "deepseek-r1:14b"
+    nav_model: str = "qwen3:14b"
+    synth_model: str = "qwen3:14b"
     nav_num_ctx: int = 8192
     synth_num_ctx: int = 16384
     nav_max_tokens: int = 400

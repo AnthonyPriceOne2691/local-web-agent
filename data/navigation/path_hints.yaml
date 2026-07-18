@@ -78,6 +78,9 @@ docs:
   - /documentation
   - /developers
   - /developer
+  - /dev
+  - /contribute
+  - /contributing
   - /api
   - /help
 
@@ -120,8 +123,8 @@ intent_keywords:
           о нас, о компании, команда, кто мы]
   careers: [jobs, careers, hiring, vacancy, work with us,
             ваканс, работа у нас, найм, карьер]
-  docs: [documentation, docs, api, developer, guide,
-         документац, апи, разработчик]
+  docs: [documentation, docs, api, develop, contribut, guide,
+         документац, апи, разработ, вклад]
   design_audit: [design, layout, colors, fonts, ui, visual, look and feel,
                  дизайн, вёрстк, верстк, макет, цвет, шрифт, внешний вид, выгляд]
   site_map: [map site, page types, site structure, all pages, sections,

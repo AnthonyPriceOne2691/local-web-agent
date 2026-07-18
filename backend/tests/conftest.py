@@ -18,6 +18,22 @@ def tmp_store(tmp_path: Path) -> SqliteRunStore:
     return SqliteRunStore(tmp_path / "runs")
 
 
+@pytest.fixture(autouse=True)
+def _no_network_probes(monkeypatch):
+    """Юниты оркестратора не ходят в сеть: slug-пробы отключены — иначе результаты
+    зависят от параллельно запущенного fixtures-сервера на 8901+ (флак)."""
+    from app.orchestrator import loop as loop_mod
+
+    async def no_probes(client, origin, slugs):  # noqa: ARG001
+        return [], []
+
+    async def no_legal(client, origin, slugs, cache, timeout_s=4.0):  # noqa: ARG001
+        return []
+
+    monkeypatch.setattr(loop_mod, "probe_slugs_f1", no_probes)
+    monkeypatch.setattr(loop_mod, "filter_alive", no_legal)
+
+
 @pytest.fixture(scope="session")
 def hints() -> PathHints:
     return PathHints.load(REPO_ROOT / "data" / "navigation")

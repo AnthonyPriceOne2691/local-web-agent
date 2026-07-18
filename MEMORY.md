@@ -1,17 +1,24 @@
 # MEMORY — состояние проекта
 
 > Снапшот для новых сессий Claude Code (обновлять при значимых вехах; история — в git).
-> Обновлено: **2026-07-18** (вечер), Phase 2 code complete.
+> Обновлено: **2026-07-18** (ночь), Phase 2 ✅ DONE (exit-бенчмарк прогнан).
 
 ## Где мы
 
 | Веха | Статус |
 |------|--------|
-| Design docs (22 шт., два review-прохода) | ✅ решения D-1..D-14 закрыты/зафиксированы в [docs/README.md](docs/README.md) |
-| Phase 0 benchmark | ✅ **DONE 2026-07-13** — все exit-критерии ([docs/19](docs/19-phase0-benchmark-results.md) v1.0) |
+| Design docs (22 шт.) | ✅ **все решения D-1..D-14 закрыты** (D-2/D-3 → qwen3:14b single-model по бенчмарку) |
+| Phase 0 benchmark | ✅ **DONE 2026-07-13** ([docs/19](docs/19-phase0-benchmark-results.md) v1.0) |
 | Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** — backend+CLI+prompts, E2E 3/3 |
-| **Phase 2 Full MVP** | 🟡 **CODE COMPLETE 2026-07-18** — 93 теста, cov 94%; до закрытия — ручные прогоны (ниже) |
-| Phase 3 Research Agent | 🔲 next после закрытия Phase 2 |
+| **Phase 2 Full MVP** | ✅ **DONE 2026-07-18** — exit-бенчмарк 4/5 (гейт 80%), 7/8 с бонусами; vision E2E ✅; PLAN p50 7.9 s ≤ 8 s; 96 тестов, cov 93% ([doc 06](docs/06-mvp-phases.md) § Phase 2 — таблица результатов) |
+| **Phase 3 Research Agent** | 🔲 **NEXT** — ComparisonResult, compare synthesizer, meta-agent, sessions (doc 06/24) |
+
+## Phase 2 exit-бенчмарк (2026-07-18, qwen3:14b single-model + qwen2.5vl:7b)
+
+- Фикстуры 5/5: phone ✅ · Pro price ✅ · RU-задача ✅ · GEO-слаг `/page/kontak` ✅ · **vision #8 ✅ ($49 из CSS ::after — DOM не видит, VLM находит, merged `source: vision, medium`)**.
+- Real: playwright.dev ✅ (python API docs, high) · ollama.com ✅ (`/search`, S-H3c URL-факт) · python.org ❌ known-fail (intent docs срабатывает, `/dev`-проба в очереди, но LLM уходит в docs.python.org листать версии; честный not_found; backlog: аннотация проб интентом, penalty версионных ссылок).
+- PLAN p50 **7.9 s** (28 вызовов; gate ≤8 doc 20 взят чисто); p95 11.6 s — выше NFR-1.2 (10 s) только на real-страницах → хвост тюнинга doc 20. Synth max 95.9 s (python.org) vs 203 s в Phase 0.
+- Бенчмарк поймал 3 прод-бага (все починены + юниты): S-H3b vision-цитаты резались DOM-проверкой → reclass через `token_set_ratio`; S-H3c URL-факты убивались без цитаты → визит = self-evidence (cap medium); флак юнитов при живом fixtures-сервере → autouse-мок проб в conftest.
 
 ## Phase 2 — что построено (поверх Phase 1)
 
@@ -27,20 +34,19 @@
 - **Markdown report** (`reporting/markdown.py`, doc 05): Findings/Design/Not found/Appendix → `artifacts/{id}/report.md`.
 - RunConfig новое: `use_sitemap`, `consent_handling`, `consent_click`, `vision_enabled`, `allow_private`.
 
-## Хвосты до закрытия Phase 2 (ручные, нужны реальные LLM)
+## Открытые хвосты (не блокеры; Phase 3 может идти)
 
-1. **5-task benchmark ≥80%** (suite Phase 0) на Phase 2-коде — exit-критерий #2 doc 06.
-2. **E2E на fixture-сервере** (3 сценария Phase 1 + vision/sitemap кейсы) с реальными моделями.
-3. **PLAN p50 ≤8s re-check** чисто, без параллельной закачки (gate doc 20).
-4. qwen3 single-model на real-сайтах — финализация D-2/D-3 (из Phase 0).
-5. Synth 203s на python.org — тюнинг токен-бюджета (doc 20).
+1. **p95 PLAN 11.6 s vs NFR-1.2 10 s** на real-страницах — тюнинг сниппетов/бюджета (doc 20).
+2. **python.org contribute-кейс** — backlog: аннотация slug-проб интентом в candidate-списке, penalty версионных ссылок (doc 06 § Phase 2 таблица).
+3. doc 14 (model split) ещё описывает пару qwen2.5+r1 как канон — выровнять с doc 16 v0.5 (single-model) при ближайшей правке.
+4. `--vision always` профили-таблица doc 21/23 реализована частично: viewports.yaml multi-viewport capture (tablet/mobile) не подключён к _maybe_screenshot (сейчас desktop-only + SPA fallback) — уточнить в Phase 3 design-audit работах.
 
 ## Окружение
 
-- **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. После работы — выгружать (`ollama ps` пуст).
-- **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz теперь установлен) и корневой `.venv` (spike).
+- **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. **Дефолт кода: qwen3:14b (nav+synth)**. После работы — выгружать (`ollama ps` пуст).
+- **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike).
 - **Порты**: API 8001 · fixtures 8901–8904 · Ollama 11434.
-- Гейты перед коммитом: `pytest` (93) · `ruff check app tests ../cli` · `check_module_size.py`.
+- Гейты перед коммитом: `pytest` (96) · `ruff check app tests ../cli` · `check_module_size.py`.
 
 ## Gotchas
 
@@ -48,7 +54,7 @@
 - qwen3 в Ollama думает по умолчанию — для nav обязательно `think: false`.
 - Ollama-демон между сессиями может умереть — проверять `/api/version`; `ollama pull` flaky (EOF) — ретраить.
 - Тесты не должны трогать реальную `data/runs` — фикстуры используют `Settings(runs_dir_override=tmp_path)`; SqliteRunStore при создании **мигрирует** JSON-файлы из каталога.
-- Оркестратор-юниты с публичным origin обязаны мокать `probe_slugs_f1`/`filter_alive`/`RobotsPolicy.load` — иначе реальная сеть.
+- Slug-пробы в юнитах отключены autouse-фикстурой `_no_network_probes` (conftest) — иначе живой fixtures-сервер на 8901 менял поведение тестов (флак). RobotsPolicy.load для public-origin тестов мокать точечно.
 - FakeOllama отдаёт ответы по очереди: vision batch на SPA-фикстурах съедает свой reply — считать порядок (nav → vision → synth).
 - step_index в steps неуникален (OBSERVE и ACT одного шага) — SQLite PK (run_id, seq).
 - Фикстурные сайты: каждый на своём порту = свой origin.

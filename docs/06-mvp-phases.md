@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-18
+> Local Web Agent · Design doc · **v0.6** · 2026-07-18
 
 ## Engineering standards (все фазы)
 
@@ -100,7 +100,20 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 ## Phase 2 — Full MVP
 
-**Status: 🟡 CODE COMPLETE (2026-07-18)** — все deliverables реализованы и покрыты юнитами (93 теста, coverage: contracts 95–100%, orchestrator ~94%, backend 94%). До закрытия фазы — ручные exit-прогоны с реальными LLM: 5-task benchmark (см. ниже), E2E на fixture-сервере, re-check PLAN p50 (gate doc 20).
+**Status: ✅ DONE (2026-07-18)** — все deliverables реализованы (96 тестов, coverage: contracts 95–100%, orchestrator ~94%, backend 93%), exit-бенчмарк прогнан на реальных LLM (qwen3:14b single-model + qwen2.5vl:7b vision):
+
+| Task | Результат |
+|------|-----------|
+| #1 phone (fixture) | ✅ high + цитата, 2 стр., 65 s |
+| #2 Pro price (fixture) | ✅ high, 1 стр., 43 s |
+| #2b RU-задача (fixture) | ✅ оба аспекта ($29 + enterprise email), 46 s |
+| #6 GEO slug `/page/kontak` (fixture) | ✅ через F1-пробу, 2 стр., 85 s |
+| **#8 SPA price в CSS (vision)** | ✅ **$49/mo через VISION_BATCH** — DOM не видит, VLM находит, merged `source: vision, medium` (S-H6) |
+| #4 playwright.dev (real) | ✅ `…/python/docs/api/…`, high, 3 стр., 90 s |
+| #5 ollama.com (real) | ✅ `ollama.com/search` (S-H3c URL-факт), 2 стр., 84 s |
+| #3 python.org (real) | ❌ known-fail: intent docs теперь срабатывает и `/dev`-проба в очереди, но LLM уходит в docs.python.org и листает версии; честный not_found. Backlog: аннотация проб интентом, penalty версионных ссылок |
+
+**Формальная пятёрка (#1–#5): 4/5 = 80% — гейт взят.** С #6/#8: 7/8. PLAN p50 **7.9 s ≤ 8 s** чисто (gate doc 20; Phase 0 мерил 10–11 s при фоновом pull); p95 11.6 s (NFR-1.2 цель 10 s — превышение только на real-страницах с тяжёлыми сниппетами, зафиксировано как хвост тюнинга doc 20). Synth max 95.9 s на python.org против 203 s в Phase 0 (−53%). Бенчмарк поймал и починил 3 продовых бага: S-H3b (vision-цитаты резались DOM-проверкой → reclass через token_set_ratio), S-H3c (URL-факты убивались без цитаты → визит = self-evidence, cap medium), флак юнитов от живого fixtures-сервера (autouse-мок проб).
 
 **Goal:** production-quality solo tool — contracts, SQLite, robots.txt, reports.
 
@@ -123,12 +136,12 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 **Exit criteria (MVP definition of done):**
 1. ✅ CLI crawl with full guardrails
-2. 🔲 5-task benchmark ≥ **80%** success (reuse Phase 0 suite) — **ручной прогон с реальными LLM**
+2. ✅ 5-task benchmark ≥ **80%** success — 4/5 (таблица выше), 2026-07-18
 3. ✅ Every fact has evidence or explicit not_found (S-H2/S-H3 fuzzy + S-G1)
 4. ✅ robots.txt respected
 5. ✅ All local, no cloud API
 6. ✅ Contract Enforcer blocks form submit / external URL
-7. ✅ Vision batch: PNG → VLM → merged in ExtractionResult (mock-tested; real VLM — в ручном прогоне)
+7. ✅ Vision batch: PNG → VLM → merged in ExtractionResult — подтверждён реальным qwen2.5vl (task #8: CSS-цена)
 
 **Engineering exit criteria:**
 - [x] Coverage: contracts ≥ 95%, orchestrator ≥ 90%, backend ≥ **85%** (факт: 95–100 / ~94 / 94)
@@ -229,3 +242,4 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-05 | **v0.3:** Phase 3 Research Agent (doc 24); Phase 4 Chat UI; Phase 5+ backlog |
 | 2026-07-05 | **v0.4 (review):** Phase 0 tasks #10 (nav model A/B) + #11 (sustained/thermal); Phase 1 + run lock и I-H8/I-H9; Phase 2 + sitemap/cookie-dismiss/cancel; риски: cookie walls, swap overhead, thermal; backlog: phase-batched, RSS, prune |
 | 2026-07-18 | **v0.5:** Phase 2 CODE COMPLETE — все deliverables реализованы (SQLite v0.5, enforcer v0.7 + drift, S-H3 fuzzy, cancel, sitemap P2.5, F1 полный, early stop G-S1, cookie-dismiss D-11, vision batch, markdown report, --allow-private); engineering exit взят (93 теста, cov 94%); осталось: ручные exit-прогоны с реальными LLM (5-task benchmark, E2E fixtures, PLAN p50 doc 20) |
+| 2026-07-18 | **v0.6: Phase 2 ✅ DONE** — exit-бенчмарк на реальных LLM: 4/5 формальной пятёрки (80%), 7/8 с #6/#8; vision E2E подтверждён (#8 CSS-цена через qwen2.5vl); PLAN p50 7.9 s ≤ 8 s чисто; synth python.org 95.9 s (−53% vs Phase 0). Починены по итогам: S-H3b vision-reclass, S-H3c URL-факты (doc 13 v0.7.1), synthesizer-промпт vision-aware (doc 16), docs-словарь + develop/contribut (doc 21); #3 python.org — known-fail (backlog: аннотация проб) |

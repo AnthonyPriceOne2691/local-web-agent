@@ -1,6 +1,6 @@
 # 16 — Prompts Library
 
-> Local Web Agent · Design doc · **v0.4.1** · 2026-07-05  
+> Local Web Agent · Design doc · **v0.5** · 2026-07-18  
 > **Канон LLM parameters** — этот документ. Doc 07 зеркалит.
 
 **Не храним тексты промптов в design docs.** Только: какие файлы, за что отвечают, variables, ссылка на output schema. Рабочие тексты — в `data/prompts/` при реализации (итерация через Phase 0/1 spike).
@@ -37,16 +37,17 @@ Reload: on each run start (no restart required in dev).
 > **R1 + format=json несовместимы со strip_thinking:** constrained decoding заставляет JSON с первого токена и **подавляет thinking-фазу** — теряется смысл reasoning-модели. Для R1: `format` не задаём, `think: true` (Ollama ≥ 0.9 отдаёт рассуждения отдельным полем `message.thinking`), JSON парсим из `content`; `strip_thinking()` — fallback для утечек `<think>`.
 
 ```yaml
-navigation:    # PLAN step → qwen2.5:14b-instruct
-  model: qwen2.5:14b-instruct
+navigation:    # PLAN step → qwen3:14b single-model (D-2 closed 2026-07-18; fallback qwen2.5:14b-instruct)
+  model: qwen3:14b
+  think: false                      # qwen3 в Ollama думает по умолчанию — для nav выключать
   num_ctx: 8192
-  temperature: 0.4
+  temperature: 0.4                  # drift auto-tighten → 0.2 (doc 13)
   max_tokens: 400
   stream: false
   format: schema:AgentAction        # JSON Schema constrained (doc 04)
 
-synthesis:     # SYNTHESIZE → deepseek-r1:14b
-  model: deepseek-r1:14b
+synthesis:     # SYNTHESIZE → qwen3:14b single-model (D-3 closed; fallback deepseek-r1:14b)
+  model: qwen3:14b
   num_ctx: 16384
   temperature: 0.2
   max_tokens: 4096
@@ -176,3 +177,4 @@ Image: Ollama `images[]`, not in Jinja template.
 | 2026-07-05 | **v0.3:** removed prompt body text from design; outlines + variables only |
 | 2026-07-05 | **v0.4 (review):** structured outputs (JSON Schema в `format`) для nav/meta/vision; конфликт `format:json`×`strip_thinking` у R1 устранён → `think:true` + отдельное поле thinking; vision fallback → gemma3:12b; compare num_ctx 24576 при N>3; правило языка ответа |
 | 2026-07-05 | **v0.4.1 (review-2):** navigator links = top-10 candidates (было 15 — рассинхрон с docs 04/21) |
+| 2026-07-18 | **v0.5 (Phase 2 exit-бенчмарк):** synthesizer_system — vision-aware: evidence получил поле `source: dom\|vision`, правило «факт только из VISION-блока → source: vision»; добавлены prod-промпты `vision_system.txt` + `vision_user.j2` (doc 23); **канон nav/synth → `qwen3:14b` single-model** (D-2/D-3 closed по бенчмарку doc 06 v0.6; пара qwen2.5+r1 — fallback) |
