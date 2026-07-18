@@ -21,3 +21,7 @@ playwright/.cache/
 
 # OS
 .DS_Store
+
+# Coverage artifacts
+.coverage
+coverage.xml
