@@ -20,6 +20,12 @@ class RobotsPolicy:
             return True
         return self._parser.can_fetch(USER_AGENT, url) and self._parser.can_fetch("*", url)
 
+    def sitemaps(self) -> list[str]:
+        """Sitemap-директивы robots.txt (doc 21 P2.5)."""
+        if self._parser is None:
+            return []
+        return list(self._parser.site_maps() or [])
+
     @classmethod
     async def load(cls, origin: str, *, respect: bool) -> RobotsPolicy:
         host = (urlparse(origin).hostname or "").lower()

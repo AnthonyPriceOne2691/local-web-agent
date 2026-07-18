@@ -22,7 +22,8 @@ from app.llm.synthesizer import Synthesizer
 from app.navigation.candidate_queue import build_candidates
 from app.navigation.intent import classify_intent
 from app.navigation.path_hints import PathHints
-from app.navigation.probes import filter_alive
+from app.navigation.probes import filter_alive, probe_slugs_f1
+from app.navigation.sitemap import fetch_sitemap_candidates, sitemap_enabled
 from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.robots import RobotsPolicy
@@ -37,6 +38,9 @@ SPA_TEXT_THRESHOLD = 200
 DRIFT_HARD_FOR_LOW_TEMP = 3   # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
 DRIFT_IH6_FOR_TOP5 = 2        # fabricated URL ≥ 2 → shrink candidate list to top 5
 DRIFT_MIN_RECOVERIES = 2      # recovery success < 50% (при ≥2 попытках) → fallback-only
+# G-S1 early stop: «релевантный» кандидат = сигнальный тег, не shallow-бонус
+RELEVANT_TAGS = ("slug", "task-kw", "homepage+intent", "probe", "sitemap", "legal-contact")
+EARLY_STOP_STALE_PAGES = 3
 
 
 def _now() -> str:
@@ -103,13 +107,17 @@ class CrawlOrchestrator:
                 self._enforcer.effective_rate_ms(cfg.rate_limit_ms, cfg.start_url),
                 int(robots.crawl_delay_s * 1000),
             )
-            alive_probes, legal_probes = await self._probe_slugs(record.intent, origin)
+            alive_probes, legal_probes, probe_links = await self._probe_slugs(record.intent, origin)
+            sitemap_urls = await self._sitemap_urls(record, origin, robots)  # P2.5
             await self._browser.start()
 
             current: PageSnapshot | None = None
             next_url: str | None = normalize_url(cfg.start_url)
             extract_streak = 0
             step_index = 0
+            stale_pages = 0  # G-S1 early stop
+            seen_relevant: set[str] = set()
+            just_visited = False
 
             canceled = False
             while step_index < cfg.max_pages * 2:
@@ -129,6 +137,7 @@ class CrawlOrchestrator:
                             break
                         continue
                     current, origin = nav
+                    just_visited = True
                     visited.add(current.url)
                     snapshots.append(current)
                     homepage = homepage or current
@@ -147,8 +156,23 @@ class CrawlOrchestrator:
                     snapshot=current, homepage=homepage, intent=record.intent, task=cfg.task,
                     hints=self._hints, origin=origin, visited=visited,
                     alive_probes=alive_probes, legal_probes=legal_probes,
+                    sitemap_urls=sitemap_urls, probe_links=probe_links,
                     top_k=self._s.top_k_candidates,
                 )
+                if just_visited:  # G-S1: 3 страницы без новых релевантных ссылок → SYNTHESIZE
+                    just_visited = False
+                    fresh = {
+                        normalize_url(c.href) for c in candidates
+                        if any(tag in c.reason for tag in RELEVANT_TAGS)
+                    } - seen_relevant
+                    if fresh:
+                        stale_pages = 0
+                        seen_relevant |= fresh
+                    else:
+                        stale_pages += 1
+                        if stale_pages >= EARLY_STOP_STALE_PAGES:
+                            record.metadata["early_stop"] = "G-S1: no new relevant links on 3 pages"
+                            break
                 pages_left = cfg.max_pages - len(visited)
                 action, step_violations, llm_stats = await self._plan_validated(
                     record, current, candidates, visited, hops, origin, pages_left, robots,
@@ -213,16 +237,29 @@ class CrawlOrchestrator:
         return record
 
     # ------------------------------------------------------------ internals
-    async def _probe_slugs(self, intent: str, origin: str) -> tuple[list[str], list[str]]:
+    async def _probe_slugs(self, intent: str, origin: str) -> tuple[list[str], list[str], list[dict]]:
+        """F1 tier: интент-слуги через GET+parse (links → queue), legal — HEAD-фильтр."""
         cache: dict[str, bool] = {}
         async with httpx.AsyncClient() as client:
-            alive = await filter_alive(client, origin, self._hints.slugs_for(intent), cache)
+            alive, probe_links = await probe_slugs_f1(client, origin, self._hints.slugs_for(intent))
             legal = (
                 await filter_alive(client, origin, self._hints.legal_slugs, cache)
                 if intent == "contact"
                 else []
             )
-        return alive, legal
+        return alive, legal, probe_links
+
+    async def _sitemap_urls(self, record: RunRecord, origin: str, robots: RobotsPolicy) -> list[str]:
+        if not sitemap_enabled(record.config.use_sitemap, record.intent):
+            return []
+        async with httpx.AsyncClient() as client:
+            urls = await fetch_sitemap_candidates(
+                client, origin=origin, intent=record.intent, task=record.config.task,
+                hints=self._hints, robots_sitemaps=robots.sitemaps(),
+            )
+        if urls:
+            record.metadata["sitemap_candidates"] = len(urls)
+        return urls
 
     async def _navigate_observe(
         self, record: RunRecord, url: str, origin: str, robots: RobotsPolicy,

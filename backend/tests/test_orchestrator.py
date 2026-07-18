@@ -172,6 +172,26 @@ async def test_cancel_before_synthesis_skips_llm(tmp_path, two_page_site):
     assert store.get("test-run").status == "canceled"
 
 
+async def test_early_stop_gs1_after_three_stale_pages(tmp_path):
+    """G-S1: три посещённые страницы подряд без новых релевантных ссылок → SYNTHESIZE."""
+    chain = {}
+    for i, name in enumerate(["", "a", "b", "c", "d"]):
+        nxt = ["a", "b", "c", "d"][i] if i < 4 else None
+        links = [(f"{ORIGIN}/{nxt}", f"page {nxt}")] if nxt else []
+        chain[f"{ORIGIN}/{name}" if name else f"{ORIGIN}/"] = page_raw(
+            title=f"P{i}", text="generic filler words here " * 20, links=links)
+    browser = FakeBrowserSession(chain)
+    replies = [{"action": "navigate", "url": f"{ORIGIN}/{n}", "reasoning": "next"}
+               for n in ["a", "b", "c", "d"]]
+    replies.append({"action": "stop", "reasoning": "exhausted"})
+    replies.append({"summary": "nothing found", "facts": [],
+                    "not_found": [{"key": "phone", "reason": "absent"}]})
+    orch, _, _ = make_orchestrator(tmp_path, browser, replies)
+    record = await orch.run(record_for(f"{ORIGIN}/", max_pages=10))
+    assert record.metadata.get("early_stop", "").startswith("G-S1")
+    assert record.pages_visited < 6  # остановились раньше бюджета
+
+
 async def test_start_page_unreachable_fails_cleanly(tmp_path):
     browser = FakeBrowserSession(pages={})
     orch, _, _ = make_orchestrator(tmp_path, browser, [])

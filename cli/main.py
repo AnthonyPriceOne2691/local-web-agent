@@ -41,6 +41,7 @@ def crawl(
     max_depth: int = typer.Option(2, "--max-depth"),
     no_robots: bool = typer.Option(False, "--no-robots"),
     screenshots: str = typer.Option("auto", "--screenshots", help="auto|always|never"),
+    sitemap: str = typer.Option("auto", "--sitemap", help="auto|always|never (P2.5, doc 21)"),
     output: Path | None = typer.Option(None, "--output", help="write ExtractionResult JSON to file"),
     wait: bool = typer.Option(True, "--wait/--no-wait"),
     api_url: str = typer.Option(API_DEFAULT, "--api-url"),
@@ -49,6 +50,7 @@ def crawl(
     body = {
         "start_url": url, "task": task, "max_pages": max_pages, "max_depth": max_depth,
         "respect_robots": not no_robots, "capture_screenshots": screenshots,
+        "use_sitemap": sitemap,
     }
     with _client(api_url) as client:
         try:

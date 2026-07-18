@@ -17,6 +17,7 @@ class RunConfig(BaseModel):
     rate_limit_ms: int = Field(default=1000, ge=0)
     respect_robots: bool = True
     capture_screenshots: Literal["auto", "always", "never"] = "auto"
+    use_sitemap: Literal["auto", "always", "never"] = "auto"  # P2.5 (doc 21)
 
 
 class Violation(BaseModel):

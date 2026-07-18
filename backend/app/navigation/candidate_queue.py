@@ -21,6 +21,8 @@ def build_candidates(
     visited: set[str],
     alive_probes: list[str],
     legal_probes: list[str],
+    sitemap_urls: list[str] | None = None,
+    probe_links: list[dict] | None = None,
     top_k: int = 10,
 ) -> list[Candidate]:
     def usable(snap: PageSnapshot) -> list[dict]:
@@ -31,15 +33,16 @@ def build_candidates(
         ]
 
     is_home = urlparse(snapshot.url).path.rstrip("/") in ("", "/")
-    buckets: list[list[Candidate]] = [[], [], [], [], []]
+    # P0 · P1 · P2 probes · P2.5 sitemap · P3 legal · P4 rest (doc 21)
+    buckets: list[list[Candidate]] = [[], [], [], [], [], []]
 
     # P0: ссылки текущей страницы с intent/task-сигналом; P4: остальные
     for link in usable(snapshot):
         s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=is_home)
-        bucket = 0 if any(tag in reason for tag in ("slug", "task-kw", "homepage+intent")) else 4
+        bucket = 0 if any(tag in reason for tag in ("slug", "task-kw", "homepage+intent")) else 5
         buckets[bucket].append(Candidate(href=link["href"], text=link["text"], score=s, reason=reason))
 
-    # P1: ссылки с закэшированной homepage
+    # P1: ссылки с закэшированной homepage + ссылки с F1-проб (doc 03) — s > 0
     if homepage is not None and homepage.url != snapshot.url:
         for link in usable(homepage):
             s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=True)
@@ -47,14 +50,24 @@ def build_candidates(
                 buckets[1].append(
                     Candidate(href=link["href"], text=link["text"], score=s, reason="home:" + reason)
                 )
+    for link in probe_links or []:
+        if same_site(link["href"], origin) and normalize_url(link["href"]) not in visited:
+            s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=False)
+            if s > 0:
+                buckets[1].append(
+                    Candidate(href=link["href"], text=link["text"], score=s, reason="f1:" + reason)
+                )
 
-    # P2: живые slug-пробы (HTTP-alive, doc 19 lesson); P3: legal только для contact
+    # P2: живые slug-пробы (HTTP-alive, doc 19 lesson); P2.5 sitemap; P3 legal (contact)
     for url in alive_probes:
         if normalize_url(url) not in visited:
             buckets[2].append(Candidate(href=url, text="(slug probe)", score=12, reason="probe"))
+    for url in sitemap_urls or []:
+        if normalize_url(url) not in visited:
+            buckets[3].append(Candidate(href=url, text="(sitemap)", score=10, reason="sitemap"))
     for url in legal_probes:
         if normalize_url(url) not in visited:
-            buckets[3].append(Candidate(href=url, text="(legal probe)", score=8, reason="legal-probe"))
+            buckets[4].append(Candidate(href=url, text="(legal probe)", score=8, reason="legal-probe"))
 
     seen: set[str] = set()
     queue: list[Candidate] = []
