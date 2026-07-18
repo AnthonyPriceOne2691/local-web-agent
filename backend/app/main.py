@@ -1,0 +1,58 @@
+"""FastAPI wiring (< 150 LOC, doc 18). DI: фабрика оркестратора в app.state —
+тесты подменяют её на моки."""
+
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from app.api.routes_health import router as health_router
+from app.api.routes_runs import router as runs_router
+from app.browser.playwright_session import PlaywrightSession
+from app.config import Settings, get_settings
+from app.llm.navigator import Navigator
+from app.llm.ollama_client import OllamaClient
+from app.llm.synthesizer import Synthesizer
+from app.navigation.path_hints import PathHints
+from app.orchestrator.loop import CrawlOrchestrator
+from app.storage.run_store import JsonRunStore
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.settings = settings
+        app.state.llm_client = OllamaClient(settings.ollama_url, timeout_s=settings.llm_timeout_s)
+        app.state.run_store = JsonRunStore(settings.runs_dir)
+        app.state.hints = PathHints.load(settings.navigation_dir)
+        app.state.active_run_id = None
+        app.state.background_tasks = set()
+        swept = app.state.run_store.startup_sweep()  # zombie runs (doc 12)
+        if swept:
+            print(f"startup sweep: {swept} orphaned run(s) → failed")
+
+        def orchestrator_factory() -> CrawlOrchestrator:
+            return CrawlOrchestrator(
+                settings=settings,
+                browser=PlaywrightSession(),
+                navigator=Navigator(app.state.llm_client, settings),
+                synthesizer=Synthesizer(app.state.llm_client, settings),
+                llm_client=app.state.llm_client,
+                store=app.state.run_store,
+                hints=app.state.hints,
+            )
+
+        app.state.orchestrator_factory = orchestrator_factory
+        yield
+        await app.state.llm_client.aclose()
+
+    app = FastAPI(title="Local Web Agent", version="0.1.0", lifespan=lifespan)
+    app.include_router(health_router)
+    app.include_router(runs_router)
+    return app
+
+
+app = create_app()

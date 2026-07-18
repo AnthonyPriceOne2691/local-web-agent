@@ -71,7 +71,7 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 ## Phase 1 — Minimal agent loop
 
-**Status: 🔲**
+**Status: ✅ DONE (2026-07-18)** — все deliverables и exit-критерии закрыты: `backend/app/` (10 модулей, 30 тестов, coverage **87%**, ruff clean, все файлы ≤ 500 LOC), `cli/`, `data/prompts/`; E2E 3/3 на fixture-сервере (в т.ч. RU-задача и несвязанный GEO-слаг), 0 контрактных нарушений. Сверх плана (перенесено из Phase 2 по итогам Phase 0): I-H8/I-H9 guards, F1-lite HTTP-фильтр проб, robots+Crawl-delay, startup sweep, SPA-fallback screenshot.
 
 **Goal:** end-to-end без full contracts — «naive agent»: observe → LLM → navigate loop → final extract.
 

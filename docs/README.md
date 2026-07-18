@@ -36,7 +36,8 @@
 |-------|--------|
 | Design docs | ✅ v0.5 review pass 2 (hop depth D-13, RU keywords, article candidates D-14, startup sweep, partial failure) + D-11 closed |
 | Phase 0 Benchmark | ✅ **DONE 2026-07-13** — все exit-критерии пройдены ([doc 19](19-phase0-benchmark-results.md) v1.0); хвосты: real re-check p50, qwen3 на real перед финалом D-2/D-3 |
-| **Phase 1 Agent loop** | 🔲 **Next** — гейт «код после Phase 0» открыт |
+| Phase 1 Agent loop | ✅ **DONE 2026-07-18** — backend/app + cli + prompts; 30 тестов, coverage 87%, E2E 3/3 ([doc 06](06-mvp-phases.md) § Phase 1) |
+| **Phase 2 Full MVP** | 🔲 **Next** — contracts YAML-enforcer, SQLite, vision batch, sitemap, cookie-dismiss, cancel, отчёты |
 | Phase 1 Agent loop | 🔲 |
 | Phase 2 Full MVP | 🔲 |
 | Phase 3 Research Agent | 🔲 |
