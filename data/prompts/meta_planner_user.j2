@@ -1,0 +1,16 @@
+SESSION RUNS (id | start_url | status | intent | summary):
+{{ runs_block }}
+
+{% if comparison_block %}LAST COMPARISON:
+{{ comparison_block }}
+
+{% endif %}RECENT MESSAGES:
+{{ history_block }}
+
+ALLOWED URLS (for crawl_site):
+{{ allowed_urls_block }}
+
+Limits: max {{ max_sites }} crawl_site calls.
+
+NEW USER MESSAGE:
+{{ message }}

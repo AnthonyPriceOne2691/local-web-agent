@@ -1,13 +1,13 @@
 # Local Web Agent — инструкции для Claude Code
 
-Локальный research-агент: Layer 1 — crawl worker одного сайта (Playwright + Ollama), Layer 2 — research-сессии по N сайтам со сравнением (`agent research`, `/sessions`), поверх них — Chat UI (`frontend/`, React + SSE). Слои 1–2 пробенчмаркованы; Chat UI реализован (остались exit-прогоны UC-1/UC-2 из чата и LLM-планнер). Всё на MacBook Air M5 32 GB, **ноль облачных API** (privacy-first). Автор: Anton Aspidov (общение — по-русски).
+Локальный research-агент: Layer 1 — crawl worker одного сайта (Playwright + Ollama), Layer 2 — research-сессии по N сайтам со сравнением (`agent research`, `/sessions`), поверх них — Chat UI (`frontend/`, React + SSE + LLM-планнер для диалога). **MVP-фазы 0–4 ✅ DONE** (exit-прогоны UC-1/UC-2 целиком из чата, 2026-07-19); дальше — Phase 5+ backlog. Всё на MacBook Air M5 32 GB, **ноль облачных API** (privacy-first). Автор: Anton Aspidov (общение — по-русски).
 
 **Первым делом в новой сессии:** прочитай [MEMORY.md](MEMORY.md) — там текущее состояние, открытые хвосты и gotchas.
 
 ## Процесс (обязателен)
 
 - **Design docs — источник правды**: `docs/` (индекс и решения D-1..D-14 — [docs/README.md](docs/README.md)). Любое изменение дизайна = правка дока + запись в changelog в конце + bump версии в шапке (`v0.x`). Версии в шапке, индексе и changelog должны совпадать.
-- **Код только в рамках фаз** [docs/06-mvp-phases.md](docs/06-mvp-phases.md). Phase 0–3 ✅ DONE; Phase 4 (Chat UI) 🛠 code complete — остаток: UC-exit из чата + `planner: llm`.
+- **Код только в рамках фаз** [docs/06-mvp-phases.md](docs/06-mvp-phases.md). Phase 0–4 ✅ DONE; дальше — Phase 5+ backlog (там же).
 - **Стандарты** [docs/18-engineering-standards.md](docs/18-engineering-standards.md): файл ≤ 500 LOC (`scripts/check_module_size.py`), SOLID/Protocols + DI, DRY — промпты и словари в `data/`, не в коде; тесты с моками (Fake browser/LLM в `backend/tests/conftest.py`); coverage: contracts ≥95%, orchestrator/navigation ≥90%, app ≥85% (к концу Phase 2).
 - **Перед завершением любой работы с кодом**: `ruff check`, `pytest`, `check_module_size.py` — всё зелёное.
 - `scripts/spike/` — исключение из стандартов (Phase 0 артефакт, не трогать без нужды).

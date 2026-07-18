@@ -1,7 +1,7 @@
 # MEMORY — состояние проекта
 
 > Снапшот для новых сессий Claude Code (обновлять при значимых вехах; история — в git).
-> Обновлено: **2026-07-19**, Phase 4 🛠 CODE COMPLETE (UI + SSE).
+> Обновлено: **2026-07-19**, **Phase 4 ✅ DONE** — MVP-фазы 0–4 закрыты.
 
 ## Где мы
 
@@ -12,14 +12,16 @@
 | Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** |
 | Phase 2 Full MVP | ✅ **DONE 2026-07-18** — 4/5 (80% гейт), vision E2E, PLAN p50 7.9 s ([doc 06](docs/06-mvp-phases.md) § Phase 2) |
 | **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3) |
-| **Phase 4 Chat UI** | 🛠 **CODE COMPLETE 2026-07-19** — UI + SSE + report/screenshot ручки; 120 тестов. **Остаток:** UC-1/UC-2 exit-прогон из чата (реальные LLM + фикстуры) и `planner: llm` (doc 24 § Planner) |
+| **Phase 4 Chat UI** | ✅ **DONE 2026-07-19** — UI + SSE + `planner: llm`; exit-прогоны целиком из Chat UI в браузере (Playwright): UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 → добран планнером до 4/4); 129 тестов ([doc 06](docs/06-mvp-phases.md) § Phase 4) |
 
-## Phase 4 — что построено (2026-07-19) и что осталось
+**Next:** Phase 5+ backlog (doc 06) — приоритеты P1: structured schema input, regex assist, phase-batched multi-site (12 свопов → 3). Плюс хвосты ниже.
 
-- **Бэкенд:** SSE `GET /sessions/{id}/events` — poll-паттерн поверх store ([app/api/sse.py](backend/app/api/sse.py)); события `status` / `message` (tool-notes M-S1 + ответы) / `crawl_progress` (из чекпоинтов run store) / `done` + `: ping` heartbeat; реконнект `?since_messages=N` (протокол — doc 15 v0.6). `GET /sessions/{id}/report` (md-экспорт), `GET /runs/{id}/steps/{pos}/screenshot?profile=` (pos = позиция в steps[], не step.index). Настройки: `sse_poll_interval_s` 0.7 / `sse_heartbeat_s` 15 / `ui_dist_dir`. FastAPI монтирует `frontend/dist` на `/` (same-origin, CORS нет; API-роуты приоритетнее).
+## Phase 4 — что построено (2026-07-19)
+
+- **Бэкенд:** SSE `GET /sessions/{id}/events` — poll-паттерн поверх store ([app/api/sse.py](backend/app/api/sse.py)); события `status` / `message` (tool-notes M-S1 + ответы) / `crawl_progress` (из чекпоинтов run store) / `done` + `: ping` heartbeat; реконнект `?since_messages=N` (протокол — doc 15 v0.6). `GET /sessions/{id}/report` (md-экспорт), `GET /runs/{id}/steps/{pos}/screenshot?profile=` (pos = позиция в steps[], не step.index). Настройки: `sse_poll_interval_s` 0.7 / `sse_heartbeat_s` 15 / `ui_dist_dir` / `planner` / `planner_max_tokens`. FastAPI монтирует `frontend/dist` на `/` (same-origin, CORS нет; API-роуты приоритетнее).
 - **Фронтенд `frontend/`:** React 19 + Vite 7 + TS + Tailwind v4. Три колонки: Sidebar (сессии) / Chat (лента + ProgressCard + composer, welcome с UC-примерами) / SidePanel (Runs: RunCard со steps + скриншот-тумбы; Comparison: winner/rankings/dimensions/narrative/excluded + Export report.md). SSE-подписка `subscribeSessionEvents` в [api.ts](frontend/src/api.ts), дедуп реплея по `message.index`; на `done` и tool-notes — рефетч (источник правды GET /sessions/{id}). Структура — doc 17 v0.4.
-- **Проверено:** SSE-цикл на живом uvicorn без LLM (status → user/assistant messages → done, curl); build 66 KB gzip.
-- **Осталось до Phase 4 DONE:** (1) exit-прогон UC-1/UC-2 целиком из чата на реальных LLM (поднять API + fixtures, открыть http://127.0.0.1:8001/); (2) `planner: llm` для свободного диалога/follow-up — meta-промпт поверх qwen3 think:false, контракты M-*, вернуть tools get_run_result/list_session_runs (doc 24 v0.4 п.2).
+- **LLM-планнер** ([research/llm_planner.py](backend/app/research/llm_planner.py) + `data/prompts/meta_planner_*`, doc 24 v0.6): URLs в сообщении → rules fast-path (LLM не зовётся); без URL → meta-промпт (nav-модель qwen3 think:false, structured output) → `{"plan": [...], "reply": "..."}`. Пост-валидация M-H1..M-H3: crawl_site.url только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply. `get_run_result`/`list_session_runs` для LLM-пути; `compare_results` с run_ids прошлых runs (re-compare/re-crawl). `LWA_PLANNER=rules` — отключить.
+- **Exit-прогоны из чата в браузере** (скрипты в scratchpad → uc_chat_run.py / followup_chat.py, скриншоты сняты): UC-2 winner blog_alpha 95>70>40 за 9.9 мин; UC-1 3/4 за 18.1 мин (8906 — synth-таймаут → excluded, M-H4 вживую); follow-up «почему 8902 последний?» → reply без tools; «перепрогони 8906 и пересравни» (без URL!) → re-crawl + re-compare 4/4 (88/75/65/50).
 
 ## Phase 3 — что построено и бенчмарк
 
@@ -45,18 +47,19 @@
 
 ## Открытые хвосты (не блокеры)
 
-1. **p95 PLAN 11.6 s vs NFR-1.2 10 s** на real-страницах — тюнинг сниппетов/бюджета (doc 20).
+1. **p95 PLAN 11.6 s vs NFR-1.2 10 s** на real-страницах — тюнинг сниппетов/бюджета (doc 20). Туда же: **synth-таймаут 300 s** изредка роняет сайт на холодном свопе VLM→qwen3 (UC-1 8906; партиал M-H4 + re-crawl планнером спасают, но стоит тюнить).
 2. **python.org contribute-кейс** — backlog: аннотация slug-проб интентом в candidate-списке, penalty версионных ссылок (doc 06 § Phase 2 таблица).
-3. **Multi-viewport capture** (tablet/mobile из viewports.yaml) не подключён к _maybe_screenshot — desktop-only; в UC-1 dimension mobile_vs_desktop честно 0; UI-ручка скриншотов уже умеет `?profile=`. Поднять при Phase 4 design-audit UX.
-4. ~~SSE `/sessions/{id}/events`~~ ✅ закрыт 2026-07-19 (Phase 4, doc 15 v0.6).
+3. **Multi-viewport capture** (tablet/mobile из viewports.yaml) не подключён к _maybe_screenshot — desktop-only; UI-ручка скриншотов уже умеет `?profile=`.
+4. ~~SSE `/sessions/{id}/events`~~ ✅ закрыт 2026-07-19 (Phase 4, doc 15 v0.6). ~~planner: llm~~ ✅ закрыт 2026-07-19 (doc 24 v0.6).
 5. UC-бенчмарки гонялись на локальных фикстурах; real-site research-сессия (2-3 публичных сайта) — прогнать при случае для калибровки таймингов.
+6. **Язык narrative**: re-compare может отвечать по-английски на русский вопрос — добавить язык ответа в compare-промпт (doc 16) при следующей правке промптов.
 
 ## Окружение
 
 - **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. **Дефолт кода: qwen3:14b (nav+synth)**. После работы — выгружать (`ollama ps` пуст).
 - **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike). **Фронт**: `frontend/` (Node 24; `npm install`, `npm run build` → dist, `npm run dev` → 5173 c proxy).
 - **Порты**: API 8001 (+ Chat UI статика на `/`) · Vite dev 5173 · fixtures 8901–8907 · Ollama 11434. Fixture-мапа (сайты сортируются по имени; `fixtures_server.py --print`): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
-- Гейты перед коммитом: `pytest` (120) · `ruff check app tests ../cli` · `check_module_size.py` · `npm run build` (tsc + vite).
+- Гейты перед коммитом: `pytest` (129) · `ruff check app tests ../cli` · `check_module_size.py` · `npm run build` (tsc + vite).
 
 ## Gotchas
 

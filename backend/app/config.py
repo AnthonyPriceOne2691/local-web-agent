@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     sse_heartbeat_s: float = 15.0
     ui_dist_dir: Path = REPO_ROOT / "frontend" / "dist"
 
+    # Meta-planner (Phase 4, doc 24 § Planner): rules fast-path + LLM для диалога
+    planner: str = "llm"  # "llm" | "rules" (rules = чистое Phase 3 поведение)
+    planner_max_tokens: int = 700
+
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
     runs_dir_override: Path | None = None  # тесты/сторонний размещение БД

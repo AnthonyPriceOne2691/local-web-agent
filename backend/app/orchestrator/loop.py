@@ -242,7 +242,8 @@ class CrawlOrchestrator:
             result = await self._synthesize(record, snapshots)
         except Exception as exc:  # noqa: BLE001 — run не должен терять запись
             record.status = "failed"
-            record.error_message = str(exc)[:500]
+            # str(httpx.ReadTimeout) пуст — без имени типа excluded[] нечитаем (M-H4)
+            record.error_message = (str(exc) or type(exc).__name__)[:500]
             record.finished_at = _now()
             self._store.save(record)
             await self._safe_close()

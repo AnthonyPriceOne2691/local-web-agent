@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.8** · 2026-07-19
+> Local Web Agent · Design doc · **v0.9** · 2026-07-19
 
 ## Engineering standards (все фазы)
 
@@ -182,7 +182,16 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 ## Phase 4 — Research Chat UI
 
-**Status: 🛠 CODE COMPLETE (2026-07-19)** — UI + SSE реализованы и собраны (`frontend/`, React 19 + Vite 7 + TS + Tailwind v4 — doc 17 v0.4; SSE-протокол — doc 15 v0.6; 120 тестов, ruff clean); SSE-цикл проверен на живом API без LLM (status → messages → done). Остались exit-прогоны с реальными LLM + `planner: llm` (doc 24).
+**Status: ✅ DONE (2026-07-19)** — UI + SSE + LLM-планнер; exit-прогоны на реальных LLM (qwen3 + qwen2.5vl) **целиком через Chat UI в браузере** (Playwright по собранной статике):
+
+| Прогон из чата | Результат |
+|----------------|-----------|
+| **UC-2** (3 блог-фикстуры) | ✅ **9.9 мин** (CLI Phase 3: ~11): winner blog_alpha **95** > gamma 70 > beta 40 — порядок Phase 3 воспроизведён; UI: лента + tool-notes, 3 RunCard, Comparison-таб (rankings/dimensions/narrative), Export, report 200 |
+| **UC-1** (4 сайта, design_diff, vision) | ✅ **18.1 мин ≤ 20-мин бюджета**: 3/4 сайта в сравнении (5 dimensions, narrative с реальными hex фикстур), 8906 — synth-таймаут 300 s → **excluded[] в UI/отчёте (M-H4 partial отработал вживую)**; 3 скриншот-тумба в RunCard |
+| **planner: llm смоук 1** (follow-up без URL) | ✅ вопрос «почему 8902 последний?» → план пуст, reply из comparison-контекста (120 слов, только базовые понятия) |
+| **planner: llm смоук 2** (re-crawl + re-compare) | ✅ «сайт на 8906 упал — прогони заново и пересравни» (в сообщении **нет URL**): планнер взял URL из истории, re-crawl ok, re-compare **4/4**: 8907 (88) > 8905 (75) > 8904 (65) > 8906 (50), 6 dimensions |
+
+Фиксы по прогонам: `error_message` больше не пустой при `str(exc)==""` (httpx ReadTimeout → имя типа); stale excluded при re-crawl того же URL убран. 129 тестов.
 
 **Goal:** primary product UX — чат с агентом (doc 24).
 
@@ -191,11 +200,13 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 - [x] SSE progress during tool execution (`/sessions/{id}/events` + `crawl_progress` из чекпоинтов store)
 - [x] Paste multiple URLs; message history
 - [x] Export comparison report from UI (`GET /sessions/{id}/report`)
-- [ ] `planner: llm` для свободного диалога / follow-up (doc 24 § Planner; rules-планнер остаётся fast-path)
+- [x] `planner: llm` для свободного диалога / follow-up (doc 24 § Planner; rules-планнер остаётся fast-path)
 
 **Exit criteria:**
-- [ ] UC-1 and UC-2 runnable entirely from chat (прогон на реальных LLM + фикстурах)
+- [x] UC-1 and UC-2 runnable entirely from chat (2026-07-19, таблица выше)
 - [x] No WebSocket required (SSE poll pattern)
+
+**Наблюдения (не блокеры):** (1) synth-таймаут 300 s может ронять отдельный сайт на холодном свопе qwen2.5vl→qwen3 — партиал-семантика отрабатывает, ретрай follow-up'ом через планнер добирает сайт; тюнинг таймаута/промпта — вместе с p95-хвостом doc 20. (2) narrative re-compare может уходить в английский при русском вопросе — язык ответа в compare-промпт (doc 16) при случае.
 
 ---
 
@@ -254,3 +265,4 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-18 | **v0.6: Phase 2 ✅ DONE** — exit-бенчмарк на реальных LLM: 4/5 формальной пятёрки (80%), 7/8 с #6/#8; vision E2E подтверждён (#8 CSS-цена через qwen2.5vl); PLAN p50 7.9 s ≤ 8 s чисто; synth python.org 95.9 s (−53% vs Phase 0). Починены по итогам: S-H3b vision-reclass, S-H3c URL-факты (doc 13 v0.7.1), synthesizer-промпт vision-aware (doc 16), docs-словарь + develop/contribut (doc 21); #3 python.org — known-fail (backlog: аннотация проб) |
 | 2026-07-18 | **v0.7: Phase 3 ✅ DONE** — Layer 2 реализован (research/{meta_agent,runner,compare_synthesizer,report}, sessions storage/API/CLI; 115 тестов, cov 93%) и exit-бенчмарк пройден: UC-2 winner blog_alpha 95>75>50 с цитатами (~11 мин), UC-1 4-site design compare + report (~18.5 мин ≤ 20-мин бюджета, vision 0 сбоев, пик RAM 13 GB). Фиксы по бенчмарку: `_host` с портом, article-excerpt заполняет код (не LLM-перепечатка), устойчивость синтеза к невалидному article-блоку. Next: Phase 4 Chat UI |
 | 2026-07-19 | **v0.8: Phase 4 CODE COMPLETE** — Chat UI (`frontend/`: React 19 + Vite 7 + TS + Tailwind v4, три колонки: sidebar/чат/side panel) + бэкенд: SSE `/sessions/{id}/events` (poll-паттерн, doc 15 v0.6), `GET /sessions/{id}/report`, `GET /runs/{id}/steps/{pos}/screenshot`, статика `frontend/dist` с FastAPI (same-origin). 120 тестов. Остаток: UC-1/UC-2 exit из чата (реальные LLM) + `planner: llm` |
+| 2026-07-19 | **v0.9: Phase 4 ✅ DONE** — `planner: llm` реализован (`research/llm_planner.py`, doc 24 v0.6: rules fast-path + LLM для диалога, M-H1..M-H3 пост-валидация) и exit-прогоны пройдены целиком из Chat UI в браузере: UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 вживую: 8906 synth-таймаут → excluded, затем добран follow-up'ом через планнер до 4/4: 88/75/65/50). Фиксы: error_message при пустом str(exc), stale excluded при re-crawl. 129 тестов |

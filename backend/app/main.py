@@ -20,6 +20,7 @@ from app.llm.synthesizer import Synthesizer
 from app.navigation.path_hints import PathHints
 from app.orchestrator.loop import CrawlOrchestrator
 from app.research.compare_synthesizer import CompareSynthesizer
+from app.research.llm_planner import LlmPlanner
 from app.research.runner import ResearchRunner
 from app.storage.session_store import SqliteSessionStore
 from app.storage.sqlite_store import SqliteRunStore
@@ -59,12 +60,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.orchestrator_factory = orchestrator_factory
 
         def research_runner_factory() -> ResearchRunner:
+            planner = (LlmPlanner(app.state.llm_client, settings)
+                       if settings.planner == "llm" else None)  # doc 24 § Planner
             return ResearchRunner(
                 settings=settings,
                 run_store=app.state.run_store,
                 session_store=app.state.session_store,
                 orchestrator_factory=app.state.orchestrator_factory,
                 compare=CompareSynthesizer(app.state.llm_client, settings),
+                planner=planner,
             )
 
         app.state.research_runner_factory = research_runner_factory

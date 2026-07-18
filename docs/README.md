@@ -12,7 +12,7 @@
 | [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.7** | Playwright; URL norm; redirect/landing policy; trafilatura |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
-| [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.8** | Phases 0–3 DONE; Phase 4 code complete |
+| [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.9** | **Phases 0–4 DONE** (Phase 4 exit из чата 2026-07-19) |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.6** | SQLite + research sessions реализованы; legacy-импорт; sweep |
 | [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.7.1** (реализован Phase 2) | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
@@ -26,7 +26,7 @@
 | [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.7** | + content_search, sitemap P2.5, RU keywords |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
-| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.5** | Phase 4 Chat UI реализован; SSE закрыт |
+| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.6** | Phase 4 DONE: Chat UI + SSE + planner:llm |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -39,7 +39,7 @@
 | Phase 1 Agent loop | ✅ **DONE 2026-07-18** — backend/app + cli + prompts; 30 тестов, coverage 87%, E2E 3/3 ([doc 06](06-mvp-phases.md) § Phase 1) |
 | **Phase 2 Full MVP** | ✅ **DONE 2026-07-18** — exit-бенчмарк 4/5 (80% гейт) + vision E2E (#8) + PLAN p50 7.9 s ([doc 06](06-mvp-phases.md) § Phase 2); 96 тестов, cov 93% |
 | **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк пройден ([doc 06](06-mvp-phases.md) § Phase 3); 115 тестов |
-| **Phase 4 Chat UI** | 🛠 **CODE COMPLETE 2026-07-19** — UI + SSE + report/screenshot ручки; остаток: UC-1/UC-2 exit из чата + `planner: llm` ([doc 06](06-mvp-phases.md) § Phase 4) |
+| **Phase 4 Chat UI** | ✅ **DONE 2026-07-19** — UI + SSE + `planner: llm`; UC-1/UC-2 прогнаны целиком из чата в браузере (9.9 / 18.1 мин), follow-up диалог и re-crawl через планнер работают ([doc 06](06-mvp-phases.md) § Phase 4) |
 
 ## Conventions
 

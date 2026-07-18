@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-19
+> Local Web Agent · Design doc · **v0.6** · 2026-07-19
 
 ## Назначение
 
@@ -97,16 +97,18 @@
 **Модуль:** `backend/app/research/meta_agent.py`  
 **Model:** `qwen2.5:14b-instruct` (tool planning) — не R1; R1 только для structured compare output.
 
-### Planner: rules-first (Phase 3), LLM — Phase 4
+### Planner: rules fast-path + LLM для диалога (Phase 4 — реализовано)
 
 Для фиксированных research intents план **полностью детерминирован** (URLs → intent → N × crawl_site → compare) — LLM-планирование здесь лишняя поверхность отказа (ещё один JSON-парсинг + контракты M-*). Поэтому:
 
 | Mode | Когда | Что делает |
 |------|-------|------------|
-| `planner: rules` (**default Phase 3**) | intent распознан по keywords + URLs распарсены regex'ом | План строится кодом по таблице research intents; LLM не вызывается до compare |
-| `planner: llm` (Phase 4) | Chat UI: свободный диалог, follow-up вопросы, ambiguous intent | Qwen meta-prompt → tool call plan (контракты M-*) |
+| rules fast-path (**всегда**, если в сообщении есть URL) | intent распознан по keywords + URLs распарсены regex'ом | План строится кодом по таблице research intents; LLM не вызывается до compare |
+| `planner: llm` (**default**, Phase 4; `LWA_PLANNER=rules` отключает) | сообщение **без URL**: follow-up вопросы, re-compare по другой рубрике, «что уже сделано», замена/повтор сайта | `research/llm_planner.py`: meta-промпт (`data/prompts/meta_planner_*`) поверх nav-модели (qwen3 `think:false`, structured output) → `{"plan": [...], "reply": "..."}`; пустой план → reply прямо в чат |
 
-`agent research` CLI (Phase 3) работает **целиком на rules** — меньше рисков, быстрее, проще тестировать. LLM meta-agent подключается в Phase 4, когда появляется настоящий диалог.
+**Пост-валидация LLM-плана (M-H1..M-H3, в `llm_planner._enforce`):** только известные tools; `crawl_site.url` — строго из ALLOWED URLS (текущее сообщение + прошлые user-сообщения сессии), выдуманный URL отбрасывается; `run_id` — только из runs сессии; рубрика вне списка → `generic_merge`; crawl'ов ≤ `max_sites` (M-H2), `max_pages` clamp ≤ 12; `compare_results` — максимум один и последним. Невалидный JSON от LLM → фоллбек-reply с просьбой уточнить (сессия не падает). В llm-пути runner'а действуют те же session-контракты, что и в rules: cooldown между crawl'ами, session time budget, M-S1 tool-notes, M-H4 в compare.
+
+`agent research` CLI работает **целиком на rules** (URL передаются флагом — fast-path); LLM-планнер включается только в свободном диалоге Chat UI.
 
 ### Responsibilities
 
@@ -178,6 +180,8 @@ Implementation: enqueue existing `POST /runs` pipeline; block until done (sequen
 ### `list_session_runs`
 
 Returns run_ids + status for current session (recovery / user ask «что уже сделано»).
+
+> Phase 4: `get_run_result` / `list_session_runs` доступны **LLM-планнеру** (ответ собирается кодом из store — `runner._run_details` / `_runs_listing`); rules-путь их по-прежнему не использует. `compare_results` в LLM-плане принимает `run_ids` прошлых runs сессии (re-compare без нового crawl).
 
 **Hard rule:** meta-agent **cannot** call Playwright or load arbitrary paths — only tools.
 
@@ -398,3 +402,4 @@ Separate from crawl ABC — enforced in `research/tool_executor.py`.
 | 2026-07-05 | **v0.3 (review-2):** partial failure spec (compare по ≥2 выжившим, `excluded[]`, M-H4 edge); UC-2 — 3 article candidates per site; `max_session_duration_min: 60` graceful timeout |
 | 2026-07-18 | **v0.4 (Phase 3 impl):** реализовано `research/{meta_agent,runner,compare_synthesizer,report}` + `/sessions` API + `agent research` CLI. Уточнения: (1) plan/execute слиты в ResearchRunner — отдельного tool_executor-модуля нет, контракты M-H1..M-H4 enforced в раннере; (2) get_run_result/list_session_runs как отдельные tools не нужны rules-планнеру (runner читает store напрямую), для Phase 4 LLM-планнера — вернуть; (3) session-level cancel_event пробрасывается в текущий crawl (одно событие отменяет и очередь, и активный run); (4) `GET /sessions/{id}/events` SSE отложен до Phase 4 (CLI поллит GET /sessions/{id}); (5) винner/rankings: run_id проставляет код по url — LLM оперирует только url/label, выдуманные сайты отбрасываются |
 | 2026-07-19 | **v0.5 (Phase 4 Chat UI impl):** § Chat UI — реализован (`frontend/`, React 19 + Vite 7 + TS + Tailwind v4; детали doc 17 v0.4); SSE `/sessions/{id}/events` закрыт (протокол doc 15 v0.6 — poll-паттерн поверх store, M-S1 tool-notes идут событиями `message`); экспорт `GET /sessions/{id}/report`. Остаток Phase 4: UC-1/UC-2 exit-прогон из чата + `planner: llm` |
+| 2026-07-19 | **v0.6 (Phase 4 ✅ DONE):** § Planner — `planner: llm` реализован (`research/llm_planner.py` + `data/prompts/meta_planner_*`): rules fast-path при URL в сообщении, LLM для диалога без URL; пост-валидация M-H1..M-H3 (URL только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply); `get_run_result`/`list_session_runs` возвращены для LLM-пути, `compare_results` принимает run_ids прошлых runs (re-compare/re-crawl без потери сессии). Проверено на реальной модели из Chat UI: follow-up ответ из comparison-контекста; re-crawl упавшего сайта по фразе без URL + re-compare 4/4. Excluded-семантика уточнена: перекраленный успешно URL не остаётся в excluded[] |

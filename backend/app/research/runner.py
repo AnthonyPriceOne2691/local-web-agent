@@ -3,6 +3,8 @@
 Sequential crawl queue (D-7) → partial failure → compare (M-H4) → chat reply +
 comparison_report.md. Контракты M-H1..M-H4 enforced здесь (`Layer 2 ≠ ABC crawl`).
 Session-level cancel_event пробрасывается в текущий crawl (FR-3.8 семантика).
+Phase 4: URLs в сообщении → rules fast-path (без LLM); иначе LLM-планнер
+(follow-up диалог, re-compare, доступ к прошлым runs — doc 24 § Planner).
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from datetime import UTC, datetime
 
 from app.config import Settings
 from app.research.compare_synthesizer import CompareSynthesizer
+from app.research.llm_planner import LlmPlanner
 from app.research.meta_agent import (
     ToolCall,
     build_plan,
@@ -50,12 +53,14 @@ class ResearchRunner:
         session_store: SessionStore,
         orchestrator_factory,
         compare: CompareSynthesizer,
+        planner: LlmPlanner | None = None,
     ):
         self._s = settings
         self._runs = run_store
         self._sessions = session_store
         self._factory = orchestrator_factory
         self._compare = compare
+        self._planner = planner
 
     # ------------------------------------------------------------- message
     async def run_message(
@@ -67,6 +72,8 @@ class ResearchRunner:
         session.title = session.title or message[:80]
         urls = parse_urls(message, max_sites=session.config.max_sites)  # M-H2
         if not urls:
+            if self._planner is not None:  # Phase 4: свободный диалог → LLM-план
+                return await self._run_llm_plan(session, message, cancel_event, started)
             return self._finish(session, "failed", "no URLs found in message")
         intent = classify_research_intent(message, len(urls))
         session.research_intent = intent
@@ -99,6 +106,82 @@ class ResearchRunner:
                     await asyncio.sleep(self._cooldown_s(len(urls)))
         return await self._compare_stage(session, crawled, task, plan, cancel_event)
 
+    # ------------------------------------------------------- llm plan path
+    async def _run_llm_plan(
+        self, session: SessionRecord, message: str,
+        cancel_event: asyncio.Event | None, started: float,
+    ) -> SessionRecord:
+        """План от LLM-планнера (M-* уже enforced в нём); пустой план → reply."""
+        decision = await self._planner.plan(session, message, run_store=self._runs)
+        if not decision.plan:
+            return self._finish(session, "completed", decision.reply)
+        session.status = "running_tools"
+        self._sessions.save(session)
+
+        n_crawls = sum(1 for c in decision.plan if c.name == "crawl_site")
+        crawled: list[RunRecord] = []
+        reply_blocks: list[str] = []
+        compare_call: ToolCall | None = None
+        for call in decision.plan:
+            if cancel_event is not None and cancel_event.is_set():
+                return self._finish(session, "failed", "canceled by user")
+            if call.name == "crawl_site":
+                if self._session_expired(started):
+                    self._note(session, "session time budget exhausted")
+                    break
+                self._note(session, f"crawl_site {call.args['url']}")  # M-S1
+                record = await self._crawl_site(session, call, cancel_event)
+                crawled.append(record)
+                session.run_ids.append(record.id)
+                self._sessions.save(session)
+                if len(crawled) < n_crawls:
+                    await asyncio.sleep(self._cooldown_s(n_crawls))
+            elif call.name == "list_session_runs":
+                self._note(session, "list_session_runs")  # M-S1
+                reply_blocks.append(self._runs_listing(session))
+            elif call.name == "get_run_result":
+                self._note(session, f"get_run_result {call.args['run_id']}")  # M-S1
+                reply_blocks.append(self._run_details(call.args["run_id"]))
+            elif call.name == "compare_results":
+                compare_call = call  # enforced: максимум один, последним
+
+        if compare_call is not None:
+            records = self._records_for_compare(session, compare_call, crawled)
+            task = compare_call.args.get("comparison_task") or strip_urls(message) or message
+            return await self._compare_stage(session, records, task, [compare_call],
+                                             cancel_event)
+        reply = "\n\n".join(b for b in (decision.reply.strip(), *reply_blocks) if b) or "done"
+        return self._finish(session, "completed", reply)
+
+    def _records_for_compare(
+        self, session: SessionRecord, call: ToolCall, crawled: list[RunRecord],
+    ) -> list[RunRecord]:
+        """Свежие crawls + прошлые runs по run_ids (пусто → все runs сессии)."""
+        ids = call.args.get("run_ids") or [r for r in session.run_ids]
+        fresh = {r.id for r in crawled}
+        stored = [self._runs.get(i) for i in ids if i not in fresh]
+        return crawled + [r for r in stored if r is not None]
+
+    def _runs_listing(self, session: SessionRecord) -> str:
+        lines = []
+        for run_id in session.run_ids:
+            r = self._runs.get(run_id)
+            if r is not None:
+                lines.append(f"- {r.id}: {r.config.start_url} — {r.status} "
+                             f"({r.pages_visited} pages, {r.intent})")
+        return "Runs:\n" + "\n".join(lines) if lines else "No runs in this session yet."
+
+    def _run_details(self, run_id: str) -> str:
+        r = self._runs.get(run_id)
+        if r is None or r.result is None:
+            return f"{run_id}: no result available"
+        lines = [f"{r.config.start_url} ({r.status}): {r.result.summary}"]
+        lines += [f"- {f.label or f.key}: {f.value}" for f in r.result.facts[:5]]
+        if r.result.article:
+            lines.append(f"- article: {r.result.article.title} "
+                         f"({r.result.article.word_count} words)")
+        return "\n".join(lines)
+
     # ---------------------------------------------------------- crawl tool
     async def _crawl_site(
         self, session: SessionRecord, call: ToolCall,
@@ -122,7 +205,7 @@ class ResearchRunner:
             return await orchestrator.run(record, cancel_event=cancel_event)
         except Exception as exc:  # noqa: BLE001 — один сайт не валит сессию (M-H4 edge)
             record.status = "failed"
-            record.error_message = str(exc)[:500]
+            record.error_message = (str(exc) or type(exc).__name__)[:500]
             self._runs.save(record)
             return record
 
@@ -132,13 +215,15 @@ class ResearchRunner:
         plan: list[ToolCall], cancel_event: asyncio.Event | None,
     ) -> SessionRecord:
         survivors = [r for r in crawled if r.status in COMPARABLE_STATUSES and r.result]
+        survivor_urls = {r.config.start_url for r in survivors}
         excluded = [
             ExcludedSite(
                 start_url=r.config.start_url,
                 reason=f"{r.status}: "
                        f"{r.metadata.get('blocked_by') or r.error_message or 'no result'}",
             )
-            for r in crawled if r not in survivors
+            # сайт, перекраленный успешно (re-crawl через LLM-план), не excluded
+            for r in crawled if r not in survivors and r.config.start_url not in survivor_urls
         ]
         compare_call = next((c for c in plan if c.name == "compare_results"), None)
 
