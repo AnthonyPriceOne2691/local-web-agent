@@ -30,6 +30,7 @@ from app.observer.snapshot import build_snapshot
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
+from app.reporting.markdown import build_report
 from app.schemas.extraction import ExtractionResult
 from app.schemas.run import CrawlStep, RunRecord, Violation
 from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot, ScreenshotRef
@@ -245,6 +246,11 @@ class CrawlOrchestrator:
         record.metadata["violations_total"] = violations_total
         record.finished_at = _now()
         self._store.save(record)
+        try:  # markdown report (doc 05) — не валит run
+            report_path = self._store.artifacts_dir(record.id) / "report.md"
+            report_path.write_text(build_report(record, snapshots), encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            pass
         return record
 
     # ------------------------------------------------------------ internals
@@ -343,6 +349,7 @@ class CrawlOrchestrator:
             intent=record.intent, candidates={normalize_url(c.href) for c in candidates},
             visited=visited, hops=hops, max_pages=record.config.max_pages,
             max_depth=record.config.max_depth, pages_visited=len(visited), robots=robots,
+            allow_private=record.config.allow_private,
         )
 
     async def _dismiss_consent(self, record: RunRecord, url: str) -> None:

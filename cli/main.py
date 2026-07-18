@@ -46,6 +46,8 @@ def crawl(
     consent_click: str = typer.Option("reject_first", "--consent-click",
                                       help="reject_first|accept|never"),
     vision: str = typer.Option("auto", "--vision", help="auto|always|never (doc 23)"),
+    allow_private: bool = typer.Option(False, "--allow-private",
+                                       help="разрешить private-network цели (I-H8 override)"),
     output: Path | None = typer.Option(None, "--output", help="write ExtractionResult JSON to file"),
     wait: bool = typer.Option(True, "--wait/--no-wait"),
     api_url: str = typer.Option(API_DEFAULT, "--api-url"),
@@ -55,7 +57,7 @@ def crawl(
         "start_url": url, "task": task, "max_pages": max_pages, "max_depth": max_depth,
         "respect_robots": not no_robots, "capture_screenshots": screenshots,
         "use_sitemap": sitemap, "consent_handling": consent, "consent_click": consent_click,
-        "vision_enabled": vision,
+        "vision_enabled": vision, "allow_private": allow_private,
     }
     with _client(api_url) as client:
         try:

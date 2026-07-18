@@ -1,7 +1,7 @@
 # MEMORY — состояние проекта
 
 > Снапшот для новых сессий Claude Code (обновлять при значимых вехах; история — в git).
-> Обновлено: **2026-07-18**, коммиты `48ffb02` (docs+Phase 0) → `d9e9f32` (Phase 1).
+> Обновлено: **2026-07-18** (вечер), Phase 2 code complete.
 
 ## Где мы
 
@@ -9,47 +9,46 @@
 |------|--------|
 | Design docs (22 шт., два review-прохода) | ✅ решения D-1..D-14 закрыты/зафиксированы в [docs/README.md](docs/README.md) |
 | Phase 0 benchmark | ✅ **DONE 2026-07-13** — все exit-критерии ([docs/19](docs/19-phase0-benchmark-results.md) v1.0) |
-| Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** — backend+CLI+prompts, 30 тестов, cov 87%, E2E 3/3 |
-| **Phase 2 Full MVP** | 🔲 **NEXT** |
+| Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** — backend+CLI+prompts, E2E 3/3 |
+| **Phase 2 Full MVP** | 🟡 **CODE COMPLETE 2026-07-18** — 93 теста, cov 94%; до закрытия — ручные прогоны (ниже) |
+| Phase 3 Research Agent | 🔲 next после закрытия Phase 2 |
 
-## Ключевые результаты Phase 0 (для решений)
+## Phase 2 — что построено (поверх Phase 1)
 
-- **Hints-навигация бьёт чистый LLM**: GEO-слаг `/page/kontak` — hints ✅ 2 стр. vs llm-only ❌ (A/B #7).
-- **Vision работает**: DOM-only честный not_found на CSS-цене; DOM+vision находит ($49). qwen2.5vl:7b: рубрика 5/5, JSON 100%, p95 14.3 s (D-6b/D-6c закрыты).
-- **qwen3:14b single-model** (nav think:false + synth think:true): качество ≥ пары qwen2.5+r1, на 22–45% быстрее, ноль свопов → **рекомендация для D-2/D-3** (подтвердить на real-сайтах перед финализацией).
-- Thermal: деградации нет (3 прогона, 1.006×). Real-сайты 2/3 (python.org ❌ — synth 203 s, тяжёлый контент).
-- Слаг-пробы без HTTP-фильтра жгут бюджет на 404 → **F1-lite фильтр обязателен** (уже в проде Phase 1).
+- **SQLite store** (`storage/sqlite_store.py`, doc 12 v0.5): WAL, run lock производный от БД, legacy-JSON автоимпорт (файлы → `data/runs/legacy_json/`), `DELETE /runs/{id}` + `runs delete`, result.json + report.md в artifacts.
+- **Contract Enforcer** (`contracts/{loader,enforcer,context,rules/}`, doc 13 v0.7): YAML DSL в `data/contracts/` (crawl/synthesis/vision + crawl_forbidden.txt), unknown check → fail fast; порядок hard-проверок приоритетом кодов (G-H1 первым); G-H4/G-H6 — clamp-enforcement (`effective_rate_ms`, private exempt); recovery k=2 + link_scorer; **drift auto-tighten**: hard ≥3 → temp 0.2, I-H6 ≥2 → top-5, recovery <50% → fallback-only.
+- **SynthesisValidator** (`extraction/synthesis_validator.py`): S-H3 fuzzy ≥0.85 (rapidfuzz, in-memory), провал цитаты → drop evidence / fact → not_found; S-H6 vision-only ≠ high; S-G2 max 20 facts.
+- **Cancel FR-3.8**: cooperative event, проверки на границах state + между vision-вызовами; `POST /runs/{id}/cancel`, `runs cancel [id]`, Ctrl+C → abort/detach.
+- **Sitemap P2.5** (`navigation/sitemap.py`): robots `Sitemap:` → fallback /sitemap.xml; index → 3 вложенных; cap 500/20; intent-фильтр (content_search по task-keywords минус стоп-слова; прочие по path_hints).
+- **F1 полный** (`navigation/probes.py`): GET 12s/500KB/browser-UA/https→http; 403|пустой текст → escalate F2; links проб → queue bucket P1 (`f1:`-reason).
+- **Early stop G-S1**: 3 посещённые страницы без новых кандидатов с сигнальными тегами → SYNTHESIZE (`metadata.early_stop`).
+- **Cookie-dismiss D-11** (`browser/consent.py`): detect (fixed/z≥1000/25%+keywords) → CSS-hide → CMP-click reject-first (1/сайт, 2s); статус per-page в `metadata.consent`; **consent_selectors.yaml был битым YAML — починен**.
+- **Vision batch** (`vision/`, `orchestrator/vision_batch.py`, doc 23): VisionLoader shield (V-H1/H2/H3), key-pages R0–R3 + caps 5/12, VISION_BATCH state (браузер закрыт до VLM), insights → снапшоты → текстом в R1-промпт; `--vision auto|always|never`.
+- **Markdown report** (`reporting/markdown.py`, doc 05): Findings/Design/Not found/Appendix → `artifacts/{id}/report.md`.
+- RunConfig новое: `use_sitemap`, `consent_handling`, `consent_click`, `vision_enabled`, `allow_private`.
 
-## Phase 1 — что построено
+## Хвосты до закрытия Phase 2 (ручные, нужны реальные LLM)
 
-`backend/app/` (все слои за Protocols, DI через `app.state.orchestrator_factory`):
-observer (snapshot/links/blockers, URL-канонизация+tldextract) · navigation (intent RU+EN, queue P0–P4 top-10, F1-lite probes) · contracts/guards (I-H1/H6/H8/H9, G-H1/H2/H3 hop-depth D-13, landing-adopt step 0) · llm (Ollama client: structured outputs, think, телеметрия; navigator/synthesizer c промптами из `data/prompts/`) · orchestrator/loop (state machine doc 04, robots+Crawl-delay, retry, SPA-fallback скриншот, replan→fallback recovery, чекпойнты) · storage (JSON store + startup sweep) · api (/health, POST /runs 409-lock D-12) + `cli/main.py`.
-
-E2E 3/3 на фикстурах: телефон с цитатой · RU-задача (value по-русски — языковое правило работает) · email через несвязанный слаг. 0 контрактных нарушений.
-
-## Открытые хвосты (не блокеры)
-
-1. **PLAN p50 на real-сайтах 10–11 s** (цель 8 s) — мерилось при параллельной закачке; re-check чисто (gate doc 20 перед Phase 2 exit).
-2. **qwen3 single-model на real-сайтах** — для финализации D-2/D-3.
-3. **Synth 203 s на python.org** — тюнинг токен-бюджета (doc 20) для тяжёлых страниц.
-4. tok/s ~11–12 у 14B — ниже ожиданий M5, проверить квантование/версию Ollama.
-
-## Phase 2 scope (doc 06)
-
-YAML contract-enforcer (`data/contracts/*.yaml`) · SQLite store (doc 12) · VISION_BATCH (loader/analyzer, doc 23) · sitemap tier P2.5 · cookie-dismiss D-11 (`consent_selectors.yaml` уже готов) · cancel FR-3.8 · markdown-отчёты (doc 05) · early stop · F1 HTTP tier полный · coverage-гейты 95/90/85.
+1. **5-task benchmark ≥80%** (suite Phase 0) на Phase 2-коде — exit-критерий #2 doc 06.
+2. **E2E на fixture-сервере** (3 сценария Phase 1 + vision/sitemap кейсы) с реальными моделями.
+3. **PLAN p50 ≤8s re-check** чисто, без параллельной закачки (gate doc 20).
+4. qwen3 single-model на real-сайтах — финализация D-2/D-3 (из Phase 0).
+5. Synth 203s на python.org — тюнинг токен-бюджета (doc 20).
 
 ## Окружение
 
-- **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b (все ~9.3/9/6/9.3 GB). После работы — выгружать (`ollama ps` пуст).
-- **Venv'ы**: `backend/.venv` (uv sync, прод+тесты) и корневой `.venv` (spike-скрипты). Playwright chromium в кэше.
+- **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. После работы — выгружать (`ollama ps` пуст).
+- **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz теперь установлен) и корневой `.venv` (spike).
 - **Порты**: API 8001 · fixtures 8901–8904 · Ollama 11434.
-- Прогоны Phase 0: `scripts/spike/results/*.jsonl` (gitignored), сводка — `summarize_results.py`.
+- Гейты перед коммитом: `pytest` (93) · `ruff check app tests ../cli` · `check_module_size.py`.
 
 ## Gotchas
 
-- `format: json` + R1 несовместимы (constrained decoding душит thinking) — R1/qwen3 synth без format, с `think: true`; `strip_thinking()` — fallback.
-- qwen3 в Ollama **думает по умолчанию** — для nav обязательно `think: false`.
-- `ollama pull` падает с «unexpected EOF» при flaky сети — ретраить; прогресс через `| tail -1` не виден (буферизация) — смотреть размер partial-блобов в `~/.ollama/models/blobs/`.
-- Ollama-демон, запущенный из сессии (nohup), может умереть между сессиями — проверять `/api/version`.
-- IDE-диагностика «Package not installed» в pyproject — у IDE выбран не тот интерпретатор; истина — `backend/.venv` (pytest зелёный).
-- Фикстурные сайты: каждый на своём порту = свой origin (same-site по netloc для localhost).
+- `format: json` + R1 несовместимы (душит thinking) — synth без format, `think: true`; `strip_thinking()` — fallback.
+- qwen3 в Ollama думает по умолчанию — для nav обязательно `think: false`.
+- Ollama-демон между сессиями может умереть — проверять `/api/version`; `ollama pull` flaky (EOF) — ретраить.
+- Тесты не должны трогать реальную `data/runs` — фикстуры используют `Settings(runs_dir_override=tmp_path)`; SqliteRunStore при создании **мигрирует** JSON-файлы из каталога.
+- Оркестратор-юниты с публичным origin обязаны мокать `probe_slugs_f1`/`filter_alive`/`RobotsPolicy.load` — иначе реальная сеть.
+- FakeOllama отдаёт ответы по очереди: vision batch на SPA-фикстурах съедает свой reply — считать порядок (nav → vision → synth).
+- step_index в steps неуникален (OBSERVE и ACT одного шага) — SQLite PK (run_id, seq).
+- Фикстурные сайты: каждый на своём порту = свой origin.

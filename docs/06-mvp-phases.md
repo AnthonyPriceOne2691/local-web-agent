@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-05
+> Local Web Agent · Design doc · **v0.5** · 2026-07-18
 
 ## Engineering standards (все фазы)
 
@@ -100,38 +100,40 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 ## Phase 2 — Full MVP
 
+**Status: 🟡 CODE COMPLETE (2026-07-18)** — все deliverables реализованы и покрыты юнитами (93 теста, coverage: contracts 95–100%, orchestrator ~94%, backend 94%). До закрытия фазы — ручные exit-прогоны с реальными LLM: 5-task benchmark (см. ниже), E2E на fixture-сервере, re-check PLAN p50 (gate doc 20).
+
 **Goal:** production-quality solo tool — contracts, SQLite, robots.txt, reports.
 
 **Deliverables:**
-- [ ] Contract Enforcer (ABC arXiv:2602.22302) + `data/contracts/crawl.contract.yaml` + `synthesis.contract.yaml`
-- [ ] robots.txt integration
-- [ ] SQLite run store (doc 12)
-- [ ] Link scoring fallback (doc 21)
-- [ ] Early stop heuristics
-- [ ] HTTP probe tier F1 + Playwright escalate F2 (doc 03)
-- [ ] Blocker detection (login, captcha)
-- [ ] VisionLoader + VisionAnalyzer → `vision_insights` (doc 23); `--vision auto`
-- [ ] **Sitemap tier P2.5** (doc 21) — критично для UC-2 content_search
-- [ ] **Cookie-banner dismissal** `best_effort` для design_audit (D-11, doc 22)
-- [ ] **Cancel run** (`POST /runs/{id}/cancel`, `agent runs cancel` — FR-3.8)
-- [ ] Markdown report export
-- [ ] `agent runs list` / `agent runs show`
-- [ ] Rate limiting + configurable max depth/domain
-- [ ] Checkpoint per step
+- [x] Contract Enforcer (ABC arXiv:2602.22302) + `data/contracts/crawl.contract.yaml` + `synthesis.contract.yaml` + `vision.contract.yaml` (doc 13 v0.7)
+- [x] robots.txt integration (Phase 1) + `Sitemap:`-директивы + G-H5 в PLAN-shield
+- [x] SQLite run store (doc 12 v0.5) + legacy-импорт + `runs delete`
+- [x] Link scoring fallback (doc 21) + drift auto-tighten (doc 13 § Drift)
+- [x] Early stop heuristics (G-S1: 3 страницы без новых релевантных ссылок)
+- [x] HTTP probe tier F1 полный (GET 500 KB cap, links → queue) + escalate-маркер F2 (doc 03)
+- [x] Blocker detection (login, captcha) — Phase 1
+- [x] VisionLoader + VisionAnalyzer → `vision_insights` (doc 23); `--vision auto|always|never`
+- [x] **Sitemap tier P2.5** (doc 21) — `use_sitemap`, фильтр по intent, top-20
+- [x] **Cookie-banner dismissal** detect→hide→click reject-first (D-11, doc 22)
+- [x] **Cancel run** (`POST /runs/{id}/cancel`, `agent runs cancel` — FR-3.8)
+- [x] Markdown report export (`artifacts/{id}/report.md`, doc 05)
+- [x] `agent runs list` / `agent runs show` (Phase 1) + `runs cancel` / `runs delete`
+- [x] Rate limiting (G-H4 floor, private exempt) + configurable max depth + `--allow-private`
+- [x] Checkpoint per step (save в SQLite на каждом шаге)
 
 **Exit criteria (MVP definition of done):**
 1. ✅ CLI crawl with full guardrails
-2. ✅ 5-task benchmark ≥ **80%** success (reuse Phase 0 suite)
-3. ✅ Every fact has evidence or explicit not_found
+2. 🔲 5-task benchmark ≥ **80%** success (reuse Phase 0 suite) — **ручной прогон с реальными LLM**
+3. ✅ Every fact has evidence or explicit not_found (S-H2/S-H3 fuzzy + S-G1)
 4. ✅ robots.txt respected
 5. ✅ All local, no cloud API
 6. ✅ Contract Enforcer blocks form submit / external URL
-7. ✅ Vision batch: PNG → VLM → merged in ExtractionResult (design_audit + empty DOM)
+7. ✅ Vision batch: PNG → VLM → merged in ExtractionResult (mock-tested; real VLM — в ручном прогоне)
 
 **Engineering exit criteria:**
-- [ ] Coverage: contracts ≥ 95%, orchestrator ≥ 90%, backend ≥ **85%**
-- [ ] No files > 500 LOC
-- [ ] `scripts/check_module_size.py` in CI/local check
+- [x] Coverage: contracts ≥ 95%, orchestrator ≥ 90%, backend ≥ **85%** (факт: 95–100 / ~94 / 94)
+- [x] No files > 500 LOC
+- [x] `scripts/check_module_size.py` in CI/local check
 
 ---
 
@@ -226,3 +228,4 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-05 | Phase 0: vision spike script + tasks #8–9; exit criteria (doc 19) |
 | 2026-07-05 | **v0.3:** Phase 3 Research Agent (doc 24); Phase 4 Chat UI; Phase 5+ backlog |
 | 2026-07-05 | **v0.4 (review):** Phase 0 tasks #10 (nav model A/B) + #11 (sustained/thermal); Phase 1 + run lock и I-H8/I-H9; Phase 2 + sitemap/cookie-dismiss/cancel; риски: cookie walls, swap overhead, thermal; backlog: phase-batched, RSS, prune |
+| 2026-07-18 | **v0.5:** Phase 2 CODE COMPLETE — все deliverables реализованы (SQLite v0.5, enforcer v0.7 + drift, S-H3 fuzzy, cancel, sitemap P2.5, F1 полный, early stop G-S1, cookie-dismiss D-11, vision batch, markdown report, --allow-private); engineering exit взят (93 теста, cov 94%); осталось: ручные exit-прогоны с реальными LLM (5-task benchmark, E2E fixtures, PLAN p50 doc 20) |

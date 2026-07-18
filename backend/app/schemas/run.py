@@ -21,6 +21,7 @@ class RunConfig(BaseModel):
     consent_handling: Literal["auto", "hide_only", "never"] = "auto"  # D-11 (doc 22)
     consent_click: Literal["reject_first", "accept", "never"] = "reject_first"
     vision_enabled: Literal["auto", "always", "never"] = "auto"  # doc 23
+    allow_private: bool = False  # I-H8 override (doc 13); fixtures/интранет
 
 
 class Violation(BaseModel):

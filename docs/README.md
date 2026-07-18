@@ -12,7 +12,7 @@
 | [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.7** | Playwright; URL norm; redirect/landing policy; trafilatura |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
-| [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.4** | Phases 0–4; model A/B; thermal |
+| [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.5** | Phases 0–4; Phase 2 code complete |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.5** | SQLite реализован (Phase 2); runs + sessions; legacy-импорт; startup sweep |
 | [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.7** (реализован Phase 2) | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
@@ -37,7 +37,7 @@
 | Design docs | ✅ v0.5 review pass 2 (hop depth D-13, RU keywords, article candidates D-14, startup sweep, partial failure) + D-11 closed |
 | Phase 0 Benchmark | ✅ **DONE 2026-07-13** — все exit-критерии пройдены ([doc 19](19-phase0-benchmark-results.md) v1.0); хвосты: real re-check p50, qwen3 на real перед финалом D-2/D-3 |
 | Phase 1 Agent loop | ✅ **DONE 2026-07-18** — backend/app + cli + prompts; 30 тестов, coverage 87%, E2E 3/3 ([doc 06](06-mvp-phases.md) § Phase 1) |
-| **Phase 2 Full MVP** | 🟡 **In progress (2026-07-18)** — SQLite store ✅, YAML-enforcer + drift ✅; далее: vision batch, sitemap, cookie-dismiss, cancel, отчёты |
+| **Phase 2 Full MVP** | 🟡 **CODE COMPLETE (2026-07-18)** — все deliverables + engineering exit (93 теста, cov 94%); до закрытия: ручные прогоны с реальными LLM (5-task benchmark, E2E, PLAN p50 doc 20) |
 | Phase 3 Research Agent | 🔲 |
 | Phase 4 Chat UI | 🔲 |
 

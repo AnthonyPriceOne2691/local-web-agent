@@ -165,6 +165,18 @@ async def test_cancel_run_flow(api_client):
     assert (await client.delete(f"/runs/{run_id}")).status_code == 200
 
 
+async def test_cancel_zombie_and_delete_active(api_client):
+    client, app = api_client
+    store = app.state.run_store
+    # zombie: running-запись без живой таски → cancel финализирует напрямую
+    store.save(_record("zombie", status="running"))
+    assert (await client.delete("/runs/zombie")).status_code == 409  # активный не удалить
+    r = await client.post("/runs/zombie/cancel")
+    assert r.status_code == 202
+    assert store.get("zombie").status == "canceled"
+    assert (await client.delete("/runs/zombie")).status_code == 200
+
+
 async def test_get_unknown_run_404(api_client):
     client, _ = api_client
     assert (await client.get("/runs/nope")).status_code == 404

@@ -107,6 +107,42 @@ async def test_analyzer_parses_and_degrades(tmp_path):
     assert bad.status == "degraded" and bad.confidence == "low"
 
 
+async def test_vision_batch_missing_png_and_cancel(tmp_path):
+    """VisionLoadError → skipped insight; cancel до цикла → vision_partial."""
+    import asyncio
+
+    from app.config import Settings as S
+    from app.orchestrator.vision_batch import run_vision_batch
+    from app.schemas.run import RunConfig, RunRecord
+    from app.storage.sqlite_store import SqliteRunStore
+
+    settings = S(data_dir=REPO_ROOT / "data")
+    store = SqliteRunStore(tmp_path / "runs")
+    record = RunRecord(id="v1", config=RunConfig(start_url="https://x.com", task="find price"))
+    record.intent = "pricing"
+    snap = _snap("https://x.com/", text="tiny", shots=[_shot()])  # файла на диске нет
+
+    async def close():
+        pass
+
+    llm = FakeOllama([])
+    await run_vision_batch(record=record, snapshots=[snap], settings=settings, store=store,
+                           llm=llm, analyzer=None, close_browser=close)  # type: ignore[arg-type]
+    assert snap.vision_insights[0]["status"] == "skipped"
+    assert snap.vision_insights[0]["error"] == "file_missing"
+    assert record.metadata["vision_partial"] is True
+
+    snap2 = _snap("https://x.com/", text="tiny", shots=[_shot()])
+    record2 = RunRecord(id="v2", config=RunConfig(start_url="https://x.com", task="find price"))
+    record2.intent = "pricing"
+    ev = asyncio.Event()
+    ev.set()
+    await run_vision_batch(record=record2, snapshots=[snap2], settings=settings, store=store,
+                           llm=llm, analyzer=None, close_browser=close, cancel_event=ev)  # type: ignore[arg-type]
+    assert record2.metadata["vision_calls_total"] == 0
+    assert record2.metadata["vision_partial"] is True
+
+
 # -------------------------------------------------------- orchestrator E2E
 async def test_vision_batch_merges_into_synthesis(tmp_path):
     """SPA-страница: vision достаёт цену → R1 видит vision-блок в промпте."""
@@ -136,3 +172,5 @@ async def test_vision_batch_merges_into_synthesis(tmp_path):
     assert record.result.facts and record.result.facts[0].value == "$49/mo"
     steps_states = [s.state for s in record.steps]
     assert "VISION_BATCH" in steps_states
+    report = (store.artifacts_dir(record.id) / "report.md").read_text(encoding="utf-8")
+    assert "source: vision" in report and "$49/mo" in report  # doc 05 report on disk
