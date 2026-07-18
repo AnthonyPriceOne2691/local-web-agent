@@ -1,6 +1,6 @@
 # 12 — Session Storage (Crawl Runs)
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-05
+> Local Web Agent · Design doc · **v0.5** · 2026-07-18
 
 ## Назначение
 
@@ -35,6 +35,8 @@ Phase 1: только `data/runs/{run_id}.json` (flat file). Phase 2: migrate to
 | start_url | TEXT | |
 | config_json | JSON | max_pages, depth, domains, resolved_defaults, prompt_versions |
 | status | ENUM | running, completed, partial, not_found, blocked, failed, **canceled** |
+| intent | TEXT | classified task intent (contact, pricing, …) — runtime-поле RunRecord |
+| current_url | TEXT | последняя посещённая страница (CLI-поллинг) |
 | result_json | JSON | ExtractionResult nullable until done |
 | **metadata_json** | JSON | violation aggregates (doc 13), vision flags (doc 23), llm stats — **колонка добавлена: на неё ссылались docs 13/23, в схеме отсутствовала** |
 | pages_visited | INT | |
@@ -70,19 +72,17 @@ Phase 1: только `data/runs/{run_id}.json` (flat file). Phase 2: migrate to
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID PK | |
-| run_id | FK | |
-| step_index | INT | 0-based |
+| run_id | FK | PK = (run_id, **seq**) |
+| seq | INT | позиция в step-логе; `step_index` может повторяться (OBSERVE и ACT одного шага) |
+| step_index | INT | логический номер шага цикла |
 | state | TEXT | OBSERVE, PLAN, ACT, ... |
 | url | TEXT | current page |
-| action_json | JSON | proposed + executed action |
-| snapshot_summary | TEXT | title + first 500 chars (not full snapshot in DB) |
-| screenshot_path | TEXT | nullable; relative path under artifacts |
+| action / target_url / note | TEXT | executed action (плоские колонки вместо action_json) |
+| screenshot_paths_json | JSON | `{profile: relative_path}` — мульти-профиль (doc 22/23), вместо одиночного screenshot_path |
 | llm_reasoning | TEXT | from PLAN |
 | contract_violations | JSON | [] if clean |
 | duration_ms | INT | |
 | llm_stats_json | JSON | nullable; `eval_count`, `eval_duration`, `prompt_eval_count` из ответа Ollama — бесплатная телеметрия для тюнинга (doc 20) |
-| created_at | TIMESTAMP | |
 
 Full PageSnapshot → `artifacts/{run_id}/steps/{index:03d}.json` (optional, configurable). After vision batch (Phase 2): same file includes **`vision_insights[]`** (doc 23).
 
@@ -145,3 +145,4 @@ Run lock — **производный от БД** (нет строк `running` �
 | 2026-07-05 | **v0.2:** research_sessions, session_messages; crawl_runs.session_id (doc 24) |
 | 2026-07-05 | **v0.3 (review):** crawl_runs.metadata_json (referenced by docs 13/23 but missing); status canceled; crawl_steps.llm_stats_json (Ollama eval telemetry); SQLite WAL |
 | 2026-07-05 | **v0.4 (review-2):** startup sweep для zombie runs (running → failed при рестарте); run lock производный от БД |
+| 2026-07-18 | **v0.5 (Phase 2 impl):** SqliteRunStore реализован. crawl_runs + intent, current_url (runtime-поля RunRecord); crawl_steps: PK (run_id, seq) — step_index неуникален (OBSERVE+ACT), action/target_url/note плоскими колонками, screenshot_paths_json (мульти-профиль) вместо screenshot_path; legacy JSON Phase 1 автоимпортируется в БД (файлы → `legacy_json/`); `DELETE /runs/{id}` + `agent runs delete` (retention); result.json пишется в artifacts при финальном статусе |

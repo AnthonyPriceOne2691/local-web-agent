@@ -131,5 +131,18 @@ def runs_show(
                                    ensure_ascii=False, indent=2))
 
 
+@runs_app.command("delete")
+def runs_delete(run_id: str, api_url: str = typer.Option(API_DEFAULT, "--api-url")) -> None:
+    with _client(api_url) as client:
+        r = client.delete(f"/runs/{run_id}")
+    if r.status_code == 404:
+        console.print("[red]run not found[/red]")
+        raise typer.Exit(1)
+    if r.status_code == 409:
+        console.print("[red]run is active — cancel it first[/red]")
+        raise typer.Exit(2)
+    console.print(f"Deleted: {run_id}")
+
+
 if __name__ == "__main__":
     sys.exit(app())

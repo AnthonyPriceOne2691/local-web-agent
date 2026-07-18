@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 
 from app.navigation.path_hints import PathHints
-from app.storage.run_store import JsonRunStore
+from app.storage.sqlite_store import SqliteRunStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture()
-def tmp_store(tmp_path: Path) -> JsonRunStore:
-    return JsonRunStore(tmp_path / "runs")
+def tmp_store(tmp_path: Path) -> SqliteRunStore:
+    return SqliteRunStore(tmp_path / "runs")
 
 
 @pytest.fixture(scope="session")

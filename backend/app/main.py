@@ -16,7 +16,7 @@ from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
 from app.navigation.path_hints import PathHints
 from app.orchestrator.loop import CrawlOrchestrator
-from app.storage.run_store import JsonRunStore
+from app.storage.sqlite_store import SqliteRunStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -26,9 +26,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.settings = settings
         app.state.llm_client = OllamaClient(settings.ollama_url, timeout_s=settings.llm_timeout_s)
-        app.state.run_store = JsonRunStore(settings.runs_dir)
+        app.state.run_store = SqliteRunStore(settings.runs_dir)
         app.state.hints = PathHints.load(settings.navigation_dir)
-        app.state.active_run_id = None
         app.state.background_tasks = set()
         swept = app.state.run_store.startup_sweep()  # zombie runs (doc 12)
         if swept:

@@ -37,10 +37,11 @@ class Settings(BaseSettings):
 
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
+    runs_dir_override: Path | None = None  # тесты/сторонний размещение БД
 
     @property
     def runs_dir(self) -> Path:
-        return self.data_dir / "runs"
+        return self.runs_dir_override or self.data_dir / "runs"
 
     @property
     def artifacts_dir(self) -> Path:

@@ -1,31 +1,78 @@
-"""API (POST /runs 202→409 D-12, GET status, startup sweep) + JsonRunStore roundtrip."""
+"""API (POST /runs 202→409 D-12, GET status, startup sweep) + SqliteRunStore roundtrip."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 
 import httpx
 import pytest
 
 from app.config import Settings
 from app.main import create_app
-from app.schemas.run import RunConfig, RunRecord
-from app.storage.run_store import JsonRunStore
+from app.schemas.extraction import ExtractionResult
+from app.schemas.run import CrawlStep, RunConfig, RunRecord, Violation
+from app.storage.sqlite_store import SqliteRunStore
 from tests.conftest import REPO_ROOT
 
 
+def _record(run_id: str = "r1", status: str = "running") -> RunRecord:
+    return RunRecord(id=run_id, config=RunConfig(start_url="https://x.com", task="t"), status=status)
+
+
 def test_store_roundtrip_and_sweep(tmp_path):
-    store = JsonRunStore(tmp_path / "runs")
-    rec = RunRecord(id="r1", config=RunConfig(start_url="https://x.com", task="t"), status="running")
+    store = SqliteRunStore(tmp_path / "runs")
+    rec = _record()
+    rec.steps.append(CrawlStep(index=1, state="OBSERVE", url="https://x.com", duration_ms=42,
+                               screenshot_paths={"desktop": "screenshots/001.png"}))
+    rec.steps.append(CrawlStep(index=1, state="ACT", action="navigate", target_url="https://x.com/a",
+                               violations=[Violation(constraint_id="I-H6", message="not in queue")],
+                               llm_stats={"eval_count": 7}))
     store.save(rec)
     loaded = store.get("r1")
     assert loaded and loaded.config.task == "t"
+    assert len(loaded.steps) == 2  # одинаковый step_index (OBSERVE+ACT) не схлопывается
+    assert loaded.steps[0].screenshot_paths == {"desktop": "screenshots/001.png"}
+    assert loaded.steps[1].violations[0].constraint_id == "I-H6"
+    assert loaded.steps[1].llm_stats == {"eval_count": 7}
     assert store.list_ids() == ["r1"]
     assert store.artifacts_dir("r1").is_dir()
+    assert store.active_run_id() == "r1"  # D-12: lock из БД
     # sweep: running → failed (orphaned)
     assert store.startup_sweep() == 1
     assert store.get("r1").status == "failed"
     assert "orphaned" in store.get("r1").error_message
+    assert store.active_run_id() is None
+
+
+def test_store_result_artifact_and_delete(tmp_path):
+    store = SqliteRunStore(tmp_path / "runs")
+    rec = _record()
+    rec.status = "completed"
+    rec.result = ExtractionResult(status="completed", summary="ok")
+    store.save(rec)
+    result_json = store.artifacts_dir("r1") / "result.json"
+    assert json.loads(result_json.read_text())["summary"] == "ok"
+    assert store.delete("r1") is True
+    assert store.get("r1") is None
+    assert not (tmp_path / "runs" / "artifacts" / "r1").exists()
+    assert store.delete("r1") is False  # идемпотентно
+
+
+def test_store_legacy_json_import(tmp_path):
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir(parents=True)
+    legacy = _record("legacy1", status="completed")
+    (runs_dir / "legacy1.json").write_text(legacy.model_dump_json(), encoding="utf-8")
+    (runs_dir / "broken.json").write_text("{not json", encoding="utf-8")
+    store = SqliteRunStore(runs_dir)
+    assert store.get("legacy1") is not None
+    assert store.list_ids() == ["legacy1"]
+    # файлы уехали в legacy_json/, повторный старт не дублирует
+    assert not (runs_dir / "legacy1.json").exists()
+    assert (runs_dir / "legacy_json" / "legacy1.json").exists()
+    store2 = SqliteRunStore(runs_dir)
+    assert store2.list_ids() == ["legacy1"]
 
 
 class InstantOrchestrator:
@@ -44,11 +91,11 @@ class InstantOrchestrator:
 
 @pytest.fixture()
 async def api_client(tmp_path, monkeypatch):
-    settings = Settings(data_dir=REPO_ROOT / "data")
+    settings = Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs")
     app = create_app(settings)
     async with app.router.lifespan_context(app):
         # подменяем на изолированный store + мгновенный оркестратор (DI через app.state)
-        app.state.run_store = JsonRunStore(tmp_path / "runs")
+        app.state.run_store = SqliteRunStore(tmp_path / "runs")
         app.state.orchestrator_factory = lambda: InstantOrchestrator(app.state.run_store)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

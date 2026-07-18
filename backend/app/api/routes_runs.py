@@ -16,10 +16,11 @@ router = APIRouter()
 @router.post("/runs", status_code=202)
 async def start_run(config: RunConfig, request: Request) -> dict:
     state = request.app.state
-    if state.active_run_id is not None:  # D-12: global run lock
+    active = state.run_store.active_run_id()  # D-12: lock производный от БД (doc 12)
+    if active is not None:
         raise HTTPException(
             status_code=409,
-            detail={"error": "run_in_progress", "active_run_id": state.active_run_id},
+            detail={"error": "run_in_progress", "active_run_id": active},
         )
     record = RunRecord(
         id=uuid.uuid4().hex[:12],
@@ -28,7 +29,6 @@ async def start_run(config: RunConfig, request: Request) -> dict:
         started_at=datetime.now(UTC).isoformat(),
     )
     state.run_store.save(record)
-    state.active_run_id = record.id
 
     async def _execute() -> None:
         try:
@@ -38,8 +38,6 @@ async def start_run(config: RunConfig, request: Request) -> dict:
             record.status = "failed"
             record.error_message = str(exc)[:500]
             state.run_store.save(record)
-        finally:
-            state.active_run_id = None
 
     state.background_tasks.add(asyncio.create_task(_execute()))
     return {"run_id": record.id, "status": "running"}
@@ -66,6 +64,17 @@ async def get_run(run_id: str, request: Request) -> RunRecord:
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
     return record
+
+
+@router.delete("/runs/{run_id}")
+async def delete_run(run_id: str, request: Request) -> dict:
+    """Retention (doc 12): удаляет запись + artifacts. Активный run удалять нельзя."""
+    store = request.app.state.run_store
+    if store.active_run_id() == run_id:
+        raise HTTPException(status_code=409, detail="run is active — cancel it first")
+    if not store.delete(run_id):
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"deleted": run_id}
 
 
 @router.get("/runs/{run_id}/result")

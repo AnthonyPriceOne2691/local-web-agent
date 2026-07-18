@@ -18,5 +18,5 @@ async def health(request: Request) -> dict:
         "ollama": "reachable" if ollama["reachable"] else "unreachable",
         "ollama_version": ollama["version"],
         "models": models_present,
-        "active_run_id": state.active_run_id,
+        "active_run_id": state.run_store.active_run_id(),
     }

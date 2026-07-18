@@ -10,7 +10,7 @@ from app.llm.navigator import Navigator
 from app.llm.synthesizer import Synthesizer
 from app.orchestrator.loop import CrawlOrchestrator
 from app.schemas.run import RunConfig, RunRecord
-from app.storage.run_store import JsonRunStore
+from app.storage.sqlite_store import SqliteRunStore
 from tests.conftest import REPO_ROOT, FakeBrowserSession, FakeOllama, page_raw
 
 ORIGIN = "http://127.0.0.1:8901"
@@ -24,9 +24,9 @@ SYNTH_OK = {
 }
 
 
-def make_orchestrator(tmp_path, browser, replies) -> tuple[CrawlOrchestrator, JsonRunStore, FakeOllama]:
+def make_orchestrator(tmp_path, browser, replies) -> tuple[CrawlOrchestrator, SqliteRunStore, FakeOllama]:
     settings = Settings(data_dir=REPO_ROOT / "data")
-    store = JsonRunStore(tmp_path / "runs")
+    store = SqliteRunStore(tmp_path / "runs")
     llm = FakeOllama(replies)
     from app.navigation.path_hints import PathHints
 

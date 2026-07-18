@@ -14,7 +14,7 @@
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.4** | Phases 0–4; model A/B; thermal |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
-| [12-session-storage.md](12-session-storage.md) | ✅ **v0.4** | runs + sessions; metadata_json; startup sweep |
+| [12-session-storage.md](12-session-storage.md) | ✅ **v0.5** | SQLite реализован (Phase 2); runs + sessions; legacy-импорт; startup sweep |
 | [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.6** | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.4** | + Meta + Compare; swap mechanics; A/B |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.5** | + /sessions, cancel, 409, ollama_version |
