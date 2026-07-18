@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-18
+> Local Web Agent · Design doc · **v0.7** · 2026-07-18
 
 ## Engineering standards (все фазы)
 
@@ -152,25 +152,31 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 ## Phase 3 — Research Agent (Layer 2)
 
-**Goal:** multi-site tasks из doc 24 — `agent research`, compare synthesis, sessions.
+**Status: ✅ DONE (2026-07-18)** — код + exit-бенчмарк на реальных LLM (qwen3 single-model + qwen2.5vl):
+
+| UC | Результат |
+|----|-----------|
+| **UC-2** (3 блог-фикстуры, content_completeness) | ✅ winner **blog_alpha 95** > gamma 75 > beta 50 — спроектированный порядок полноты; dimensions по всем сайтам; narrative цитирует конкретику (примеры кэфов, таблица вероятностей, FAQ, банкролл); ~11 мин |
+| **UC-1** (4 сайта, design_diff, vision always) | ✅ ComparisonResult + report: 6 рубрик-dimensions × 4 сайта, narrative различает тёмную/светлую схемы и структуру; winner=None (корректно для diff-рубрики); vision 0 сбоев; **~18.5 мин — в 20-минутный бюджет doc 24**; пик RAM Ollama 13 GB, OOM нет |
+
+Бенчмарк поймал и починил: `_host()` без порта (фикстуры на 127.0.0.1:* сливались в один сайт), article-excerpt перепечатывался LLM в output и резался `max_tokens` (теперь excerpt 12K подставляет код из снапшота — S-семантика verbatim гарантирована), невалидный article-блок ронял весь синтез в пустой partial (теперь отбрасывается только блок), word_count-коэрция.
 
 **Deliverables:**
-- [ ] `ComparisonResult` schema + rubrics (`design_diff`, `content_completeness`)
-- [ ] Compare Synthesizer (R1)
-- [ ] Meta-agent + tool registry (`crawl_site`, `compare_results`, `get_run_result`)
-- [ ] Sequential multi-site queue (D-7)
-- [ ] Research Session storage (doc 12)
-- [ ] `article` extraction block in ExtractionResult
-- [ ] CLI: `agent research --urls ... --task "..."`
-- [ ] REST: `POST /sessions`, `POST /sessions/{id}/messages`
-- [ ] UC-1 benchmark: 2 fixture sites design compare
-- [ ] UC-2 benchmark: 2 fixture blogs football article compare
+- [x] `ComparisonResult` schema + rubrics (`design_diff`, `content_completeness`, `generic_merge`)
+- [x] Compare Synthesizer (synth-модель, wide ctx 24K при N>3; run_id мапит код, выдуманные сайты отбрасываются)
+- [x] Meta-agent rules-planner + tools `crawl_site`/`compare_results` (M-H1..M-H4 в раннере; doc 24 v0.4)
+- [x] Sequential multi-site queue (D-7) + cooldown (30 s при N≥4) + session timeout 60 min graceful
+- [x] Research Session storage (doc 12 v0.6) + startup sweep + session cancel
+- [x] `article` extraction block (excerpt 12K заполняет код из снапшота)
+- [x] CLI: `agent research --urls ... --task ... --output --report`
+- [x] REST: `POST /sessions`, `POST /sessions/{id}/messages`, GET/cancel/DELETE
+- [x] UC-1 / UC-2 benchmarks (fixtures: blog_alpha/beta/gamma + pricing/simple_contact)
 
 **Exit criteria:**
-- [ ] UC-1: 4 URLs design compare → ComparisonResult + report
-- [ ] UC-2: 3 competitor URLs → correct winner with evidence quotes
-- [ ] No parallel crawls; OOM-free on 32 GB for 4-site queue
-- [ ] Meta-agent uses only registered tools (M-H1)
+- [x] UC-1: 4 URLs design compare → ComparisonResult + report
+- [x] UC-2: 3 competitor URLs → correct winner (blog_alpha) with evidence quotes
+- [x] No parallel crawls; OOM-free on 32 GB for 4-site queue (пик 13 GB)
+- [x] Meta-agent uses only registered tools (M-H1)
 
 ---
 
@@ -243,3 +249,4 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-05 | **v0.4 (review):** Phase 0 tasks #10 (nav model A/B) + #11 (sustained/thermal); Phase 1 + run lock и I-H8/I-H9; Phase 2 + sitemap/cookie-dismiss/cancel; риски: cookie walls, swap overhead, thermal; backlog: phase-batched, RSS, prune |
 | 2026-07-18 | **v0.5:** Phase 2 CODE COMPLETE — все deliverables реализованы (SQLite v0.5, enforcer v0.7 + drift, S-H3 fuzzy, cancel, sitemap P2.5, F1 полный, early stop G-S1, cookie-dismiss D-11, vision batch, markdown report, --allow-private); engineering exit взят (93 теста, cov 94%); осталось: ручные exit-прогоны с реальными LLM (5-task benchmark, E2E fixtures, PLAN p50 doc 20) |
 | 2026-07-18 | **v0.6: Phase 2 ✅ DONE** — exit-бенчмарк на реальных LLM: 4/5 формальной пятёрки (80%), 7/8 с #6/#8; vision E2E подтверждён (#8 CSS-цена через qwen2.5vl); PLAN p50 7.9 s ≤ 8 s чисто; synth python.org 95.9 s (−53% vs Phase 0). Починены по итогам: S-H3b vision-reclass, S-H3c URL-факты (doc 13 v0.7.1), synthesizer-промпт vision-aware (doc 16), docs-словарь + develop/contribut (doc 21); #3 python.org — known-fail (backlog: аннотация проб) |
+| 2026-07-18 | **v0.7: Phase 3 ✅ DONE** — Layer 2 реализован (research/{meta_agent,runner,compare_synthesizer,report}, sessions storage/API/CLI; 115 тестов, cov 93%) и exit-бенчмарк пройден: UC-2 winner blog_alpha 95>75>50 с цитатами (~11 мин), UC-1 4-site design compare + report (~18.5 мин ≤ 20-мин бюджета, vision 0 сбоев, пик RAM 13 GB). Фиксы по бенчмарку: `_host` с портом, article-excerpt заполняет код (не LLM-перепечатка), устойчивость синтеза к невалидному article-блоку. Next: Phase 4 Chat UI |

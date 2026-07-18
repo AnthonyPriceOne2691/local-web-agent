@@ -1,20 +1,20 @@
 # 14 — LLM Model Split
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-05
+> Local Web Agent · Design doc · **v0.5** · 2026-07-18
 
-## Принцип
+## Принцип (D-2/D-3 closed: single-model qwen3)
 
-**Instruct для hot loop · VLM для скриншотов · reasoning для финального JSON.**
+**Один text-модель `qwen3:14b` в двух режимах (`think:false` для hot loop, `think:true` для итогового JSON) · VLM для скриншотов.** Ноль свопов внутри text-пайплайна — главный выигрыш на 32 GB (Phase 0 A/B #10 + Phase 2 exit-бенчмарк).
 
-| Pass | Latency sensitive? | Model |
-|------|-------------------|-------|
-| PLAN (each page) | ✅ Yes | `qwen2.5:14b-instruct` |
-| **VISION** (per PNG, batch) | ⚠️ Moderate | **`qwen2.5vl:7b`** (doc 23) |
-| SYNTHESIZE (per site) | ❌ No | `deepseek-r1:14b` |
-| **META** (research plan) | ⚠️ Moderate | `qwen2.5:14b-instruct` (doc 24) |
-| **COMPARE** (N sites) | ❌ No | `deepseek-r1:14b` |
+| Pass | Latency sensitive? | Model (канон doc 16 v0.5) | Fallback |
+|------|-------------------|---------------------------|----------|
+| PLAN (each page) | ✅ Yes | `qwen3:14b` `think:false` | `qwen2.5:14b-instruct` |
+| **VISION** (per PNG, batch) | ⚠️ Moderate | **`qwen2.5vl:7b`** (doc 23) | `gemma3:12b` |
+| SYNTHESIZE (per site) | ❌ No | `qwen3:14b` `think:true` | `deepseek-r1:14b` |
+| **META** (research plan) | — | **rules-planner Phase 3** (без LLM, doc 24); LLM Phase 4 → `qwen3:14b` `think:false` | |
+| **COMPARE** (N sites) | ❌ No | `qwen3:14b` `think:true` | `deepseek-r1:14b` |
 
-Правило: **навигация — Qwen; картинки — VLM; итог — R1.** R1 не получает raw PNG — только текст `vision_insights`.
+Правило: **навигация — think off; картинки — VLM; итог — think on.** Synthesis/compare не получают raw PNG — только текст `vision_insights`.
 
 ---
 
@@ -148,3 +148,4 @@ Research session (Layer 2, doc 24):
 | 2026-07-05 | **v0.2:** three-model split + swap timeline; D-6b vision model (doc 23) |
 | 2026-07-05 | **v0.3:** Meta-agent Qwen + Compare R1 (doc 24) |
 | 2026-07-05 | **v0.4 (review):** vision-тег исправлен `qwen2-vl:7b` → **`qwen2.5vl:7b`** (реального тега qwen2-vl в Ollama library нет); fallback-матрица обновлена (gemma3/minicpm-v вместо llava:13b); swap mechanics (keep_alive=0, OLLAMA_MAX_LOADED_MODELS=1, /api/ps); Phase 0 A/B кандидаты qwen3:14b (single-model вариант) и gpt-oss:20b; strip_thinking → Ollama think param |
+| 2026-07-18 | **v0.5 (D-2/D-3 closed):** канон — **`qwen3:14b` single-model** (PLAN `think:false` / SYNTHESIZE+COMPARE `think:true`), пара qwen2.5+r1 — fallback; META Phase 3 — rules-planner без LLM (doc 24 v0.4); свопы остаются только text↔VLM (vision batch) |

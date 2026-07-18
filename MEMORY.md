@@ -1,24 +1,26 @@
 # MEMORY — состояние проекта
 
 > Снапшот для новых сессий Claude Code (обновлять при значимых вехах; история — в git).
-> Обновлено: **2026-07-18** (ночь), Phase 2 ✅ DONE (exit-бенчмарк прогнан).
+> Обновлено: **2026-07-18** (поздняя ночь), Phase 3 ✅ DONE.
 
 ## Где мы
 
 | Веха | Статус |
 |------|--------|
-| Design docs (22 шт.) | ✅ **все решения D-1..D-14 закрыты** (D-2/D-3 → qwen3:14b single-model по бенчмарку) |
+| Design docs (22 шт.) | ✅ **все решения D-1..D-14 закрыты** (D-2/D-3 → qwen3:14b single-model) |
 | Phase 0 benchmark | ✅ **DONE 2026-07-13** ([docs/19](docs/19-phase0-benchmark-results.md) v1.0) |
-| Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** — backend+CLI+prompts, E2E 3/3 |
-| **Phase 2 Full MVP** | ✅ **DONE 2026-07-18** — exit-бенчмарк 4/5 (гейт 80%), 7/8 с бонусами; vision E2E ✅; PLAN p50 7.9 s ≤ 8 s; 96 тестов, cov 93% ([doc 06](docs/06-mvp-phases.md) § Phase 2 — таблица результатов) |
-| **Phase 3 Research Agent** | 🔲 **NEXT** — ComparisonResult, compare synthesizer, meta-agent, sessions (doc 06/24) |
+| Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** |
+| Phase 2 Full MVP | ✅ **DONE 2026-07-18** — 4/5 (80% гейт), vision E2E, PLAN p50 7.9 s ([doc 06](docs/06-mvp-phases.md) § Phase 2) |
+| **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3); 115 тестов, cov 93% |
+| **Phase 4 Chat UI** | 🔲 **NEXT** — React chat + SSE поверх /sessions (doc 24 § Chat UI, doc 17) |
 
-## Phase 2 exit-бенчмарк (2026-07-18, qwen3:14b single-model + qwen2.5vl:7b)
+## Phase 3 — что построено и бенчмарк
 
-- Фикстуры 5/5: phone ✅ · Pro price ✅ · RU-задача ✅ · GEO-слаг `/page/kontak` ✅ · **vision #8 ✅ ($49 из CSS ::after — DOM не видит, VLM находит, merged `source: vision, medium`)**.
-- Real: playwright.dev ✅ (python API docs, high) · ollama.com ✅ (`/search`, S-H3c URL-факт) · python.org ❌ known-fail (intent docs срабатывает, `/dev`-проба в очереди, но LLM уходит в docs.python.org листать версии; честный not_found; backlog: аннотация проб интентом, penalty версионных ссылок).
-- PLAN p50 **7.9 s** (28 вызовов; gate ≤8 doc 20 взят чисто); p95 11.6 s — выше NFR-1.2 (10 s) только на real-страницах → хвост тюнинга doc 20. Synth max 95.9 s (python.org) vs 203 s в Phase 0.
-- Бенчмарк поймал 3 прод-бага (все починены + юниты): S-H3b vision-цитаты резались DOM-проверкой → reclass через `token_set_ratio`; S-H3c URL-факты убивались без цитаты → визит = self-evidence (cap medium); флак юнитов при живом fixtures-сервере → autouse-мок проб в conftest.
+- `research/`: meta_agent (rules-planner: URL regex, research intent RU+EN, план по intent-таблице), runner (sequential D-7 + cooldown 30 s при N≥4, partial failure → `excluded[]`, M-H1..M-H4, session cancel/timeout 60 min), compare_synthesizer (rubrics из data/, wide ctx 24K при N>3, run_id мапит код по netloc-с-портом, выдуманные сайты отбрасываются), report (comparison_report.md).
+- Storage: research_sessions в том же app.db (messages_json в строке; sweep running_tools/comparing → failed). API `/sessions` CRUD+messages+cancel; CLI `agent research --urls --task --output --report`.
+- ExtractionResult + `article` (excerpt 12K **подставляет код из снапшота** — LLM возвращает только url+мету и короткую цитату), `article_candidates_considered`, `design_tokens`; синтез intent-aware (ARTICLE/DESIGN MODE в user-промпте).
+- **UC-2 ✅** (3 блог-фикстуры): winner blog_alpha **95** > gamma 75 > beta 50 — спроектированный порядок; dimensions/narrative с цитатами; ~11 мин. **UC-1 ✅** (4 сайта, design_diff, vision always): report c 6 dimensions × 4 сайта; ~18.5 мин ≤ 20-мин бюджета doc 24; vision 0 сбоев; пик RAM Ollama 13 GB, OOM нет; winner=None — корректно для diff-рубрики.
+- Бенчмарк-фиксы: `_host()` netloc с портом (фикстуры 127.0.0.1:* сливались), article-excerpt больше не перепечатывается LLM (резался max_tokens → пустой partial), невалидный article-блок отбрасывается не роняя синтез, word_count coercion+порог 50.
 
 ## Phase 2 — что построено (поверх Phase 1)
 
@@ -34,19 +36,21 @@
 - **Markdown report** (`reporting/markdown.py`, doc 05): Findings/Design/Not found/Appendix → `artifacts/{id}/report.md`.
 - RunConfig новое: `use_sitemap`, `consent_handling`, `consent_click`, `vision_enabled`, `allow_private`.
 
-## Открытые хвосты (не блокеры; Phase 3 может идти)
+## Открытые хвосты (не блокеры; Phase 4 может идти)
 
 1. **p95 PLAN 11.6 s vs NFR-1.2 10 s** на real-страницах — тюнинг сниппетов/бюджета (doc 20).
 2. **python.org contribute-кейс** — backlog: аннотация slug-проб интентом в candidate-списке, penalty версионных ссылок (doc 06 § Phase 2 таблица).
-3. doc 14 (model split) ещё описывает пару qwen2.5+r1 как канон — выровнять с doc 16 v0.5 (single-model) при ближайшей правке.
-4. `--vision always` профили-таблица doc 21/23 реализована частично: viewports.yaml multi-viewport capture (tablet/mobile) не подключён к _maybe_screenshot (сейчас desktop-only + SPA fallback) — уточнить в Phase 3 design-audit работах.
+3. **Multi-viewport capture** (tablet/mobile из viewports.yaml) не подключён к _maybe_screenshot — desktop-only; в UC-1 dimension mobile_vs_desktop честно 0. Поднять при Phase 4 design-audit UX.
+4. **SSE `/sessions/{id}/events`** отложен до Phase 4 (CLI поллит GET); doc 24 v0.4 п.4.
+5. UC-бенчмарки гонялись на локальных фикстурах; real-site research-сессия (2-3 публичных сайта) — прогнать при случае для калибровки таймингов.
 
 ## Окружение
 
 - **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. **Дефолт кода: qwen3:14b (nav+synth)**. После работы — выгружать (`ollama ps` пуст).
 - **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike).
 - **Порты**: API 8001 · fixtures 8901–8904 · Ollama 11434.
-- Гейты перед коммитом: `pytest` (96) · `ruff check app tests ../cli` · `check_module_size.py`.
+- Гейты перед коммитом: `pytest` (115) · `ruff check app tests ../cli` · `check_module_size.py`.
+- Fixture-порты сдвинулись (сайты сортируются по имени): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
 
 ## Gotchas
 

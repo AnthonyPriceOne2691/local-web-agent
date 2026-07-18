@@ -94,8 +94,17 @@ class Synthesizer:
                 ExtractionResult(status="partial", summary=strip_thinking(content)[:500]),
                 stats,
             )
+        payload = {**raw, "status": raw.get("status", "completed")}
         try:
-            result = ExtractionResult.model_validate({**raw, "status": raw.get("status", "completed")})
+            result = ExtractionResult.model_validate(payload)
         except ValidationError:
-            result = ExtractionResult(status="partial", summary=str(raw.get("summary", ""))[:500])
+            # чаще всего валидацию валят опциональные блоки (article/design) —
+            # отбросить их и сохранить факты, а не ронять весь результат в пустой partial
+            for key in ("article", "article_candidates_considered", "design_tokens"):
+                payload.pop(key, None)
+            try:
+                result = ExtractionResult.model_validate(payload)
+            except ValidationError:
+                result = ExtractionResult(status="partial",
+                                          summary=str(raw.get("summary", ""))[:500])
         return result, stats

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Confidence = Literal["high", "medium", "low"]
 RunStatus = Literal["running", "completed", "partial", "not_found", "blocked", "failed", "canceled"]
@@ -40,6 +40,14 @@ class Article(BaseModel):
     main_text_excerpt: str = ""  # до 12000 chars для compare (doc 20)
     published_date: str | None = None
     page_type_confidence: Confidence = "medium"
+
+    @field_validator("word_count", mode="before")
+    @classmethod
+    def _coerce_word_count(cls, v):  # LLM пишет "≈2400"/"about 950" — вытащить цифры
+        if isinstance(v, str):
+            digits = "".join(ch for ch in v if ch.isdigit())
+            return int(digits) if digits else 0
+        return v or 0
 
 
 class ArticleCandidate(BaseModel):

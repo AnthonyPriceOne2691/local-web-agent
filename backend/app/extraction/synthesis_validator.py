@@ -95,7 +95,28 @@ class SynthesisValidator:
                 result.not_found.append(
                     NotFound(key=key, reason="evidence quote not found in visited pages")
                 )
+        self._enrich_article(result, snapshots)
         return validate_result(result)  # S-H2 базовый + статус-согласование (S-G1)
+
+    @staticmethod
+    def _enrich_article(result: ExtractionResult, snapshots: list[PageSnapshot]) -> None:
+        """Article excerpt/word_count подставляет КОД из снапшота (verbatim, до 12K —
+        doc 20); LLM возвращает только url+мету и не перепечатывает статью в output."""
+        article = result.article
+        if article is None:
+            return
+        from app.observer.links import normalize_url
+
+        target = normalize_url(article.url)
+        source = next((s for s in snapshots if normalize_url(s.url) == target), None)
+        if source is None:  # URL статьи не из посещённых → блок недостоверен
+            result.article = None
+            return
+        article.main_text_excerpt = source.main_text[:12000]
+        if article.word_count < 50:  # мусор LLM («14 min read» → 14) — считаем сами
+            article.word_count = len(source.main_text.split())
+        if not article.title:
+            article.title = source.title
 
     def _evidence_ok(self, ev, pages: dict, all_text: str,
                      vision_pages: dict, all_vision: str) -> bool:

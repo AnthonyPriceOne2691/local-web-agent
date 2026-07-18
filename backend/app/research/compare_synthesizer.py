@@ -24,7 +24,8 @@ WIDE_NUM_CTX = 24576  # N > 3 (doc 16)
 
 
 def _host(url: str) -> str:
-    return (urlparse(url).hostname or url).removeprefix("www.")
+    """Метка сайта: netloc С портом — фикстуры на 127.0.0.1:* различимы только им."""
+    return (urlparse(url).netloc or url).lower().removeprefix("www.")
 
 
 def build_sites_block(inputs: list[tuple[str, ExtractionResult]]) -> str:

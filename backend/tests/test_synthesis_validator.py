@@ -121,6 +121,35 @@ def test_facts_truncated_to_contract_max(validator):
     assert len(out.facts) == 20  # S-G2
 
 
+def test_article_enriched_from_snapshot_code_side():
+    """Excerpt/word_count статьи подставляет код из снапшота, не LLM-перепечатка."""
+    from app.schemas.extraction import Article
+
+    v = SynthesisValidator()
+    long_text = "Odds formats explained with worked examples. " * 400  # > 12K chars
+    snap = PageSnapshot(url="https://x.com/blog/guide", title="Guide",
+                        main_text=long_text)
+    result = ExtractionResult(
+        status="completed", summary="found",
+        article=Article(url="https://x.com/blog/guide/", title="",
+                        main_text_excerpt="short quote"))
+    out = v.validate(result, [snap])  # трейлинг-слэш нормализуется
+    assert len(out.article.main_text_excerpt) == 12000
+    assert out.article.word_count == len(long_text.split())
+    assert out.article.title == "Guide"
+    # url статьи не из посещённых → блок отбрасывается
+    bad = ExtractionResult(status="completed", summary="s",
+                           article=Article(url="https://x.com/invented"))
+    assert v.validate(bad, [snap]).article is None
+
+
+def test_article_word_count_coercion():
+    from app.schemas.extraction import Article
+
+    assert Article(url="u", word_count="≈2400 words").word_count == 2400
+    assert Article(url="u", word_count=None).word_count == 0
+
+
 def test_defaults_without_spec():
     v = SynthesisValidator()
     assert v._fuzzy == 0.85 and v._max_facts == 20
