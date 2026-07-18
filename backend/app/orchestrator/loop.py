@@ -12,6 +12,8 @@ import httpx
 from app.browser.base import BrowserSession
 from app.config import Settings
 from app.contracts import guards
+from app.contracts.context import ActionContext
+from app.contracts.enforcer import ContractEnforcer
 from app.extraction.validator import validate_result
 from app.llm.navigator import Navigator
 from app.llm.ollama_client import OllamaClient
@@ -26,11 +28,14 @@ from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.schemas.extraction import ExtractionResult
 from app.schemas.run import CrawlStep, RunRecord, Violation
-from app.schemas.snapshot import AgentAction, PageSnapshot, ScreenshotRef
+from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot, ScreenshotRef
 from app.storage.run_store import RunStore
 
-MAX_REPLANS_PER_STEP = 1  # Phase 1 (полные k=2 + link_scorer — Phase 2)
 SPA_TEXT_THRESHOLD = 200
+# Drift auto-tighten (doc 13 § Drift detection)
+DRIFT_HARD_FOR_LOW_TEMP = 3   # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
+DRIFT_IH6_FOR_TOP5 = 2        # fabricated URL ≥ 2 → shrink candidate list to top 5
+DRIFT_MIN_RECOVERIES = 2      # recovery success < 50% (при ≥2 попытках) → fallback-only
 
 
 def _now() -> str:
@@ -48,6 +53,7 @@ class CrawlOrchestrator:
         llm_client: OllamaClient,
         store: RunStore,
         hints: PathHints,
+        enforcer: ContractEnforcer | None = None,
     ):
         self._s = settings
         self._browser = browser
@@ -56,6 +62,7 @@ class CrawlOrchestrator:
         self._llm = llm_client
         self._store = store
         self._hints = hints
+        self._enforcer = enforcer or ContractEnforcer.load(settings.contracts_dir)
 
     # ------------------------------------------------------------------ run
     async def run(self, record: RunRecord) -> RunRecord:
@@ -70,9 +77,24 @@ class CrawlOrchestrator:
         homepage: PageSnapshot | None = None
         violations_total = 0
 
+        config_violations = self._enforcer.check_run_config(cfg)  # P-1/P-2 + G-H4/G-H6
+        if any(v.severity == "hard" for v in config_violations):
+            record.status = "failed"
+            record.error_message = "; ".join(
+                f"{v.constraint_id}: {v.message}" for v in config_violations if v.severity == "hard"
+            )
+            record.finished_at = _now()
+            self._store.save(record)
+            return record
+        if config_violations:  # soft: rate floor / timeout cap — только лог
+            record.metadata["config_notes"] = [v.message for v in config_violations]
+
         try:
             robots = await RobotsPolicy.load(origin, respect=cfg.respect_robots)
-            rate_ms = max(cfg.rate_limit_ms, int(robots.crawl_delay_s * 1000))
+            rate_ms = max(
+                self._enforcer.effective_rate_ms(cfg.rate_limit_ms, cfg.start_url),
+                int(robots.crawl_delay_s * 1000),
+            )
             alive_probes, legal_probes = await self._probe_slugs(record.intent, origin)
             await self._browser.start()
 
@@ -114,7 +136,7 @@ class CrawlOrchestrator:
                 )
                 pages_left = cfg.max_pages - len(visited)
                 action, step_violations, llm_stats = await self._plan_validated(
-                    record, current, candidates, visited, hops, origin, pages_left,
+                    record, current, candidates, visited, hops, origin, pages_left, robots,
                 )
                 violations_total += len(step_violations)
 
@@ -190,9 +212,10 @@ class CrawlOrchestrator:
             return None
         t_nav = time.perf_counter()
         final_url = None
+        timeout_ms = self._enforcer.effective_timeout_ms(self._s.page_timeout_ms)  # G-H6
         for attempt in (1, 2):  # retry 1× (doc 03)
             try:
-                final_url = await self._browser.goto(url, timeout_ms=self._s.page_timeout_ms)
+                final_url = await self._browser.goto(url, timeout_ms=timeout_ms)
                 break
             except Exception as exc:  # noqa: BLE001
                 if attempt == 2:
@@ -240,51 +263,100 @@ class CrawlOrchestrator:
         except Exception:  # noqa: BLE001 — скриншот не валит run
             pass
 
+    def _action_ctx(
+        self, record: RunRecord, current: PageSnapshot, candidates: list[Candidate],
+        visited: set[str], hops: dict[str, int], origin: str, robots: RobotsPolicy,
+    ) -> ActionContext:
+        return ActionContext(
+            origin=origin, start_url=record.config.start_url, current_url=current.url,
+            intent=record.intent, candidates={normalize_url(c.href) for c in candidates},
+            visited=visited, hops=hops, max_pages=record.config.max_pages,
+            max_depth=record.config.max_depth, pages_visited=len(visited), robots=robots,
+        )
+
     async def _plan_validated(
         self,
         record: RunRecord,
         current: PageSnapshot,
-        candidates: list,
+        candidates: list[Candidate],
         visited: set[str],
         hops: dict[str, int],
         origin: str,
         pages_left: int,
+        robots: RobotsPolicy,
     ) -> tuple[AgentAction, list[Violation], dict]:
         violations: list[Violation] = []
         llm_stats: dict = {}
         retry_note = ""
-        for _ in range(MAX_REPLANS_PER_STEP + 1):
-            action, llm_stats = await self._navigator.propose(
-                task=record.config.task, intent=record.intent, snapshot=current,
-                candidates=candidates, visited=visited, pages_left=pages_left, retry_note=retry_note,
-            )
-            if action is None:  # I-H7 invalid schema
-                violations.append(Violation(constraint_id="I-H7", message="unparseable action"))
-                retry_note = "response was not valid action JSON"
-                continue
-            if action.action != "navigate":
-                return action, violations, llm_stats
-            violation = guards.validate_navigate(
-                action, candidates=candidates, origin=origin, visited=visited, hops=hops,
-                current_url=current.url, max_depth=record.config.max_depth,
-                max_pages=record.config.max_pages, pages_visited=len(visited),
-            )
-            if violation is None:
-                return action, violations, llm_stats
-            violations.append(violation)
-            if violation.constraint_id == "G-H1":  # budget → форс stop, не replan
-                return AgentAction(action="stop", reasoning="page budget exhausted"), violations, llm_stats
-            retry_note = f"{violation.constraint_id}: {violation.message}"
-        # fallback: детерминированный link scorer (recovery R2)
+        drift = record.metadata.setdefault(
+            "drift", {"hard_total": 0, "ih6": 0, "replan_ok": 0, "replan_fail": 0, "fallbacks": 0}
+        )
+        cands = candidates[: 5 if drift["ih6"] >= DRIFT_IH6_FOR_TOP5 else None]
+        ctx = self._action_ctx(record, current, cands, visited, hops, origin, robots)
+
+        replans_used = 0
+        if not self._fallback_only(drift):
+            for attempt in range(self._enforcer.max_replans_per_step + 1):
+                temperature = 0.2 if drift["hard_total"] >= DRIFT_HARD_FOR_LOW_TEMP else 0.4
+                action, llm_stats = await self._navigator.propose(
+                    task=record.config.task, intent=record.intent, snapshot=current,
+                    candidates=cands, visited=visited, pages_left=pages_left,
+                    retry_note=retry_note, temperature=temperature,
+                )
+                replans_used = attempt
+                if action is None:  # I-H7 invalid schema
+                    violations.append(Violation(constraint_id="I-H7", message="unparseable action",
+                                                recovered=False))
+                    drift["hard_total"] += 1
+                    retry_note = "response was not valid action JSON"
+                    continue
+                if action.action != "navigate":
+                    self._mark_recovered(violations, replans_used, drift)
+                    return action, violations, llm_stats
+                hard, softs = self._enforcer.validate_navigate(action, ctx)
+                violations.extend(softs)
+                if hard is None:
+                    self._mark_recovered(violations, replans_used, drift)
+                    return action, violations, llm_stats
+                violations.append(hard)
+                drift["hard_total"] += 1
+                if hard.constraint_id == "I-H6":
+                    drift["ih6"] += 1
+                    if drift["ih6"] >= DRIFT_IH6_FOR_TOP5:  # auto-tighten: top-5 (doc 13)
+                        cands = cands[:5]
+                        ctx.candidates = {normalize_url(c.href) for c in cands}
+                if hard.constraint_id == "G-H1":  # budget → форс stop, не replan
+                    return (AgentAction(action="stop", reasoning="page budget exhausted"),
+                            violations, llm_stats)
+                retry_note = f"{hard.constraint_id}: {hard.message}"
+            drift["replan_fail"] += 1
+
+        # fallback: детерминированный link scorer (recovery R2, doc 13)
+        drift["fallbacks"] += 1
         for cand in candidates:
-            fallback = AgentAction(action="navigate", url=cand.href, reasoning="fallback: top candidate")
-            if guards.validate_navigate(
-                fallback, candidates=candidates, origin=origin, visited=visited, hops=hops,
-                current_url=current.url, max_depth=record.config.max_depth,
-                max_pages=record.config.max_pages, pages_visited=len(visited),
-            ) is None:
+            fallback = AgentAction(action="navigate", url=cand.href,
+                                   reasoning="fallback: top candidate")
+            hard, _ = self._enforcer.validate_navigate(fallback, ctx)
+            if hard is None:
+                for v in violations:
+                    v.recovered = True
                 return fallback, violations, llm_stats
         return AgentAction(action="stop", reasoning="no valid candidates"), violations, llm_stats
+
+    @staticmethod
+    def _fallback_only(drift: dict) -> bool:
+        """Recovery success < 50% при ≥2 попытках → link_scorer до конца run (doc 13)."""
+        attempts = drift["replan_ok"] + drift["replan_fail"]
+        return attempts >= DRIFT_MIN_RECOVERIES and drift["replan_ok"] / attempts < 0.5
+
+    @staticmethod
+    def _mark_recovered(violations: list[Violation], replans_used: int, drift: dict) -> None:
+        if not violations:
+            return
+        for v in violations:
+            v.recovered = True
+        if replans_used > 0:
+            drift["replan_ok"] += 1
 
     async def _synthesize(self, record: RunRecord, snapshots: list[PageSnapshot]) -> ExtractionResult:
         if not snapshots:

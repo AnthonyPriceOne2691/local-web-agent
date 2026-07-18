@@ -15,7 +15,7 @@
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.4** | Phases 0–4; model A/B; thermal |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.5** | SQLite реализован (Phase 2); runs + sessions; legacy-импорт; startup sweep |
-| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.6** | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
+| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.7** (реализован Phase 2) | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.4** | + Meta + Compare; swap mechanics; A/B |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.5** | + /sessions, cancel, 409, ollama_version |
 | [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.4.1** | Params: structured outputs, think; top-10 |
@@ -37,9 +37,7 @@
 | Design docs | ✅ v0.5 review pass 2 (hop depth D-13, RU keywords, article candidates D-14, startup sweep, partial failure) + D-11 closed |
 | Phase 0 Benchmark | ✅ **DONE 2026-07-13** — все exit-критерии пройдены ([doc 19](19-phase0-benchmark-results.md) v1.0); хвосты: real re-check p50, qwen3 на real перед финалом D-2/D-3 |
 | Phase 1 Agent loop | ✅ **DONE 2026-07-18** — backend/app + cli + prompts; 30 тестов, coverage 87%, E2E 3/3 ([doc 06](06-mvp-phases.md) § Phase 1) |
-| **Phase 2 Full MVP** | 🔲 **Next** — contracts YAML-enforcer, SQLite, vision batch, sitemap, cookie-dismiss, cancel, отчёты |
-| Phase 1 Agent loop | 🔲 |
-| Phase 2 Full MVP | 🔲 |
+| **Phase 2 Full MVP** | 🟡 **In progress (2026-07-18)** — SQLite store ✅, YAML-enforcer + drift ✅; далее: vision batch, sitemap, cookie-dismiss, cancel, отчёты |
 | Phase 3 Research Agent | 🔲 |
 | Phase 4 Chat UI | 🔲 |
 

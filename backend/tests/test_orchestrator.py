@@ -73,15 +73,43 @@ async def test_happy_path_navigate_extract_synthesize(tmp_path, two_page_site):
 async def test_fabricated_url_recovers_via_fallback(tmp_path, two_page_site):
     orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
         {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "invented"},  # I-H6
-        {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "invented again"},  # retry тоже мимо
+        {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "again"},     # replan 1 мимо
+        {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "stubborn"},  # replan 2 (k=2) мимо
         {"action": "stop", "reasoning": "done"},
         SYNTH_OK,
     ])
     record = await orch.run(record_for(f"{ORIGIN}/"))
     violations = [v for s in record.steps for v in s.violations]
-    assert any(v.constraint_id == "I-H6" for v in violations)
+    assert sum(v.constraint_id == "I-H6" for v in violations) == 3  # k=2 → 3 попытки
+    assert all(v.recovered for v in violations if v.constraint_id == "I-H6")  # fallback = recovery
     # fallback link scorer повёл на валидного кандидата
     assert record.pages_visited == 2
+    drift = record.metadata["drift"]
+    assert drift["fallbacks"] == 1 and drift["ih6"] == 3
+
+
+async def test_drift_fallback_only_skips_llm_navigation(tmp_path, two_page_site):
+    """Recovery success < 50% → link_scorer-only до конца run (doc 13 § Drift)."""
+    orch, _, llm = make_orchestrator(tmp_path, two_page_site, [SYNTH_OK])
+    record = record_for(f"{ORIGIN}/")
+    record.metadata["drift"] = {"hard_total": 4, "ih6": 0,
+                                "replan_ok": 0, "replan_fail": 2, "fallbacks": 2}
+    record = await orch.run(record)
+    # навигация шла без LLM (fallback-only): единственный chat-вызов — synthesis
+    assert len(llm.calls) == 1
+    assert record.pages_visited == 2  # fallback повёл на /contact
+
+
+async def test_drift_low_temperature_after_hard_violations(tmp_path, two_page_site):
+    orch, _, llm = make_orchestrator(tmp_path, two_page_site, [
+        {"action": "stop", "reasoning": "done"},
+        SYNTH_OK,
+    ])
+    record = record_for(f"{ORIGIN}/")
+    record.metadata["drift"] = {"hard_total": 3, "ih6": 0,
+                                "replan_ok": 5, "replan_fail": 0, "fallbacks": 0}
+    await orch.run(record)
+    assert llm.calls[0]["temperature"] == 0.2  # auto-tighten 0.4 → 0.2
 
 
 async def test_offsite_redirect_discarded_mid_run(tmp_path):

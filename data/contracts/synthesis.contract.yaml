@@ -1,0 +1,34 @@
+# Synthesis contract (doc 13 § Mode: Synthesis) — параметры SynthesisValidator.
+mode: synthesis
+version: "1.0"
+
+preconditions:
+  - id: snapshots_exist
+    check: min_snapshots
+    min: 1
+
+invariants:
+  hard:
+    - id: valid_schema           # S-H1
+      check: pydantic_model
+      model: ExtractionResult
+    - id: high_needs_quote       # S-H2
+      check: confidence_evidence
+      level: high
+    - id: quote_in_snapshot      # S-H3: fuzzy match, in-memory во время synthesis
+      check: evidence_substring
+      fuzzy: 0.85
+    - id: thinking_stripped      # S-H5
+      check: strip_thinking_nonempty
+
+governance:
+  hard:
+    - id: not_found_when_missing # S-G1
+      check: prefer_not_found_over_empty
+    - id: max_facts              # S-G2
+      check: facts_budget
+      max: 20
+
+recovery:
+  max_retries: 1
+  fallback: qwen_json_extract

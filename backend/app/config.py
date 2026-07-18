@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     def navigation_dir(self) -> Path:
         return self.data_dir / "navigation"
 
+    @property
+    def contracts_dir(self) -> Path:
+        return self.data_dir / "contracts"
+
 
 def get_settings() -> Settings:
     return Settings()

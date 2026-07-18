@@ -1,0 +1,82 @@
+# Crawl behavioral contract (doc 13, ABC-lite — arXiv:2602.22302).
+# Декларативный: только named checks из contracts/rules/; loader отклоняет unknown check.
+# code — constraint_id для violation log (сквозная нумерация doc 13).
+mode: crawl
+version: "1.0"
+source: "arXiv:2602.22302 ABC-lite"
+
+preconditions:
+  - id: valid_start_url
+    code: P-1
+    check: url_scheme
+    allowed: [http, https]
+  - id: task_present
+    code: P-2
+    check: non_empty
+    field: task
+  - id: browser_ready
+    code: P-3
+    check: browser_session_active
+    owner: orchestrator          # runtime state — проверяет state machine (INIT)
+
+invariants:
+  hard:
+    - id: same_domain
+      code: I-H1
+      check: url_in_allowed_domains
+    - id: url_in_candidate_queue # links ∪ slug probes ∪ sitemap (doc 21)
+      code: I-H6
+      check: url_in_candidate_queue
+      except: [start_url]
+    - id: no_private_network     # SSRF guard
+      code: I-H8
+      check: public_http_url
+      forbidden: [loopback, rfc1918, link_local, dot_local]
+      override_flag: allow_private
+    - id: redirect_recheck       # final URL after goto
+      code: I-H9
+      check: post_navigation_domain
+      owner: orchestrator        # вызывается после goto, не в PLAN-shield
+      on_violation: discard_snapshot
+    - id: no_submit
+      code: I-H2
+      check: action_not_in
+      forbidden: [submit, fill_form, click_submit, click]
+    - id: no_revisit             # dual: orchestrator visited set
+      code: G-H3
+      check: url_not_visited
+  soft:
+    - id: legal_pages_policy
+      code: I-S2
+      check: intent_conditional_paths
+      avoid_by_default: crawl_forbidden.txt
+      boost_when_intent: contact
+
+governance:
+  hard:
+    - id: max_pages              # dual enforcement — doc 13
+      code: G-H1
+      check: pages_budget
+      owner: orchestrator
+    - id: max_depth              # hop depth (D-13)
+      code: G-H2
+      check: hop_depth
+      owner: orchestrator
+    - id: robots_txt
+      code: G-H5
+      check: robots_allowed
+    - id: rate_limit_ms          # floor для публичных хостов; private/fixtures exempt
+      code: G-H4
+      check: rate_limit_floor
+      min_delay: 1000
+      exempt: private_hosts
+    - id: page_timeout_ms
+      code: G-H6
+      check: page_timeout_ceiling
+      max: 30000
+
+recovery:
+  max_replan_per_step: 2
+  fallback: link_scorer
+  on_blocked: stop_status_blocked
+  on_exhausted: stop_status_partial

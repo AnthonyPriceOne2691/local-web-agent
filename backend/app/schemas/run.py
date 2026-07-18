@@ -24,6 +24,7 @@ class Violation(BaseModel):
     message: str = ""
     proposed_url: str | None = None
     recovered: bool = True
+    severity: Literal["hard", "soft"] = "hard"
 
 
 class CrawlStep(BaseModel):

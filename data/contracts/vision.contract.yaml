@@ -1,0 +1,40 @@
+# Vision batch contract (doc 13 § Mode: Vision batch, doc 23) — shield для VisionLoader.
+mode: vision
+version: "1.0"
+
+preconditions:
+  - id: artifacts_or_skip
+    check: min_screenshots_or_never
+  - id: browser_closed
+    check: orchestrator_state
+    owner: orchestrator
+    state: VISION_BATCH
+
+invariants:
+  hard:
+    - id: path_in_snapshot       # V-H1: allowlist из PageSnapshot.screenshots
+      check: screenshot_path_allowlist
+    - id: no_traversal           # V-H2
+      check: path_normalize_safe
+    - id: max_png_bytes          # V-H3: 5 MB
+      check: file_size_ceiling
+      max: 5242880
+    - id: valid_profile          # V-H4
+      check: profile_allowed
+      allowed: [desktop, tablet, mobile]
+
+governance:
+  hard:
+    - id: max_vision_pages       # V-G1
+      check: vision_pages_budget
+      owner: orchestrator
+    - id: max_vision_calls       # V-H5/V-G1
+      check: vision_calls_budget
+      max: 12
+    - id: vlm_timeout_ms         # V-G2
+      check: vlm_timeout_ceiling
+      max: 45000
+
+recovery:
+  max_retries_per_call: 1
+  on_oom: skip_remaining_batch

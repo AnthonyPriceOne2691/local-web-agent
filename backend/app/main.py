@@ -11,6 +11,7 @@ from app.api.routes_health import router as health_router
 from app.api.routes_runs import router as runs_router
 from app.browser.playwright_session import PlaywrightSession
 from app.config import Settings, get_settings
+from app.contracts.enforcer import ContractEnforcer
 from app.llm.navigator import Navigator
 from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
@@ -28,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.llm_client = OllamaClient(settings.ollama_url, timeout_s=settings.llm_timeout_s)
         app.state.run_store = SqliteRunStore(settings.runs_dir)
         app.state.hints = PathHints.load(settings.navigation_dir)
+        app.state.enforcer = ContractEnforcer.load(settings.contracts_dir)  # fail fast (doc 13)
         app.state.background_tasks = set()
         swept = app.state.run_store.startup_sweep()  # zombie runs (doc 12)
         if swept:
@@ -42,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 llm_client=app.state.llm_client,
                 store=app.state.run_store,
                 hints=app.state.hints,
+                enforcer=app.state.enforcer,
             )
 
         app.state.orchestrator_factory = orchestrator_factory

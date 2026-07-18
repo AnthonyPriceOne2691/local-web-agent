@@ -32,6 +32,7 @@ class Navigator:
         visited: set[str],
         pages_left: int,
         retry_note: str = "",
+        temperature: float = 0.4,
     ) -> tuple[AgentAction | None, dict]:
         cand_block = "\n".join(
             f"{i + 1}. {c.href}  [{c.text[:60]}] (score {c.score}, {c.reason})"
@@ -55,7 +56,7 @@ class Navigator:
             user=user,
             schema=AgentAction.model_json_schema(),
             think=False if supports_think(self._s.nav_model) else None,
-            temperature=0.4,
+            temperature=temperature,  # 0.4; drift auto-tighten → 0.2 (doc 13)
             num_ctx=self._s.nav_num_ctx,
             max_tokens=self._s.nav_max_tokens,
         )

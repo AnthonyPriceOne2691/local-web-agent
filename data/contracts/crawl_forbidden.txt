@@ -1,0 +1,12 @@
+# Path substrings to avoid by default (I-S2 soft; boost instead when intent=contact)
+/login
+/signin
+/signup
+/register
+/cart
+/checkout
+/privacy
+/terms
+/cookie
+/legal
+/wp-admin
