@@ -4,6 +4,7 @@ LLM выбирает только среди top-K кандидатов, contrac
 
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import UTC, datetime
 
@@ -14,7 +15,7 @@ from app.config import Settings
 from app.contracts import guards
 from app.contracts.context import ActionContext
 from app.contracts.enforcer import ContractEnforcer
-from app.extraction.validator import validate_result
+from app.extraction.synthesis_validator import SynthesisValidator
 from app.llm.navigator import Navigator
 from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
@@ -42,6 +43,10 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _is_canceled(cancel_event: asyncio.Event | None) -> bool:
+    return cancel_event is not None and cancel_event.is_set()
+
+
 class CrawlOrchestrator:
     def __init__(
         self,
@@ -63,9 +68,12 @@ class CrawlOrchestrator:
         self._store = store
         self._hints = hints
         self._enforcer = enforcer or ContractEnforcer.load(settings.contracts_dir)
+        self._synth_validator = SynthesisValidator.load(settings.contracts_dir)
 
     # ------------------------------------------------------------------ run
-    async def run(self, record: RunRecord) -> RunRecord:
+    async def run(
+        self, record: RunRecord, cancel_event: asyncio.Event | None = None
+    ) -> RunRecord:
         cfg = record.config
         t0 = time.perf_counter()
         record.started_at = record.started_at or _now()
@@ -103,7 +111,11 @@ class CrawlOrchestrator:
             extract_streak = 0
             step_index = 0
 
+            canceled = False
             while step_index < cfg.max_pages * 2:
+                if _is_canceled(cancel_event):  # FR-3.8: граница state (перед OBSERVE)
+                    canceled = True
+                    break
                 step_index += 1
                 # ---------------- NAVIGATE + OBSERVE
                 if next_url is not None:
@@ -128,6 +140,9 @@ class CrawlOrchestrator:
                     self._store.save(record)
 
                 # ---------------- PLAN
+                if _is_canceled(cancel_event):  # FR-3.8: граница state (перед PLAN)
+                    canceled = True
+                    break
                 candidates = build_candidates(
                     snapshot=current, homepage=homepage, intent=record.intent, task=cfg.task,
                     hints=self._hints, origin=origin, visited=visited,
@@ -164,7 +179,14 @@ class CrawlOrchestrator:
                     continue
                 break  # stop
 
-            # ---------------- SYNTHESIZE
+            # ---------------- SYNTHESIZE (пропускается при cancel — doc 15)
+            if canceled or _is_canceled(cancel_event):
+                record.status = "canceled"
+                record.metadata["canceled_by_user"] = True
+                record.finished_at = _now()
+                self._store.save(record)
+                await self._safe_close()
+                return record
             result = await self._synthesize(record, snapshots)
         except Exception as exc:  # noqa: BLE001 — run не должен терять запись
             record.status = "failed"
@@ -183,7 +205,7 @@ class CrawlOrchestrator:
         result.generated_at = _now()
         if record.metadata.get("blocked_by"):
             result.status = "blocked"
-        record.result = validate_result(result)
+        record.result = self._synth_validator.validate(result, snapshots)  # S-H2/H3/H6, S-G1/G2
         record.status = record.result.status
         record.metadata["violations_total"] = violations_total
         record.finished_at = _now()

@@ -67,8 +67,19 @@ def crawl(
             return
         status = "running"
         while status == "running":
-            time.sleep(2)
-            record = client.get(f"/runs/{run_id}").json()
+            try:
+                time.sleep(2)
+                record = client.get(f"/runs/{run_id}").json()
+            except KeyboardInterrupt:  # doc 15: [a]bort on server / [d]etach
+                choice = typer.prompt("\n[a]bort run on server / [d]etach (run continues)",
+                                      default="d").strip().lower()
+                if choice.startswith("a"):
+                    client.post(f"/runs/{run_id}/cancel")
+                    console.print("Cancel requested — waiting for run to stop…")
+                    continue
+                console.print(f"Detached. Poll later: agent runs show {run_id}")
+                print(run_id)
+                return
             status = record["status"]
             console.print(
                 f"[{record['pages_visited']}/{max_pages}] {record.get('current_url', '')} · {status}",
@@ -129,6 +140,28 @@ def runs_show(
     else:
         Console().print(json.dumps(record.get("result") or {"status": record["status"]},
                                    ensure_ascii=False, indent=2))
+
+
+@runs_app.command("cancel")
+def runs_cancel(
+    run_id: str = typer.Argument("", help="run id; пусто — отменить активный"),
+    api_url: str = typer.Option(API_DEFAULT, "--api-url"),
+) -> None:
+    with _client(api_url) as client:
+        if not run_id:
+            active = client.get("/health").json().get("active_run_id")
+            if not active:
+                console.print("no active run")
+                raise typer.Exit(1)
+            run_id = active
+        r = client.post(f"/runs/{run_id}/cancel")
+    if r.status_code == 404:
+        console.print("[red]run not found[/red]")
+        raise typer.Exit(1)
+    if r.status_code == 409:
+        console.print(f"[yellow]run not running:[/yellow] {r.json()['detail']}")
+        raise typer.Exit(2)
+    console.print(f"Canceling: {run_id}")
 
 
 @runs_app.command("delete")

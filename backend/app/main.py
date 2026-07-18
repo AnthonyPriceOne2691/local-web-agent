@@ -31,6 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.hints = PathHints.load(settings.navigation_dir)
         app.state.enforcer = ContractEnforcer.load(settings.contracts_dir)  # fail fast (doc 13)
         app.state.background_tasks = set()
+        app.state.cancel_events = {}  # run_id → asyncio.Event (FR-3.8)
         swept = app.state.run_store.startup_sweep()  # zombie runs (doc 12)
         if swept:
             print(f"startup sweep: {swept} orphaned run(s) → failed")

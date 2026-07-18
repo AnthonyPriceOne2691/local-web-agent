@@ -1,0 +1,81 @@
+"""SynthesisValidator (S-H2/S-H3/S-H6, S-G2): fuzzy quote check, remove→not_found."""
+
+from __future__ import annotations
+
+import pytest
+
+from app.extraction.synthesis_validator import SynthesisValidator
+from app.schemas.extraction import Evidence, ExtractionResult, Fact
+from app.schemas.snapshot import PageSnapshot
+from tests.conftest import REPO_ROOT
+
+URL = "https://x.com/contact"
+
+
+@pytest.fixture(scope="module")
+def validator() -> SynthesisValidator:
+    return SynthesisValidator.load(REPO_ROOT / "data" / "contracts")
+
+
+def _snapshots(text: str = "Call us at +1 555 123 4567, office in Berlin.") -> list[PageSnapshot]:
+    return [PageSnapshot(url=URL, title="Contact", main_text=text)]
+
+
+def _fact(quote: str, *, key: str = "phone", confidence: str = "high", source: str = "dom") -> Fact:
+    return Fact(key=key, value="+1 555 123 4567", confidence=confidence,
+                evidence=[Evidence(url=URL, quote=quote, source=source)])
+
+
+def test_exact_and_fuzzy_quotes_pass(validator):
+    result = ExtractionResult(facts=[
+        _fact("Call us at +1 555 123 4567"),                       # exact
+        _fact("Call us at +1  555 123 4567, office in Berlin", key="k2"),  # whitespace/fuzzy
+    ])
+    out = validator.validate(result, _snapshots())
+    assert [f.confidence for f in out.facts] == ["high", "high"]
+    assert not out.not_found
+
+
+def test_fabricated_quote_removes_fact_to_not_found(validator):
+    result = ExtractionResult(facts=[_fact("Our HQ is on the Moon since 1969")])
+    out = validator.validate(result, _snapshots())
+    assert not out.facts
+    assert out.not_found and out.not_found[0].key == "phone"
+    assert "quote not found" in out.not_found[0].reason
+    assert out.status == "not_found"  # S-G1 статус согласован
+
+
+def test_partial_evidence_filtered_keeps_fact(validator):
+    fact = Fact(key="phone", value="+1 555 123 4567", confidence="high", evidence=[
+        Evidence(url=URL, quote="Call us at +1 555 123 4567"),
+        Evidence(url=URL, quote="totally made up quote about llamas"),
+    ])
+    out = validator.validate(ExtractionResult(facts=[fact]), _snapshots())
+    assert len(out.facts) == 1 and len(out.facts[0].evidence) == 1
+    assert out.facts[0].confidence == "high"
+
+
+def test_unknown_url_falls_back_to_all_pages_text(validator):
+    fact = _fact("office in Berlin")
+    fact.evidence[0].url = "https://x.com/other-page"
+    out = validator.validate(ExtractionResult(facts=[fact]), _snapshots())
+    assert out.facts  # цитата найдена в общем тексте
+
+
+def test_vision_only_high_downgraded_sh6(validator):
+    fact = Fact(key="hero_color", value="blue", confidence="high",
+                evidence=[Evidence(url=URL, quote="", source="vision")])
+    out = validator.validate(ExtractionResult(facts=[fact]), _snapshots())
+    assert out.facts[0].confidence == "medium"
+
+
+def test_facts_truncated_to_contract_max(validator):
+    facts = [_fact("Call us at +1 555 123 4567", key=f"k{i}", confidence="medium")
+             for i in range(25)]
+    out = validator.validate(ExtractionResult(facts=facts), _snapshots())
+    assert len(out.facts) == 20  # S-G2
+
+
+def test_defaults_without_spec():
+    v = SynthesisValidator()
+    assert v._fuzzy == 0.85 and v._max_facts == 20

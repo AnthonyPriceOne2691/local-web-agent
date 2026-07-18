@@ -81,7 +81,7 @@ class InstantOrchestrator:
     def __init__(self, store):
         self._store = store
 
-    async def run(self, record: RunRecord) -> RunRecord:
+    async def run(self, record: RunRecord, cancel_event=None) -> RunRecord:
         await asyncio.sleep(0.05)
         record.status = "completed"
         record.pages_visited = 1
@@ -131,6 +131,38 @@ async def test_second_run_409_while_active(api_client):
     r2 = await client.post("/runs", json={"start_url": "https://example.com", "task": "second"})
     assert r2.status_code == 409  # D-12 global run lock
     assert r2.json()["detail"]["error"] == "run_in_progress"
+
+
+async def test_cancel_run_flow(api_client):
+    client, app = api_client
+
+    class CancelableOrchestrator(InstantOrchestrator):
+        async def run(self, record, cancel_event=None):
+            for _ in range(100):  # ждём cancel до ~2 s
+                if cancel_event is not None and cancel_event.is_set():
+                    record.status = "canceled"
+                    record.metadata["canceled_by_user"] = True
+                    self._store.save(record)
+                    return record
+                await asyncio.sleep(0.02)
+            return await super().run(record, cancel_event)
+
+    app.state.orchestrator_factory = lambda: CancelableOrchestrator(app.state.run_store)
+    run_id = (await client.post(
+        "/runs", json={"start_url": "https://example.com", "task": "t"})).json()["run_id"]
+    r = await client.post(f"/runs/{run_id}/cancel")
+    assert r.status_code == 202 and r.json()["status"] == "canceling"
+    for _ in range(50):
+        record = (await client.get(f"/runs/{run_id}")).json()
+        if record["status"] != "running":
+            break
+        await asyncio.sleep(0.02)
+    assert record["status"] == "canceled"
+    # 409 повторно (terminal), 404 для неизвестного
+    assert (await client.post(f"/runs/{run_id}/cancel")).status_code == 409
+    assert (await client.post("/runs/nope/cancel")).status_code == 404
+    # canceled run можно удалить
+    assert (await client.delete(f"/runs/{run_id}")).status_code == 200
 
 
 async def test_get_unknown_run_404(api_client):

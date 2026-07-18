@@ -157,6 +157,21 @@ async def test_spa_fallback_screenshot_captured(tmp_path):
     assert record.status == "not_found"
 
 
+async def test_cancel_before_synthesis_skips_llm(tmp_path, two_page_site):
+    """FR-3.8: canceled run сохраняет partial trace, SYNTHESIZE пропущен."""
+    import asyncio
+
+    orch, store, llm = make_orchestrator(tmp_path, two_page_site, [SYNTH_OK])
+    event = asyncio.Event()
+    event.set()  # отменён ещё до первого шага
+    record = await orch.run(record_for(f"{ORIGIN}/"), cancel_event=event)
+    assert record.status == "canceled"
+    assert record.metadata["canceled_by_user"] is True
+    assert llm.calls == []  # ни навигации, ни синтеза
+    assert two_page_site.closed is True
+    assert store.get("test-run").status == "canceled"
+
+
 async def test_start_page_unreachable_fails_cleanly(tmp_path):
     browser = FakeBrowserSession(pages={})
     orch, _, _ = make_orchestrator(tmp_path, browser, [])

@@ -29,18 +29,41 @@ async def start_run(config: RunConfig, request: Request) -> dict:
         started_at=datetime.now(UTC).isoformat(),
     )
     state.run_store.save(record)
+    cancel_event = asyncio.Event()
+    state.cancel_events[record.id] = cancel_event
 
     async def _execute() -> None:
         try:
             orchestrator = state.orchestrator_factory()
-            await orchestrator.run(record)
+            await orchestrator.run(record, cancel_event=cancel_event)
         except Exception as exc:  # noqa: BLE001 — фон не должен падать молча
             record.status = "failed"
             record.error_message = str(exc)[:500]
             state.run_store.save(record)
+        finally:
+            state.cancel_events.pop(record.id, None)
 
     state.background_tasks.add(asyncio.create_task(_execute()))
     return {"run_id": record.id, "status": "running"}
+
+
+@router.post("/runs/{run_id}/cancel", status_code=202)
+async def cancel_run(run_id: str, request: Request) -> dict:
+    """FR-3.8: cooperative cancel — оркестратор останавливается на границе state."""
+    state = request.app.state
+    record = state.run_store.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    if record.status != "running":
+        raise HTTPException(status_code=409, detail={"error": "not_running", "status": record.status})
+    event = state.cancel_events.get(run_id)
+    if event is not None:
+        event.set()
+    else:  # беспроцессный zombie (рестарт между sweep'ами) — финализируем напрямую
+        record.status = "canceled"
+        record.metadata["canceled_by_user"] = True
+        state.run_store.save(record)
+    return {"run_id": run_id, "status": "canceling"}
 
 
 @router.get("/runs")
