@@ -149,12 +149,15 @@ async def test_spa_fallback_screenshot_captured(tmp_path):
     })
     orch, _, _ = make_orchestrator(tmp_path, browser, [
         {"action": "stop", "reasoning": "nothing to click"},
+        {"profile": "desktop", "screen_status": "blank", "description": "empty page",
+         "extracted": [], "confidence": "low"},  # vision batch (auto: empty DOM)
         {"summary": "no price visible in DOM", "facts": [],
          "not_found": [{"key": "price", "reason": "not in DOM"}]},
     ])
     record = await orch.run(record_for(f"{ORIGIN}/", task="Find the price"))
     assert browser.screenshots  # SPA fallback capture сработал при auto
     assert record.status == "not_found"
+    assert record.metadata["vision_calls_total"] == 1  # R2: empty DOM → vision
 
 
 async def test_cancel_before_synthesis_skips_llm(tmp_path, two_page_site):

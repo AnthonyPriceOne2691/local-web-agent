@@ -36,6 +36,7 @@ class PageSnapshot(BaseModel):
     main_text: str = ""
     links: list[Link] = Field(default_factory=list)
     screenshots: list[ScreenshotRef] = Field(default_factory=list)
+    vision_insights: list[dict] = Field(default_factory=list)  # VisionInsight dumps (doc 23)
     truncated: bool = False
     priority: bool = False
 

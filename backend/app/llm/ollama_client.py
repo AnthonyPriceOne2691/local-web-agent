@@ -36,14 +36,18 @@ class OllamaClient:
         num_ctx: int = 8192,
         max_tokens: int = 1024,
         keep_alive: str | int = "10m",
+        images: list[str] | None = None,
     ) -> tuple[str, dict]:
+        user_msg: dict = {"role": "user", "content": user}
+        if images:  # multimodal (doc 23): base64 PNG в images[]
+            user_msg["images"] = images
         body: dict = {
             "model": model,
             "stream": False,
             "keep_alive": keep_alive,
             "messages": [
                 {"role": "system", "content": system},
-                {"role": "user", "content": user},
+                user_msg,
             ],
             "options": {"temperature": temperature, "num_ctx": num_ctx, "num_predict": max_tokens},
         }

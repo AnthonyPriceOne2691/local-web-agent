@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from jinja2 import Template
 from pydantic import ValidationError
 
@@ -13,6 +15,7 @@ from app.schemas.snapshot import PageSnapshot
 
 PAGE_TEXT_CAP = 1000  # doc 20 synthesis bundle
 PRIORITY_TEXT_CAP = 4000
+VISION_DESC_CAP = 400
 
 
 def build_pages_block(snapshots: list[PageSnapshot]) -> str:
@@ -20,8 +23,27 @@ def build_pages_block(snapshots: list[PageSnapshot]) -> str:
     for s in snapshots:
         cap = PRIORITY_TEXT_CAP if s.priority else PAGE_TEXT_CAP
         headings = "; ".join(h.text for h in s.headings[:8])
-        blocks.append(f"URL: {s.url}\nTITLE: {s.title}\nHEADINGS: {headings}\nTEXT: {s.main_text[:cap]}\n")
+        block = f"URL: {s.url}\nTITLE: {s.title}\nHEADINGS: {headings}\nTEXT: {s.main_text[:cap]}\n"
+        block += _vision_block(s)
+        blocks.append(block)
     return "\n---\n".join(blocks)
+
+
+def _vision_block(s: PageSnapshot) -> str:
+    """Vision insights текстом для R1 (doc 23 § Integration): без raw PNG."""
+    lines = []
+    for ins in s.vision_insights:
+        if ins.get("status") != "ok":
+            continue
+        parts = [f"VISION ({ins.get('profile', '?')}): {ins.get('description', '')[:VISION_DESC_CAP]}"]
+        if ins.get("extracted"):
+            parts.append("extracted: " + json.dumps(ins["extracted"], ensure_ascii=False))
+        if ins.get("design"):
+            parts.append("design: " + json.dumps(ins["design"], ensure_ascii=False)[:300])
+        if ins.get("text_not_in_dom"):
+            parts.append("text_not_in_dom: " + json.dumps(ins["text_not_in_dom"], ensure_ascii=False))
+        lines.append(" | ".join(parts))
+    return ("\n".join(lines) + "\n") if lines else ""
 
 
 class Synthesizer:

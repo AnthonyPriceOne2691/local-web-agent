@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     synth_max_tokens: int = 4096
     llm_timeout_s: float = 300.0
 
+    # Vision batch (docs 16/23)
+    vision_model: str = "qwen2.5vl:7b"
+    vision_num_ctx: int = 8192
+    vision_max_tokens: int = 1200
+    max_vision_pages: int = 5
+    max_vision_calls: int = 12
+
     # Crawl defaults (doc 04)
     max_pages: int = 10
     max_depth: int = 2  # hop depth, D-13

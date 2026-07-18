@@ -29,10 +29,12 @@ from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
+from app.orchestrator.vision_batch import run_vision_batch
 from app.schemas.extraction import ExtractionResult
 from app.schemas.run import CrawlStep, RunRecord, Violation
 from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot, ScreenshotRef
 from app.storage.run_store import RunStore
+from app.vision.analyzer import VisionAnalyzer
 
 SPA_TEXT_THRESHOLD = 200
 # Drift auto-tighten (doc 13 § Drift detection)
@@ -76,6 +78,7 @@ class CrawlOrchestrator:
         self._synth_validator = SynthesisValidator.load(settings.contracts_dir)
         self._consent = ConsentHandler.load(settings.navigation_dir)
         self._consent_click_used = False  # 1 попытка click на сайт (D-11)
+        self._vision = VisionAnalyzer(llm_client, settings)
 
     # ------------------------------------------------------------------ run
     async def run(
@@ -214,6 +217,11 @@ class CrawlOrchestrator:
                 self._store.save(record)
                 await self._safe_close()
                 return record
+            await run_vision_batch(  # doc 23
+                record=record, snapshots=snapshots, settings=self._s, store=self._store,
+                llm=self._llm, analyzer=self._vision, close_browser=self._safe_close,
+                cancel_event=cancel_event,
+            )
             result = await self._synthesize(record, snapshots)
         except Exception as exc:  # noqa: BLE001 — run не должен терять запись
             record.status = "failed"

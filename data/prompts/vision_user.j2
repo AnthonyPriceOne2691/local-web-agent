@@ -1,0 +1,9 @@
+TASK: {{ task }}
+PAGE URL: {{ url }}
+VIEWPORT PROFILE: {{ profile }}
+{% if dom_excerpt %}
+DOM TEXT EXCERPT (first 1500 chars — do not re-extract what is identical; note visual-only text in text_not_in_dom):
+{{ dom_excerpt }}
+{% endif %}
+Analyze the screenshot for this task. Return VisionInsight JSON:
+{"profile": "{{ profile }}", "url": "{{ url }}", "screen_status": "ok|blank|obstructed|error_page|unknown", "description": "...", "extracted": [{"key": "...", "value": "...", "confidence": "high|medium|low"}], "design": {"colors_approx": [], "layout": "", "responsive_note": ""}, "text_not_in_dom": [], "confidence": "high|medium|low"}

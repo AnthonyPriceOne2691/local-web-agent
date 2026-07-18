@@ -11,5 +11,6 @@ class State(StrEnum):
     PLAN = "PLAN"
     VALIDATE = "VALIDATE"
     ACT = "ACT"
+    VISION_BATCH = "VISION_BATCH"
     SYNTHESIZE = "SYNTHESIZE"
     DONE = "DONE"
