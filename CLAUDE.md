@@ -1,6 +1,6 @@
 # Local Web Agent — инструкции для Claude Code
 
-Локальный research-агент: Layer 1 — crawl worker одного сайта (Playwright + Ollama), Layer 2 — research chat по N сайтам со сравнением. Всё на MacBook Air M5 32 GB, **ноль облачных API** (privacy-first). Автор: Anton Aspidov (общение — по-русски).
+Локальный research-агент: Layer 1 — crawl worker одного сайта (Playwright + Ollama), Layer 2 — research-сессии по N сайтам со сравнением (`agent research`, `/sessions`). Оба слоя реализованы и пробенчмаркованы; следующий шаг — Chat UI. Всё на MacBook Air M5 32 GB, **ноль облачных API** (privacy-first). Автор: Anton Aspidov (общение — по-русски).
 
 **Первым делом в новой сессии:** прочитай [MEMORY.md](MEMORY.md) — там текущее состояние, открытые хвосты и gotchas.
 
@@ -21,11 +21,12 @@ cd backend && uv sync --extra dev
 .venv/bin/python -m ruff check app tests ../cli   # lint
 .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001  # API
 
-# CLI (из корня репо)
-backend/.venv/bin/python -m cli.main crawl --url URL --task "..."
-backend/.venv/bin/python -m cli.main runs list
+# CLI (из корня репо; нужен запущенный API)
+backend/.venv/bin/python -m cli.main crawl --url URL --task "..." [--vision auto|always|never] [--sitemap ...] [--consent ...]
+backend/.venv/bin/python -m cli.main research --urls "URL1,URL2,..." --task "..." [--rubric ...] [--output x.json] [--report x.md]
+backend/.venv/bin/python -m cli.main runs list|show ID|cancel [ID]|delete ID
 
-# Fixture-сайты для тестов/E2E (порты 8901+)
+# Fixture-сайты для тестов/E2E (7 сайтов, порты 8901–8907; мапа: --print)
 backend/.venv/bin/python scripts/spike/fixtures_server.py
 
 # Гейт размера модулей

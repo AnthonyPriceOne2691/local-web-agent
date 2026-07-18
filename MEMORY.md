@@ -14,6 +14,12 @@
 | **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3); 115 тестов, cov 93% |
 | **Phase 4 Chat UI** | 🔲 **NEXT** — React chat + SSE поверх /sessions (doc 24 § Chat UI, doc 17) |
 
+## Phase 4 — с чего начинать (scope doc 06/24/17)
+
+- React + Vite чат: paste URLs + task → `POST /sessions` + `/messages`; прогресс из `GET /sessions/{id}` (поллинг) → добавить **SSE `GET /sessions/{id}/events`** (tool_start / crawl_progress / compare_start / done — doc 15); сайд-панель: runs timeline, скриншоты (`GET /runs/{id}` + artifacts), comparison-таблица; экспорт отчёта. Паттерн-референс — Voice Interview Coach chat (SSE poll, без WebSocket).
+- Exit doc 06: UC-1 и UC-2 полностью из чата; No WebSocket (SSE poll pattern).
+- Бэкенд готов: `/sessions` CRUD+messages+cancel работает (UC-бенчмарки прошли через него); для чата, вероятно, планнер `planner: llm` (doc 24 Phase 4) — meta-промпт поверх qwen3 think:false + контракты M-*; rules-планнер остаётся fast-path.
+
 ## Phase 3 — что построено и бенчмарк
 
 - `research/`: meta_agent (rules-planner: URL regex, research intent RU+EN, план по intent-таблице), runner (sequential D-7 + cooldown 30 s при N≥4, partial failure → `excluded[]`, M-H1..M-H4, session cancel/timeout 60 min), compare_synthesizer (rubrics из data/, wide ctx 24K при N>3, run_id мапит код по netloc-с-портом, выдуманные сайты отбрасываются), report (comparison_report.md).
@@ -48,9 +54,8 @@
 
 - **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. **Дефолт кода: qwen3:14b (nav+synth)**. После работы — выгружать (`ollama ps` пуст).
 - **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike).
-- **Порты**: API 8001 · fixtures 8901–8904 · Ollama 11434.
+- **Порты**: API 8001 · fixtures 8901–8907 · Ollama 11434. Fixture-мапа (сайты сортируются по имени; `fixtures_server.py --print`): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
 - Гейты перед коммитом: `pytest` (115) · `ruff check app tests ../cli` · `check_module_size.py`.
-- Fixture-порты сдвинулись (сайты сортируются по имени): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
 
 ## Gotchas
 
