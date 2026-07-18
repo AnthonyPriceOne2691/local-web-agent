@@ -1,6 +1,6 @@
 # 17 — UI Screens (CLI + Future Web)
 
-> Local Web Agent · Design doc · **v0.3.1** · 2026-07-05
+> Local Web Agent · Design doc · **v0.4** · 2026-07-19
 
 ## MVP: CLI (Phase 1–3) → Chat UI (Phase 4, primary UX)
 
@@ -116,46 +116,53 @@ Side panel: linked runs, screenshot thumbs, per-site reports.
 
 ---
 
-## Phase 4: Research Chat UI
+## Phase 4: Research Chat UI — реализовано (2026-07-19)
 
-### Screens
+**Стек (факт):** React 19 + Vite 7 + TypeScript + Tailwind CSS v4 (`frontend/`). Prod: `npm run build` → `frontend/dist`, FastAPI монтирует на `/` (same-origin, CORS не нужен). Dev: `npm run dev` (5173) c proxy `/sessions|/runs|/health` → 8001.
+
+### Layout (три колонки)
 
 ```
-[New Crawl]  [Runs]  [Settings]
-
-New Crawl:
-  - URL input
-  - Task textarea
-  - Advanced: max pages, depth, allow external
-  - [Start] → live step feed
-
-Run detail:
-  - Status badge
-  - Step timeline (url, action, reasoning)
-  - Vision badge per step (ok / skipped / failed)
-  - Screenshot thumbnails (desktop + mobile tabs)
-  - Result card (facts + evidence expand; source dom/vision/both)
-  - Design panel (colors swatches, layout notes)
-  - Export JSON / Markdown
-  - Cancel run (while running) — FR-3.8
-  - Delete run
-
-Settings:
-  - Default limits
-  - Ollama model names
-  - Data directory
+┌─ Sidebar ─────┬─ Chat ────────────────────────┬─ Side panel ──────────┐
+│ + New chat    │ header: title·status·Cancel   │ tabs: Runs|Comparison │
+│ session list  │ messages (user/assistant/⚙)   │ Runs: RunCard         │
+│  (status,     │ CrawlProgress bar (SSE)       │  status·intent·pages  │
+│   runs count, │ "Comparing…" spinner          │  steps timeline       │
+│   delete ✕)   │ composer (Enter=send)         │  screenshot thumbs    │
+│               │ welcome: UC-1/UC-2 примеры    │ Comparison: winner,   │
+│               │                               │  rankings bars,       │
+│               │                               │  dimensions table,    │
+│               │                               │  narrative, excluded, │
+│               │                               │  Export report.md     │
+└───────────────┴───────────────────────────────┴───────────────────────┘
 ```
 
-### Tech (if built)
+### Компоненты (`frontend/src/`)
 
-- React + Vite + Tailwind (consistent with voice-interview-coach)
-- Poll REST or SSE
-- **No WebSocket required** — crawl is async job, not streaming chat
+| Файл | Ответственность |
+|------|-----------------|
+| `App.tsx` | state-holder: sessions/current/runs/progress; SSE attach/detach; send/cancel/delete |
+| `api.ts` | REST-клиент + `subscribeSessionEvents` (EventSource, дедуп реплея по `message.index`) |
+| `types.ts` | зеркала Pydantic-схем (SessionRecord, RunRecord, ComparisonResult, SSE events) |
+| `components/Sidebar.tsx` | список сессий, New chat, delete |
+| `components/Chat.tsx` | лента, ProgressCard, composer, welcome-примеры UC-1/UC-2 |
+| `components/Message.tsx` | user/assistant баблы; tool-notes (M-S1) компактной строкой ⚙ |
+| `components/SidePanel.tsx` | табы Runs / Comparison |
+| `components/RunCard.tsx` | статус, steps timeline, скриншот-тумбы (`/runs/{id}/steps/{pos}/screenshot`) |
+| `components/ComparisonView.tsx` | winner, rankings, dimensions-таблица, narrative, excluded, экспорт `report.md` |
+| `components/StatusBadge.tsx` | цветовые статусы session/run |
+
+### Поведение
+
+- SSE `GET /sessions/{id}/events` (протокол — doc 15 v0.6); источник правды — `GET /sessions/{id}`: на `done` и tool-notes UI рефетчит сессию/runs.
+- Cancel session (FR-3.8) из header; ошибки API (409 busy/run_in_progress) — красный баннер.
+- **No WebSocket** — SSE poll pattern (exit doc 06). EventSource сам реконнектит; реплей дедупится.
 
 ### Out of scope for Web UI
 
 - Real-time browser view (too heavy)
-- Editing prompts in UI (edit files in `data/prompts/`)
+- Editing prompts / settings in UI (edit files in `data/prompts/`, env `LWA_*`)
+- Отдельный «New Crawl» экран для Layer 1 — single-site задача решается тем же чатом (один URL → `single_site` intent)
 
 ---
 
@@ -167,3 +174,4 @@ Settings:
 | 2026-07-05 | **v0.2:** design audit flow; --vision progress; report/design CLI; Web UI vision badges |
 | 2026-07-05 | **v0.3:** Flow 5 Research Chat primary UX; Phase 4 (doc 24) |
 | 2026-07-05 | **v0.3.1 (review):** Cancel run в Run detail (FR-3.8) |
+| 2026-07-19 | **v0.4 (Phase 4 impl):** Chat UI реализован — React 19 + Vite 7 + TS + Tailwind v4 в `frontend/`; трёхколоночный layout (sidebar / chat+SSE progress / side panel Runs+Comparison со скриншотами и экспортом report.md); prod = статика из FastAPI, dev = Vite proxy; черновые экраны New Crawl/Settings заменены фактической структурой (single-site — через тот же чат) |

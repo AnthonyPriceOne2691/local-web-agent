@@ -1,4 +1,5 @@
-"""Research sessions API (doc 15/24): POST /sessions, messages, cancel, delete."""
+"""Research sessions API (doc 15/24): POST /sessions, messages, events SSE,
+report, cancel, delete."""
 
 from __future__ import annotations
 
@@ -6,9 +7,11 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.api.sse import session_event_stream
 from app.schemas.research import SessionConfig, SessionRecord
 
 router = APIRouter()
@@ -90,6 +93,37 @@ async def get_session(session_id: str, request: Request) -> SessionRecord:
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
     return session
+
+
+@router.get("/sessions/{session_id}/events")
+async def session_events(session_id: str, request: Request, since_messages: int = 0):
+    """SSE-прогресс (doc 15 v0.6): status / message / crawl_progress / done.
+
+    Poll-паттерн поверх store (Phase 4, no WebSocket); реконнект возобновляет
+    с `?since_messages=N` — messages только аппендятся.
+    """
+    state = request.app.state
+    if state.session_store.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    stream = session_event_stream(
+        session_id, sessions=state.session_store, runs=state.run_store,
+        settings=state.settings, since_messages=since_messages,
+    )
+    return StreamingResponse(stream, media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/sessions/{session_id}/report")
+async def get_session_report(session_id: str, request: Request) -> Response:
+    """comparison_report.md как text/markdown (экспорт из Chat UI, doc 24)."""
+    state = request.app.state
+    if state.session_store.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    path = state.session_store.artifacts_dir(session_id) / "comparison_report.md"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="report not generated")
+    return Response(path.read_text(encoding="utf-8"),
+                    media_type="text/markdown; charset=utf-8")
 
 
 @router.post("/sessions/{session_id}/cancel", status_code=202)

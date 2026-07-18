@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     site_cooldown_hot_s: float = 30.0  # N ≥ 4, fanless thermal
     max_session_duration_min: float = 60.0
 
+    # Chat UI (Phase 4, doc 15 v0.6): SSE poll-паттерн + статика фронта
+    sse_poll_interval_s: float = 0.7
+    sse_heartbeat_s: float = 15.0
+    ui_dist_dir: Path = REPO_ROOT / "frontend" / "dist"
+
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
     runs_dir_override: Path | None = None  # тесты/сторонний размещение БД

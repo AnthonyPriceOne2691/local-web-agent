@@ -6,6 +6,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes_health import router as health_router
 from app.api.routes_runs import router as runs_router
@@ -74,6 +75,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(runs_router)
     app.include_router(sessions_router)
+    if settings.ui_dist_dir.is_dir():  # Chat UI (Phase 4): same-origin статика, без CORS
+        app.mount("/", StaticFiles(directory=settings.ui_dist_dir, html=True), name="ui")
     return app
 
 

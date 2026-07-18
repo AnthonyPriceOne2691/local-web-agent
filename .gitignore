@@ -5,6 +5,10 @@ data/runs/
 # Phase 0 benchmark artifacts (сырые прогоны; выводы фиксируются в docs/19)
 scripts/spike/results/
 
+# Frontend (Phase 4 Chat UI)
+node_modules/
+frontend/dist/
+
 # Python
 .venv/
 __pycache__/

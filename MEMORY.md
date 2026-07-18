@@ -1,7 +1,7 @@
 # MEMORY — состояние проекта
 
 > Снапшот для новых сессий Claude Code (обновлять при значимых вехах; история — в git).
-> Обновлено: **2026-07-18** (поздняя ночь), Phase 3 ✅ DONE.
+> Обновлено: **2026-07-19**, Phase 4 🛠 CODE COMPLETE (UI + SSE).
 
 ## Где мы
 
@@ -11,14 +11,15 @@
 | Phase 0 benchmark | ✅ **DONE 2026-07-13** ([docs/19](docs/19-phase0-benchmark-results.md) v1.0) |
 | Phase 1 minimal agent loop | ✅ **DONE 2026-07-18** |
 | Phase 2 Full MVP | ✅ **DONE 2026-07-18** — 4/5 (80% гейт), vision E2E, PLAN p50 7.9 s ([doc 06](docs/06-mvp-phases.md) § Phase 2) |
-| **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3); 115 тестов, cov 93% |
-| **Phase 4 Chat UI** | 🔲 **NEXT** — React chat + SSE поверх /sessions (doc 24 § Chat UI, doc 17) |
+| **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3) |
+| **Phase 4 Chat UI** | 🛠 **CODE COMPLETE 2026-07-19** — UI + SSE + report/screenshot ручки; 120 тестов. **Остаток:** UC-1/UC-2 exit-прогон из чата (реальные LLM + фикстуры) и `planner: llm` (doc 24 § Planner) |
 
-## Phase 4 — с чего начинать (scope doc 06/24/17)
+## Phase 4 — что построено (2026-07-19) и что осталось
 
-- React + Vite чат: paste URLs + task → `POST /sessions` + `/messages`; прогресс из `GET /sessions/{id}` (поллинг) → добавить **SSE `GET /sessions/{id}/events`** (tool_start / crawl_progress / compare_start / done — doc 15); сайд-панель: runs timeline, скриншоты (`GET /runs/{id}` + artifacts), comparison-таблица; экспорт отчёта. Паттерн-референс — Voice Interview Coach chat (SSE poll, без WebSocket).
-- Exit doc 06: UC-1 и UC-2 полностью из чата; No WebSocket (SSE poll pattern).
-- Бэкенд готов: `/sessions` CRUD+messages+cancel работает (UC-бенчмарки прошли через него); для чата, вероятно, планнер `planner: llm` (doc 24 Phase 4) — meta-промпт поверх qwen3 think:false + контракты M-*; rules-планнер остаётся fast-path.
+- **Бэкенд:** SSE `GET /sessions/{id}/events` — poll-паттерн поверх store ([app/api/sse.py](backend/app/api/sse.py)); события `status` / `message` (tool-notes M-S1 + ответы) / `crawl_progress` (из чекпоинтов run store) / `done` + `: ping` heartbeat; реконнект `?since_messages=N` (протокол — doc 15 v0.6). `GET /sessions/{id}/report` (md-экспорт), `GET /runs/{id}/steps/{pos}/screenshot?profile=` (pos = позиция в steps[], не step.index). Настройки: `sse_poll_interval_s` 0.7 / `sse_heartbeat_s` 15 / `ui_dist_dir`. FastAPI монтирует `frontend/dist` на `/` (same-origin, CORS нет; API-роуты приоритетнее).
+- **Фронтенд `frontend/`:** React 19 + Vite 7 + TS + Tailwind v4. Три колонки: Sidebar (сессии) / Chat (лента + ProgressCard + composer, welcome с UC-примерами) / SidePanel (Runs: RunCard со steps + скриншот-тумбы; Comparison: winner/rankings/dimensions/narrative/excluded + Export report.md). SSE-подписка `subscribeSessionEvents` в [api.ts](frontend/src/api.ts), дедуп реплея по `message.index`; на `done` и tool-notes — рефетч (источник правды GET /sessions/{id}). Структура — doc 17 v0.4.
+- **Проверено:** SSE-цикл на живом uvicorn без LLM (status → user/assistant messages → done, curl); build 66 KB gzip.
+- **Осталось до Phase 4 DONE:** (1) exit-прогон UC-1/UC-2 целиком из чата на реальных LLM (поднять API + fixtures, открыть http://127.0.0.1:8001/); (2) `planner: llm` для свободного диалога/follow-up — meta-промпт поверх qwen3 think:false, контракты M-*, вернуть tools get_run_result/list_session_runs (doc 24 v0.4 п.2).
 
 ## Phase 3 — что построено и бенчмарк
 
@@ -42,20 +43,20 @@
 - **Markdown report** (`reporting/markdown.py`, doc 05): Findings/Design/Not found/Appendix → `artifacts/{id}/report.md`.
 - RunConfig новое: `use_sitemap`, `consent_handling`, `consent_click`, `vision_enabled`, `allow_private`.
 
-## Открытые хвосты (не блокеры; Phase 4 может идти)
+## Открытые хвосты (не блокеры)
 
 1. **p95 PLAN 11.6 s vs NFR-1.2 10 s** на real-страницах — тюнинг сниппетов/бюджета (doc 20).
 2. **python.org contribute-кейс** — backlog: аннотация slug-проб интентом в candidate-списке, penalty версионных ссылок (doc 06 § Phase 2 таблица).
-3. **Multi-viewport capture** (tablet/mobile из viewports.yaml) не подключён к _maybe_screenshot — desktop-only; в UC-1 dimension mobile_vs_desktop честно 0. Поднять при Phase 4 design-audit UX.
-4. **SSE `/sessions/{id}/events`** отложен до Phase 4 (CLI поллит GET); doc 24 v0.4 п.4.
+3. **Multi-viewport capture** (tablet/mobile из viewports.yaml) не подключён к _maybe_screenshot — desktop-only; в UC-1 dimension mobile_vs_desktop честно 0; UI-ручка скриншотов уже умеет `?profile=`. Поднять при Phase 4 design-audit UX.
+4. ~~SSE `/sessions/{id}/events`~~ ✅ закрыт 2026-07-19 (Phase 4, doc 15 v0.6).
 5. UC-бенчмарки гонялись на локальных фикстурах; real-site research-сессия (2-3 публичных сайта) — прогнать при случае для калибровки таймингов.
 
 ## Окружение
 
 - **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. **Дефолт кода: qwen3:14b (nav+synth)**. После работы — выгружать (`ollama ps` пуст).
-- **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike).
-- **Порты**: API 8001 · fixtures 8901–8907 · Ollama 11434. Fixture-мапа (сайты сортируются по имени; `fixtures_server.py --print`): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
-- Гейты перед коммитом: `pytest` (115) · `ruff check app tests ../cli` · `check_module_size.py`.
+- **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike). **Фронт**: `frontend/` (Node 24; `npm install`, `npm run build` → dist, `npm run dev` → 5173 c proxy).
+- **Порты**: API 8001 (+ Chat UI статика на `/`) · Vite dev 5173 · fixtures 8901–8907 · Ollama 11434. Fixture-мапа (сайты сортируются по имени; `fixtures_server.py --print`): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
+- Гейты перед коммитом: `pytest` (120) · `ruff check app tests ../cli` · `check_module_size.py` · `npm run build` (tsc + vite).
 
 ## Gotchas
 

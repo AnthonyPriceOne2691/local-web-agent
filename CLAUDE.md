@@ -1,13 +1,13 @@
 # Local Web Agent — инструкции для Claude Code
 
-Локальный research-агент: Layer 1 — crawl worker одного сайта (Playwright + Ollama), Layer 2 — research-сессии по N сайтам со сравнением (`agent research`, `/sessions`). Оба слоя реализованы и пробенчмаркованы; следующий шаг — Chat UI. Всё на MacBook Air M5 32 GB, **ноль облачных API** (privacy-first). Автор: Anton Aspidov (общение — по-русски).
+Локальный research-агент: Layer 1 — crawl worker одного сайта (Playwright + Ollama), Layer 2 — research-сессии по N сайтам со сравнением (`agent research`, `/sessions`), поверх них — Chat UI (`frontend/`, React + SSE). Слои 1–2 пробенчмаркованы; Chat UI реализован (остались exit-прогоны UC-1/UC-2 из чата и LLM-планнер). Всё на MacBook Air M5 32 GB, **ноль облачных API** (privacy-first). Автор: Anton Aspidov (общение — по-русски).
 
 **Первым делом в новой сессии:** прочитай [MEMORY.md](MEMORY.md) — там текущее состояние, открытые хвосты и gotchas.
 
 ## Процесс (обязателен)
 
 - **Design docs — источник правды**: `docs/` (индекс и решения D-1..D-14 — [docs/README.md](docs/README.md)). Любое изменение дизайна = правка дока + запись в changelog в конце + bump версии в шапке (`v0.x`). Версии в шапке, индексе и changelog должны совпадать.
-- **Код только в рамках фаз** [docs/06-mvp-phases.md](docs/06-mvp-phases.md). Phase 0–3 ✅ DONE, Phase 4 (Chat UI) — next.
+- **Код только в рамках фаз** [docs/06-mvp-phases.md](docs/06-mvp-phases.md). Phase 0–3 ✅ DONE; Phase 4 (Chat UI) 🛠 code complete — остаток: UC-exit из чата + `planner: llm`.
 - **Стандарты** [docs/18-engineering-standards.md](docs/18-engineering-standards.md): файл ≤ 500 LOC (`scripts/check_module_size.py`), SOLID/Protocols + DI, DRY — промпты и словари в `data/`, не в коде; тесты с моками (Fake browser/LLM в `backend/tests/conftest.py`); coverage: contracts ≥95%, orchestrator/navigation ≥90%, app ≥85% (к концу Phase 2).
 - **Перед завершением любой работы с кодом**: `ruff check`, `pytest`, `check_module_size.py` — всё зелёное.
 - `scripts/spike/` — исключение из стандартов (Phase 0 артефакт, не трогать без нужды).
@@ -25,6 +25,10 @@ cd backend && uv sync --extra dev
 backend/.venv/bin/python -m cli.main crawl --url URL --task "..." [--vision auto|always|never] [--sitemap ...] [--consent ...]
 backend/.venv/bin/python -m cli.main research --urls "URL1,URL2,..." --task "..." [--rubric ...] [--output x.json] [--report x.md]
 backend/.venv/bin/python -m cli.main runs list|show ID|cancel [ID]|delete ID
+
+# Chat UI (frontend/, React+Vite+TS+Tailwind; prod-статика отдаётся API на /)
+cd frontend && npm install && npm run build   # dist/ монтируется FastAPI
+cd frontend && npm run dev                    # dev на 5173, proxy на API 8001
 
 # Fixture-сайты для тестов/E2E (7 сайтов, порты 8901–8907; мапа: --print)
 backend/.venv/bin/python scripts/spike/fixtures_server.py

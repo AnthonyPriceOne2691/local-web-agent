@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from app.schemas.run import RunConfig, RunRecord
 
@@ -98,6 +99,28 @@ async def delete_run(run_id: str, request: Request) -> dict:
     if not store.delete(run_id):
         raise HTTPException(status_code=404, detail="run not found")
     return {"deleted": run_id}
+
+
+@router.get("/runs/{run_id}/steps/{step_index}/screenshot")
+async def get_step_screenshot(
+    run_id: str, step_index: int, request: Request, profile: str = "desktop",
+) -> FileResponse:
+    """PNG шага (doc 15). `step_index` — позиция в steps[] (step.index неуникален:
+    OBSERVE и ACT одного шага делят номер — gotcha doc 12)."""
+    store = request.app.state.run_store
+    record = store.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    if not 0 <= step_index < len(record.steps):
+        raise HTTPException(status_code=404, detail="step not found")
+    rel = record.steps[step_index].screenshot_paths.get(profile)
+    if rel is None:
+        raise HTTPException(status_code=404, detail=f"no '{profile}' screenshot for step")
+    root = store.artifacts_dir(run_id).resolve()
+    path = (root / rel).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="screenshot file missing")
+    return FileResponse(path, media_type="image/png")
 
 
 @router.get("/runs/{run_id}/result")

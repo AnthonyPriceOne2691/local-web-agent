@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-18
+> Local Web Agent · Design doc · **v0.5** · 2026-07-19
 
 ## Назначение
 
@@ -311,7 +311,7 @@ Equivalent to one user chat message without UI.
 
 ## Chat UI (Phase 4 — primary product UX)
 
-**Статус:** целевой интерфейс продукта (обновляет D-5, OQ-1).
+**Статус:** **реализован (2026-07-19)** — `frontend/` React 19 + Vite 7 + TS + Tailwind v4; структура компонентов и layout — doc 17 v0.4; SSE-протокол — doc 15 v0.6 (события `status`/`message`/`crawl_progress`/`done`, poll-паттерн поверх store, реконнект `?since_messages=N`). Экспорт отчёта — `GET /sessions/{id}/report`. Остаток Phase 4: exit-прогон UC-1/UC-2 из чата на реальных LLM + `planner: llm` для свободного диалога (rules-планнер пока единственный).
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -397,3 +397,4 @@ Separate from crawl ABC — enforced in `research/tool_executor.py`.
 | 2026-07-05 | **v0.2 (review):** planner rules-first (Phase 3 без LLM-планирования; LLM meta — Phase 4); UC-1 max_pages=6 + session time budget (swap-математика: naive = до 12 загрузок моделей); cooldown 30–60 s при N≥4 (thermal); phase-batched execution в backlog |
 | 2026-07-05 | **v0.3 (review-2):** partial failure spec (compare по ≥2 выжившим, `excluded[]`, M-H4 edge); UC-2 — 3 article candidates per site; `max_session_duration_min: 60` graceful timeout |
 | 2026-07-18 | **v0.4 (Phase 3 impl):** реализовано `research/{meta_agent,runner,compare_synthesizer,report}` + `/sessions` API + `agent research` CLI. Уточнения: (1) plan/execute слиты в ResearchRunner — отдельного tool_executor-модуля нет, контракты M-H1..M-H4 enforced в раннере; (2) get_run_result/list_session_runs как отдельные tools не нужны rules-планнеру (runner читает store напрямую), для Phase 4 LLM-планнера — вернуть; (3) session-level cancel_event пробрасывается в текущий crawl (одно событие отменяет и очередь, и активный run); (4) `GET /sessions/{id}/events` SSE отложен до Phase 4 (CLI поллит GET /sessions/{id}); (5) винner/rankings: run_id проставляет код по url — LLM оперирует только url/label, выдуманные сайты отбрасываются |
+| 2026-07-19 | **v0.5 (Phase 4 Chat UI impl):** § Chat UI — реализован (`frontend/`, React 19 + Vite 7 + TS + Tailwind v4; детали doc 17 v0.4); SSE `/sessions/{id}/events` закрыт (протокол doc 15 v0.6 — poll-паттерн поверх store, M-S1 tool-notes идут событиями `message`); экспорт `GET /sessions/{id}/report`. Остаток Phase 4: UC-1/UC-2 exit-прогон из чата + `planner: llm` |

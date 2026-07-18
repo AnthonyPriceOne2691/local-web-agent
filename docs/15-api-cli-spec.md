@@ -1,6 +1,6 @@
 # 15 — API & CLI Spec
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-05
+> Local Web Agent · Design doc · **v0.6** · 2026-07-19
 
 ## Base URL
 
@@ -9,6 +9,8 @@ http://localhost:8001
 ```
 
 Uvicorn биндится **только на `127.0.0.1`** (NFR-2.5) — API не требует auth, поэтому не должен быть доступен из сети.
+
+**Chat UI (Phase 4):** FastAPI монтирует собранную статику `frontend/dist` на `/` (same-origin — CORS не нужен); API-роуты имеют приоритет над статикой. Dev-режим — Vite dev server (5173) с proxy `/sessions|/runs|/health` → 8001 (doc 17).
 
 ## Concurrency (D-12)
 
@@ -114,6 +116,8 @@ Query: `?profile=desktop` | `tablet` | `mobile` (default `desktop`).
 
 Returns `image/png` for the step. 404 if screenshots disabled or profile not captured. See [22-page-screenshots.md](22-page-screenshots.md).
 
+`step_index` — **позиция в массиве `steps[]`** (не `step.index`: он неуникален — OBSERVE и ACT одного шага делят номер, doc 12).
+
 ### GET /runs
 
 List runs (paginated).
@@ -175,7 +179,20 @@ Meta-agent parses URLs, runs sequential crawls, compare pass, appends assistant 
 
 ### GET /sessions/{session_id}/events
 
-SSE: `tool_start`, `crawl_progress`, `compare_start`, `done`.
+SSE-прогресс сессии (Phase 4). **Poll-паттерн поверх store** (exit doc 06: no WebSocket): генератор диффит session/run store с шагом `sse_poll_interval_s` (0.7 s) и отдаёт только новое. Query `?since_messages=N` — реконнект без повторов (messages append-only, клиент дедупит по `index`).
+
+| Event | Data | Когда |
+|-------|------|-------|
+| `status` | `{session_id, status}` | смена статуса сессии; `comparing` = старт compare-фазы |
+| `message` | `{index, role, content, created_at}` | новое SessionMessage; `role: tool` = tool-note M-S1 (старт crawl_site) |
+| `crawl_progress` | `{run_id, status, start_url, pages_visited, max_pages, current_url}` | изменение активного run этой сессии (orchestrator чекпоинтит каждый шаг) |
+| `done` | `{session_id, status}` | терминальный статус — поток закрывается |
+
+Комментарий `: ping` раз в `sse_heartbeat_s` (15 s) держит соединение в паузах. 404 если сессии нет.
+
+### GET /sessions/{session_id}/report
+
+`comparison_report.md` как `text/markdown` (экспорт из Chat UI). 404 — отчёт ещё не сгенерирован.
 
 ### POST /sessions/{session_id}/cancel
 
@@ -329,3 +346,4 @@ MVP: CLI polls `GET /runs/{id}` every 2 s.
 | 2026-07-05 | **v0.3:** Research API /sessions; agent research CLI (doc 24) |
 | 2026-07-05 | **v0.4 (review):** concurrency D-12 (409 при активном run); `POST /runs/{id}/cancel` + `agent runs cancel` + session cancel; /health c model presence + active_run_id; bind 127.0.0.1 (NFR-2.5) |
 | 2026-07-05 | **v0.5 (review-2):** startup sweep в concurrency-таблице (lock из БД); /health + ollama_version (≥0.9 для think, doc 16) |
+| 2026-07-19 | **v0.6 (Phase 4 impl):** SSE `/sessions/{id}/events` реализован poll-паттерном поверх store; протокол уточнён — события `status`/`message`/`crawl_progress`/`done` + heartbeat (вместо черновых tool_start/compare_start: tool_start = `message` role=tool, compare_start = `status: comparing`), реконнект `?since_messages=N`. Новая ручка `GET /sessions/{id}/report` (text/markdown). `steps/{step_index}/screenshot` реализован; step_index = позиция в steps[]. Статика Chat UI: mount `frontend/dist` на `/` (same-origin, без CORS); dev — Vite proxy |
