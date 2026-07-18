@@ -7,7 +7,7 @@ from typing import Protocol
 
 
 class BrowserSession(Protocol):
-    async def start(self) -> None: ...
+    async def start(self, *, headless: bool = True) -> None: ...
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         """Navigate + settle; возвращает ФИНАЛЬНЫЙ URL (redirects — I-H9)."""

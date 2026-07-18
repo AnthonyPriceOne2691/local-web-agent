@@ -67,8 +67,8 @@ class FakeBrowserSession:
         self.consent_click_result: str | None = None
         self.click_attempts: list[list[str]] = []
 
-    async def start(self) -> None:  # pragma: no cover - trivial
-        pass
+    async def start(self, *, headless: bool = True) -> None:  # pragma: no cover - trivial
+        self.headless = headless
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         final = self.redirects.get(url, url)

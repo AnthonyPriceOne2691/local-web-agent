@@ -32,17 +32,26 @@ async def start_run(config: RunConfig, request: Request) -> dict:
     state.run_store.save(record)
     cancel_event = asyncio.Event()
     state.cancel_events[record.id] = cancel_event
+    run_kwargs: dict = {"cancel_event": cancel_event}
+    if config.attended:  # Phase 5: пауза на challenge → resume пользователем
+        from app.orchestrator.attended import EventAttendedGate
+
+        resume_event = asyncio.Event()
+        state.resume_events[record.id] = resume_event
+        run_kwargs["attended_gate"] = EventAttendedGate(
+            resume_event, state.run_store, timeout_s=state.settings.attended_wait_timeout_s)
 
     async def _execute() -> None:
         try:
             orchestrator = state.orchestrator_factory()
-            await orchestrator.run(record, cancel_event=cancel_event)
+            await orchestrator.run(record, **run_kwargs)
         except Exception as exc:  # noqa: BLE001 — фон не должен падать молча
             record.status = "failed"
-            record.error_message = str(exc)[:500]
+            record.error_message = (str(exc) or type(exc).__name__)[:500]
             state.run_store.save(record)
         finally:
             state.cancel_events.pop(record.id, None)
+            state.resume_events.pop(record.id, None)
 
     state.background_tasks.add(asyncio.create_task(_execute()))
     return {"run_id": record.id, "status": "running"}
@@ -65,6 +74,22 @@ async def cancel_run(run_id: str, request: Request) -> dict:
         record.metadata["canceled_by_user"] = True
         state.run_store.save(record)
     return {"run_id": run_id, "status": "canceling"}
+
+
+@router.post("/runs/{run_id}/resume", status_code=202)
+async def resume_run(run_id: str, request: Request) -> dict:
+    """Attended (Phase 5): пользователь прошёл challenge → снять паузу waiting_user."""
+    state = request.app.state
+    record = state.run_store.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    if record.status != "waiting_user":
+        raise HTTPException(status_code=409, detail={"error": "not_waiting",
+                                                     "status": record.status})
+    event = state.resume_events.get(run_id)
+    if event is not None:
+        event.set()
+    return {"run_id": run_id, "status": "resuming"}
 
 
 @router.get("/runs")

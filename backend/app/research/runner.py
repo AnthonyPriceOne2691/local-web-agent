@@ -61,12 +61,15 @@ class ResearchRunner:
         self._factory = orchestrator_factory
         self._compare = compare
         self._planner = planner
+        self._resume_event: asyncio.Event | None = None
 
     # ------------------------------------------------------------- message
     async def run_message(
         self, session: SessionRecord, message: str,
         cancel_event: asyncio.Event | None = None,
+        resume_event: asyncio.Event | None = None,  # attended (Phase 5)
     ) -> SessionRecord:
+        self._resume_event = resume_event
         started = time.monotonic()
         session.messages.append(SessionMessage(role="user", content=message, created_at=_now()))
         session.title = session.title or message[:80]
@@ -194,6 +197,7 @@ class ResearchRunner:
             max_pages=args.get("max_pages", self._s.max_pages),
             capture_screenshots=args.get("capture_screenshots", "auto"),
             vision_enabled=args.get("vision_enabled", "auto"),
+            attended=session.config.attended,  # Phase 5 (doc 24)
         )
         record = RunRecord(id=uuid.uuid4().hex[:12], config=config, status="running",
                            session_id=session.id, started_at=_now())
@@ -201,8 +205,14 @@ class ResearchRunner:
             record.intent = args["intent"]  # research-план фиксирует intent (doc 24)
         self._runs.save(record)
         orchestrator = self._factory()
+        kwargs: dict = {"cancel_event": cancel_event}
+        if config.attended and self._resume_event is not None:
+            from app.orchestrator.attended import EventAttendedGate
+
+            kwargs["attended_gate"] = EventAttendedGate(
+                self._resume_event, self._runs, timeout_s=self._s.attended_wait_timeout_s)
         try:
-            return await orchestrator.run(record, cancel_event=cancel_event)
+            return await orchestrator.run(record, **kwargs)
         except Exception as exc:  # noqa: BLE001 — один сайт не валит сессию (M-H4 edge)
             record.status = "failed"
             record.error_message = (str(exc) or type(exc).__name__)[:500]

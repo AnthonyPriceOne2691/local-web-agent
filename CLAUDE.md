@@ -49,7 +49,7 @@ cd scripts/spike && ../../.venv/bin/python benchmark_crawl.py --tasks tasks.yaml
 ## Границы
 
 - API bind только `127.0.0.1` (NFR-2.5); глобальный лок: 1 активный crawl (D-12, 409).
-- robots.txt соблюдаем, anti-bot bypass запрещён, формы не сабмитим (контракты doc 13).
+- robots.txt соблюдаем, anti-bot bypass запрещён, формы не сабмитим (контракты doc 13). **Обман детекта (fingerprint-спуфинг, undetected-браузеры, автопрохождение/solver капч) — вне scope навсегда.** Anti-bot challenge проходит только человек — attended-режим (видимый браузер + пауза + resume, Phase 5, doc 24).
 - Никаких облачных LLM и телеметрии.
 
 ## Git

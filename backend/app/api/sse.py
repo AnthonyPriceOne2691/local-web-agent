@@ -39,6 +39,20 @@ def _active_run_progress(session_id: str, runs: RunStore) -> tuple | None:
             record.pages_visited, record.config.max_pages, record.current_url)
 
 
+def _active_challenge(session_id: str, runs: RunStore) -> dict | None:
+    """Attended (Phase 5): активный run сессии стоит на anti-bot challenge."""
+    active_id = runs.active_run_id()
+    if active_id is None:
+        return None
+    record = runs.get(active_id)
+    if record is None or record.session_id != session_id or record.status != "waiting_user":
+        return None
+    challenge = record.metadata.get("challenge") or {}
+    return {"run_id": record.id, "start_url": record.config.start_url,
+            "url": challenge.get("url", record.current_url),
+            "kind": challenge.get("kind", "captcha")}
+
+
 async def session_event_stream(
     session_id: str,
     *,
@@ -51,6 +65,7 @@ async def session_event_stream(
     seen_messages = max(0, since_messages)
     last_status: str | None = None
     last_progress: tuple | None = None
+    last_challenge: dict | None = None
     idle_s = 0.0
     while True:
         session = sessions.get(session_id)
@@ -72,6 +87,12 @@ async def session_event_stream(
             last_progress = progress
             idle_s = 0.0
             yield format_sse("crawl_progress", dict(zip(_PROGRESS_FIELDS, progress, strict=True)))
+        challenge = _active_challenge(session_id, runs)  # attended (Phase 5)
+        if challenge != last_challenge:
+            last_challenge = challenge
+            if challenge is not None:
+                idle_s = 0.0
+                yield format_sse("challenge_wait", challenge)
         if session.status in TERMINAL_SESSION_STATUSES:
             yield format_sse("done", {"session_id": session_id, "status": session.status})
             return

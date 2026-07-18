@@ -61,6 +61,7 @@ class SessionConfig(BaseModel):
     max_sites: int = 10  # M-H2 (doc 24)
     rubric_override: str | None = None
     canceled_by_restart: bool = False
+    attended: bool = False  # Phase 5: attended-режим на anti-bot challenge (doc 24)
 
 
 class SessionRecord(BaseModel):

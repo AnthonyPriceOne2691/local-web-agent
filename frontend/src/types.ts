@@ -133,3 +133,10 @@ export interface SseMessage {
   content: string
   created_at: string
 }
+
+export interface ChallengeWait {
+  run_id: string
+  start_url: string
+  url: string
+  kind: string
+}

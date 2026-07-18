@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-19
+> Local Web Agent · Design doc · **v0.7** · 2026-07-19
 
 ## Назначение
 
@@ -230,6 +230,26 @@ When crawl finds candidate article page:
 
 ---
 
+## Attended-режим — anti-bot challenge (Phase 5, реализовано 2026-07-19)
+
+**Проблема:** сайты за активным Cloudflare managed challenge (403 + «just a moment» на каждый запрос, включая robots.txt) headless-агент не читает — и не должен обходить (контракт: no anti-bot bypass). Но контент доступен человеку, прошедшему проверку.
+
+**Решение — human-in-the-loop, НЕ обход детекта.** Проверку проходит пользователь в видимом браузере; агент делает всё остальное. Fingerprint-спуфинг / автопрохождение challenge / solver-сервисы **вне scope навсегда** — они подделывают сигнал «я человек», что и запрещено.
+
+| Шаг | Поведение |
+|-----|-----------|
+| Детект challenge | `observer/blockers.detect_status` → `captcha` (сигналы `cloudflare` / `checking your browser` / `cf-browser-verification` …) |
+| attended off (default) | как Phase 2: `captcha` → `blocked` сразу |
+| attended on | run → `waiting_user`, `metadata.challenge = {url, kind}`; браузер видимый (`headless=False`); ждём resume до `attended_wait_timeout_s` (300 s) |
+| resume | пользователь прошёл проверку → `POST /sessions/{id}/resume` (или `/runs/{id}/resume`) → challenge-снапшот выброшен, страница переобсёрвивается (DOM настоящий), `cf_clearance`-cookie живёт в контексте run'а |
+| timeout | не дождались → `blocked_by=captcha`, `challenge_timeout=True` → сайт в `excluded[]` (M-H4) |
+
+**Реализация:** `orchestrator/attended.py` (`AttendedGate` Protocol + `EventAttendedGate` — пауза/resume/сброс, вынесено из loop.py ради ≤500 LOC); одна развилка на границе OBSERVE в `loop.py`; `EventAttendedGate` создаётся в `routes_runs` / `ResearchRunner` из `resume_event` (по образцу cancel_event). **D-12:** `active_run_id`/`startup_sweep` считают `waiting_user` занятым слотом (браузер открыт, лок держится; после рестарта — zombie → failed).
+
+**SSE:** событие `challenge_wait {run_id, start_url, url, kind}` пока активный run сессии в `waiting_user` (doc 15). **Chat UI:** карточка-пауза с кнопкой «✓ Я прошёл — продолжить», тумблер «Attended-режим» при старте сессии (`ChallengeCard` в `Chat.tsx`).
+
+**Пределы (честно):** `cf_clearance` привязан к IP+браузеру и живёт ограниченно — на длинной сессии challenge всплывёт снова; на N доменов за стенкой — N ручных прохождений. Снимает рутину обхода страниц, не сам факт проверки. Видимый браузер требует, чтобы агент и пользователь были на одной машине (для локального privacy-first инструмента — всегда так).
+
 ## Multi-site execution (D-7 closed)
 
 | Rule | Value |
@@ -402,4 +422,5 @@ Separate from crawl ABC — enforced in `research/tool_executor.py`.
 | 2026-07-05 | **v0.3 (review-2):** partial failure spec (compare по ≥2 выжившим, `excluded[]`, M-H4 edge); UC-2 — 3 article candidates per site; `max_session_duration_min: 60` graceful timeout |
 | 2026-07-18 | **v0.4 (Phase 3 impl):** реализовано `research/{meta_agent,runner,compare_synthesizer,report}` + `/sessions` API + `agent research` CLI. Уточнения: (1) plan/execute слиты в ResearchRunner — отдельного tool_executor-модуля нет, контракты M-H1..M-H4 enforced в раннере; (2) get_run_result/list_session_runs как отдельные tools не нужны rules-планнеру (runner читает store напрямую), для Phase 4 LLM-планнера — вернуть; (3) session-level cancel_event пробрасывается в текущий crawl (одно событие отменяет и очередь, и активный run); (4) `GET /sessions/{id}/events` SSE отложен до Phase 4 (CLI поллит GET /sessions/{id}); (5) винner/rankings: run_id проставляет код по url — LLM оперирует только url/label, выдуманные сайты отбрасываются |
 | 2026-07-19 | **v0.5 (Phase 4 Chat UI impl):** § Chat UI — реализован (`frontend/`, React 19 + Vite 7 + TS + Tailwind v4; детали doc 17 v0.4); SSE `/sessions/{id}/events` закрыт (протокол doc 15 v0.6 — poll-паттерн поверх store, M-S1 tool-notes идут событиями `message`); экспорт `GET /sessions/{id}/report`. Остаток Phase 4: UC-1/UC-2 exit-прогон из чата + `planner: llm` |
+| 2026-07-19 | **v0.7 (Phase 5 attended):** § Attended-режим — human-in-the-loop прохождение anti-bot challenge (не обход детекта). `orchestrator/attended.py` (AttendedGate + EventAttendedGate), статус `waiting_user`, видимый браузер (`headless=False`), resume-эндпоинты, SSE `challenge_wait`, карточка-пауза + тумблер в Chat UI, CLI `--attended`. D-12: `waiting_user` держит лок. Границы: fingerprint-спуфинг/автопрохождение — вне scope навсегда |
 | 2026-07-19 | **v0.6 (Phase 4 ✅ DONE):** § Planner — `planner: llm` реализован (`research/llm_planner.py` + `data/prompts/meta_planner_*`): rules fast-path при URL в сообщении, LLM для диалога без URL; пост-валидация M-H1..M-H3 (URL только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply); `get_run_result`/`list_session_runs` возвращены для LLM-пути, `compare_results` принимает run_ids прошлых runs (re-compare/re-crawl без потери сессии). Проверено на реальной модели из Chat UI: follow-up ответ из comparison-контекста; re-crawl упавшего сайта по фразе без URL + re-compare 4/4. Excluded-семантика уточнена: перекраленный успешно URL не остаётся в excluded[] |

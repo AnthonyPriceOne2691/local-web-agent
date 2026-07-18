@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CrawlProgress, SessionRecord } from '../types'
+import type { ChallengeWait, CrawlProgress, SessionRecord } from '../types'
 import Message from './Message'
 import StatusBadge from './StatusBadge'
 
 interface Props {
   session: SessionRecord | null
   progress: CrawlProgress | null
+  challenge: ChallengeWait | null
   banner: string
   sending: boolean
+  attended: boolean
   onSend: (content: string) => void
   onCancel: () => void
+  onResume: () => void
+  onToggleAttended: (value: boolean) => void
 }
 
 const EXAMPLES = [
@@ -23,14 +27,17 @@ const EXAMPLES = [
   },
 ]
 
-export default function Chat({ session, progress, banner, sending, onSend, onCancel }: Props) {
+export default function Chat({
+  session, progress, challenge, banner, sending, attended,
+  onSend, onCancel, onResume, onToggleAttended,
+}: Props) {
   const [draft, setDraft] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const busy = session != null && ['running_tools', 'comparing'].includes(session.status)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [session?.messages.length, progress?.pages_visited])
+  }, [session?.messages.length, progress?.pages_visited, challenge])
 
   const submit = () => {
     const text = draft.trim()
@@ -80,7 +87,8 @@ export default function Chat({ session, progress, banner, sending, onSend, onCan
           </div>
         )}
         {session?.messages.map((m, i) => <Message key={i} message={m} />)}
-        {progress && <ProgressCard progress={progress} />}
+        {challenge && <ChallengeCard challenge={challenge} onResume={onResume} />}
+        {progress && !challenge && <ProgressCard progress={progress} />}
         {session?.status === 'comparing' && (
           <div className="flex items-center gap-2 text-sm text-violet-600">
             <Spinner /> Comparing results…
@@ -119,8 +127,42 @@ export default function Chat({ session, progress, banner, sending, onSend, onCan
             Send
           </button>
         </div>
+        <label
+          className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 select-none w-fit"
+          title="Видимый браузер: на anti-bot проверке пауза — пройди её сам, дальше агент продолжит"
+        >
+          <input
+            type="checkbox"
+            checked={attended}
+            disabled={session != null || busy}
+            onChange={(e) => onToggleAttended(e.target.checked)}
+            className="accent-blue-600"
+          />
+          Attended-режим (пройти проверки вручную) — задаётся при старте новой сессии
+        </label>
       </footer>
     </main>
+  )
+}
+
+function ChallengeCard({ challenge, onResume }: {
+  challenge: ChallengeWait
+  onResume: () => void
+}) {
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
+      <div className="font-semibold mb-1">⏸ Нужна проверка — {new URL(challenge.start_url).host}</div>
+      <p className="text-xs text-amber-800 mb-2.5">
+        Сайт показал anti-bot проверку ({challenge.kind}). Я открыл браузер — пройди её
+        в появившемся окне, потом нажми «Продолжить». Сессию для этого домена запомню.
+      </p>
+      <button
+        onClick={onResume}
+        className="rounded-md bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-xs font-medium"
+      >
+        ✓ Я прошёл — продолжить
+      </button>
+    </div>
   )
 }
 

@@ -1,6 +1,6 @@
 # 15 — API & CLI Spec
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-19
+> Local Web Agent · Design doc · **v0.7** · 2026-07-19
 
 ## Base URL
 
@@ -131,6 +131,10 @@ List runs (paginated).
 }
 ```
 
+### POST /runs/{run_id}/resume
+
+Attended-режим (Phase 5, doc 24): пользователь прошёл anti-bot challenge → снять паузу `waiting_user`. **202** `{"run_id": "...", "status": "resuming"}`. 404 — нет run; 409 `{"error": "not_waiting"}` — run не на паузе.
+
 ### POST /runs/{run_id}/cancel
 
 Отмена активного run. **202** `{"run_id": "...", "status": "canceling"}`.
@@ -186,6 +190,7 @@ SSE-прогресс сессии (Phase 4). **Poll-паттерн поверх 
 | `status` | `{session_id, status}` | смена статуса сессии; `comparing` = старт compare-фазы |
 | `message` | `{index, role, content, created_at}` | новое SessionMessage; `role: tool` = tool-note M-S1 (старт crawl_site) |
 | `crawl_progress` | `{run_id, status, start_url, pages_visited, max_pages, current_url}` | изменение активного run этой сессии (orchestrator чекпоинтит каждый шаг) |
+| `challenge_wait` | `{run_id, start_url, url, kind}` | активный run сессии встал на anti-bot challenge (attended, Phase 5) — UI показывает карточку-паузу с resume |
 | `done` | `{session_id, status}` | терминальный статус — поток закрывается |
 
 Комментарий `: ping` раз в `sse_heartbeat_s` (15 s) держит соединение в паузах. 404 если сессии нет.
@@ -193,6 +198,10 @@ SSE-прогресс сессии (Phase 4). **Poll-паттерн поверх 
 ### GET /sessions/{session_id}/report
 
 `comparison_report.md` как `text/markdown` (экспорт из Chat UI). 404 — отчёт ещё не сгенерирован.
+
+### POST /sessions/{session_id}/resume
+
+Attended (Phase 5): пользователь прошёл challenge активного crawl'а сессии → снять паузу. **202** `{"session_id": "...", "status": "resuming"}`. 404 — нет сессии; 409 `{"error": "not_waiting"}` — активный run сессии не в `waiting_user`.
 
 ### POST /sessions/{session_id}/cancel
 
@@ -228,6 +237,7 @@ agent crawl \
 | `--max-pages` | 10 | Page budget |
 | `--max-depth` | 2 | Path depth |
 | `--allow-external` | false | Cross-domain links |
+| `--attended` | false | Видимый браузер; на anti-bot challenge пауза → пройди сам, затем resume (Phase 5, doc 24) |
 | `--no-robots` | false | Skip robots.txt (use with care) |
 | `--output` | stdout | JSON file path |
 | `--report` | none | Markdown report path |
@@ -347,3 +357,4 @@ MVP: CLI polls `GET /runs/{id}` every 2 s.
 | 2026-07-05 | **v0.4 (review):** concurrency D-12 (409 при активном run); `POST /runs/{id}/cancel` + `agent runs cancel` + session cancel; /health c model presence + active_run_id; bind 127.0.0.1 (NFR-2.5) |
 | 2026-07-05 | **v0.5 (review-2):** startup sweep в concurrency-таблице (lock из БД); /health + ollama_version (≥0.9 для think, doc 16) |
 | 2026-07-19 | **v0.6 (Phase 4 impl):** SSE `/sessions/{id}/events` реализован poll-паттерном поверх store; протокол уточнён — события `status`/`message`/`crawl_progress`/`done` + heartbeat (вместо черновых tool_start/compare_start: tool_start = `message` role=tool, compare_start = `status: comparing`), реконнект `?since_messages=N`. Новая ручка `GET /sessions/{id}/report` (text/markdown). `steps/{step_index}/screenshot` реализован; step_index = позиция в steps[]. Статика Chat UI: mount `frontend/dist` на `/` (same-origin, без CORS); dev — Vite proxy |
+| 2026-07-19 | **v0.7 (Phase 5 attended):** `POST /runs/{id}/resume` + `POST /sessions/{id}/resume` (снять паузу `waiting_user`); SSE-событие `challenge_wait`; CLI `--attended`; `POST /sessions` принимает `attended`. Human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим) |

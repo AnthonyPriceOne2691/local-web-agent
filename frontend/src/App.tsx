@@ -3,7 +3,13 @@ import { api, subscribeSessionEvents } from './api'
 import Chat from './components/Chat'
 import Sidebar from './components/Sidebar'
 import SidePanel from './components/SidePanel'
-import type { CrawlProgress, RunRecord, SessionListItem, SessionRecord } from './types'
+import type {
+  ChallengeWait,
+  CrawlProgress,
+  RunRecord,
+  SessionListItem,
+  SessionRecord,
+} from './types'
 
 const BUSY: string[] = ['running_tools', 'comparing']
 
@@ -11,6 +17,8 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [current, setCurrent] = useState<SessionRecord | null>(null)
   const [progress, setProgress] = useState<CrawlProgress | null>(null)
+  const [challenge, setChallenge] = useState<ChallengeWait | null>(null)
+  const [attended, setAttended] = useState(false)
   const [runs, setRuns] = useState<Record<string, RunRecord>>({})
   const [banner, setBanner] = useState('')
   const [sending, setSending] = useState(false)
@@ -61,10 +69,15 @@ export default function App() {
               ? { ...prev, status: status as SessionRecord['status'] }
               : prev,
           ),
-        onProgress: (p) => setProgress(p),
+        onProgress: (p) => {
+          setProgress(p)
+          if (p.status !== 'waiting_user') setChallenge(null) // прошли — снять карточку
+        },
+        onChallenge: (c) => setChallenge(c),
         onDone: () => {
           detach()
           setProgress(null)
+          setChallenge(null)
           api.getSession(sessionId).then((full) => {
             setCurrent((prev) => (prev && prev.id === sessionId ? full : prev))
             fetchRuns(full.run_ids)
@@ -79,6 +92,7 @@ export default function App() {
   const selectSession = (id: string) => {
     detach()
     setProgress(null)
+    setChallenge(null)
     setBanner('')
     api.getSession(id).then((sess) => {
       setCurrent(sess)
@@ -91,6 +105,7 @@ export default function App() {
     detach()
     setCurrent(null)
     setProgress(null)
+    setChallenge(null)
     setBanner('')
   }
 
@@ -100,7 +115,7 @@ export default function App() {
     try {
       let sess = current
       if (!sess) {
-        const { session_id } = await api.createSession()
+        const { session_id } = await api.createSession('', attended)
         sess = await api.getSession(session_id)
         setCurrent(sess)
         refreshSessions()
@@ -118,6 +133,12 @@ export default function App() {
 
   const cancel = () => {
     if (current) api.cancelSession(current.id).catch((e) => setBanner(String(e)))
+  }
+
+  const resume = () => {
+    if (!current) return
+    setChallenge(null) // оптимистично; SSE подтвердит прогрессом
+    api.resumeSession(current.id).catch((e) => setBanner(String(e)))
   }
 
   const removeSession = (id: string) => {
@@ -139,10 +160,14 @@ export default function App() {
       <Chat
         session={current}
         progress={progress}
+        challenge={challenge}
         banner={banner}
         sending={sending}
+        attended={attended}
         onSend={send}
         onCancel={cancel}
+        onResume={resume}
+        onToggleAttended={setAttended}
       />
       <SidePanel session={current} runs={runs} progress={progress} />
     </div>

@@ -7,7 +7,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 Confidence = Literal["high", "medium", "low"]
-RunStatus = Literal["running", "completed", "partial", "not_found", "blocked", "failed", "canceled"]
+RunStatus = Literal["running", "waiting_user", "completed", "partial", "not_found",
+                    "blocked", "failed", "canceled"]  # waiting_user: attended-пауза (Phase 5)
 
 
 class Evidence(BaseModel):

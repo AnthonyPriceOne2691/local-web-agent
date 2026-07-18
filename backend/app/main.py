@@ -40,6 +40,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.background_tasks = set()
         app.state.cancel_events = {}  # run_id → asyncio.Event (FR-3.8)
         app.state.session_cancel_events = {}  # session_id → asyncio.Event (doc 24)
+        app.state.resume_events = {}  # run_id → asyncio.Event (attended, Phase 5)
+        app.state.session_resume_events = {}  # session_id → asyncio.Event (attended)
         swept = app.state.run_store.startup_sweep()  # zombie runs (doc 12)
         swept += app.state.session_store.startup_sweep()  # zombie sessions
         if swept:

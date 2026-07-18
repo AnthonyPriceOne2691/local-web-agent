@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     planner: str = "llm"  # "llm" | "rules" (rules = чистое Phase 3 поведение)
     planner_max_tokens: int = 700
 
+    # Attended-режим (Phase 5, doc 24): пауза на anti-bot challenge, человек проходит сам
+    attended_wait_timeout_s: float = 300.0  # не дождались resume → сайт blocked
+
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
     runs_dir_override: Path | None = None  # тесты/сторонний размещение БД

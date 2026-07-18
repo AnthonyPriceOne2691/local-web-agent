@@ -153,20 +153,25 @@ class SqliteRunStore:
         return path
 
     def startup_sweep(self) -> int:
-        """Zombie runs после рестарта (doc 12): running → failed(orphaned)."""
+        """Zombie runs после рестарта (doc 12): running/waiting_user → failed(orphaned).
+
+        waiting_user (attended-пауза, Phase 5) после рестарта тоже зомби —
+        resume_event потерян, ждать нечего."""
         with self._conn() as con:
             cur = con.execute(
                 "UPDATE crawl_runs SET status='failed', error_message='orphaned: backend restart' "
-                "WHERE status='running'"
+                "WHERE status IN ('running', 'waiting_user')"
             )
             return cur.rowcount
 
     # -------------------------------------------------- Phase 2 extensions
     def active_run_id(self) -> str | None:
-        """Run lock производный от БД (D-12, doc 12): нет строк running → свободен."""
+        """Run lock производный от БД (D-12, doc 12): нет running/waiting_user → свободен.
+
+        waiting_user держит лок — браузер открыт, ждём человека (attended, Phase 5)."""
         with self._conn() as con:
             row = con.execute(
-                "SELECT id FROM crawl_runs WHERE status='running' LIMIT 1"
+                "SELECT id FROM crawl_runs WHERE status IN ('running', 'waiting_user') LIMIT 1"
             ).fetchone()
         return row["id"] if row else None
 

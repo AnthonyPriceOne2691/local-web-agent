@@ -48,6 +48,9 @@ def crawl(
     vision: str = typer.Option("auto", "--vision", help="auto|always|never (doc 23)"),
     allow_private: bool = typer.Option(False, "--allow-private",
                                        help="разрешить private-network цели (I-H8 override)"),
+    attended: bool = typer.Option(False, "--attended",
+                                  help="видимый браузер; на anti-bot challenge пауза — "
+                                       "пройди проверку сам, затем resume (Phase 5)"),
     output: Path | None = typer.Option(None, "--output", help="write ExtractionResult JSON to file"),
     wait: bool = typer.Option(True, "--wait/--no-wait"),
     api_url: str = typer.Option(API_DEFAULT, "--api-url"),
@@ -57,7 +60,7 @@ def crawl(
         "start_url": url, "task": task, "max_pages": max_pages, "max_depth": max_depth,
         "respect_robots": not no_robots, "capture_screenshots": screenshots,
         "use_sitemap": sitemap, "consent_handling": consent, "consent_click": consent_click,
-        "vision_enabled": vision, "allow_private": allow_private,
+        "vision_enabled": vision, "allow_private": allow_private, "attended": attended,
     }
     with _client(api_url) as client:
         try:

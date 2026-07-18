@@ -1,4 +1,5 @@
 import type {
+  ChallengeWait,
   CrawlProgress,
   RunRecord,
   SessionListItem,
@@ -30,8 +31,10 @@ const post = (url: string, body: unknown) =>
 export const api = {
   listSessions: () =>
     fetch('/sessions').then((r) => asJson<{ sessions: SessionListItem[] }>(r)),
-  createSession: (title = '') =>
-    post('/sessions', { title }).then((r) => asJson<{ session_id: string }>(r)),
+  createSession: (title = '', attended = false) =>
+    post('/sessions', { title, attended }).then((r) => asJson<{ session_id: string }>(r)),
+  resumeSession: (id: string) =>
+    post(`/sessions/${id}/resume`, {}).then((r) => asJson<{ status: string }>(r)),
   getSession: (id: string) =>
     fetch(`/sessions/${id}`).then((r) => asJson<SessionRecord>(r)),
   postMessage: (id: string, content: string) =>
@@ -61,6 +64,7 @@ export interface SessionEventHandlers {
   onMessage?: (m: SseMessage) => void
   onStatus?: (status: string) => void
   onProgress?: (p: CrawlProgress) => void
+  onChallenge?: (c: ChallengeWait) => void
   onDone?: (status: string) => void
 }
 
@@ -83,6 +87,7 @@ export function subscribeSessionEvents(
   on<SseMessage>('message', (d) => h.onMessage?.(d))
   on<{ status: string }>('status', (d) => h.onStatus?.(d.status))
   on<CrawlProgress>('crawl_progress', (d) => h.onProgress?.(d))
+  on<ChallengeWait>('challenge_wait', (d) => h.onChallenge?.(d))
   on<{ status: string }>('done', (d) => {
     es.close()
     h.onDone?.(d.status)

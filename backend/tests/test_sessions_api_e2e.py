@@ -25,7 +25,7 @@ class FakeRunner:
     def __init__(self, session_store):
         self._sessions = session_store
 
-    async def run_message(self, session, message, cancel_event=None):
+    async def run_message(self, session, message, cancel_event=None, resume_event=None):
         await asyncio.sleep(0.05)
         session.status = "completed"
         session.messages.append(SessionMessage(role="assistant", content="done", created_at="t"))
@@ -66,7 +66,7 @@ async def test_session_busy_cancel_and_delete_guards(api_client):  # noqa: F811
         def __init__(self, store):
             self._sessions = store
 
-        async def run_message(self, session, message, cancel_event=None):
+        async def run_message(self, session, message, cancel_event=None, resume_event=None):
             session.status = "running_tools"
             self._sessions.save(session)
             for _ in range(100):  # ждём cancel ~2 s

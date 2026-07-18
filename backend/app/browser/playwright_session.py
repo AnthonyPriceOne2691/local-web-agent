@@ -14,11 +14,13 @@ class PlaywrightSession:
         self._browser = None
         self._page = None
 
-    async def start(self) -> None:
+    async def start(self, *, headless: bool = True) -> None:
         from playwright.async_api import async_playwright
 
+        # attended-режим (Phase 5): headless=False — видимое окно, чтобы человек
+        # прошёл anti-bot challenge сам; cf_clearance-cookie живёт в контексте run'а
         self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(headless=True)
+        self._browser = await self._pw.chromium.launch(headless=headless)
         context = await self._browser.new_context(viewport=DESKTOP, accept_downloads=False)
         self._page = await context.new_page()
 

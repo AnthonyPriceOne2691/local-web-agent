@@ -27,6 +27,7 @@ from app.navigation.probes import filter_alive, probe_slugs_f1
 from app.navigation.sitemap import fetch_sitemap_candidates, sitemap_enabled
 from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
+from app.orchestrator.attended import AttendedGate
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
@@ -97,7 +98,8 @@ class CrawlOrchestrator:
 
     # ------------------------------------------------------------------ run
     async def run(
-        self, record: RunRecord, cancel_event: asyncio.Event | None = None
+        self, record: RunRecord, cancel_event: asyncio.Event | None = None,
+        attended_gate: AttendedGate | None = None,  # Phase 5: пауза на challenge (doc 24)
     ) -> RunRecord:
         cfg = record.config
         t0 = time.perf_counter()
@@ -130,7 +132,7 @@ class CrawlOrchestrator:
             )
             alive_probes, legal_probes, probe_links = await self._probe_slugs(record.intent, origin)
             sitemap_urls = await self._sitemap_urls(record, origin, robots)  # P2.5
-            await self._browser.start()
+            await self._browser.start(headless=not cfg.attended)  # attended → видимое окно
 
             current: PageSnapshot | None = None
             next_url: str | None = normalize_url(cfg.start_url)
@@ -166,7 +168,13 @@ class CrawlOrchestrator:
                     homepage = homepage or current
                     record.pages_visited = len(visited)
                     record.current_url = current.url
-                    if current.status in ("captcha", "login_wall"):  # blocker → stop (doc 04)
+                    if current.status in ("captcha", "login_wall"):  # blocker (doc 04)
+                        if (attended_gate is not None and current.status == "captcha"
+                                and await attended_gate.try_clear(
+                                    record, current, snapshots, visited)):
+                            next_url = current.url  # человек прошёл → переобсёрвить (doc 24)
+                            homepage = snapshots[-1] if snapshots else None
+                            continue
                         record.metadata["blocked_by"] = current.status
                         break
                     self._store.save(record)

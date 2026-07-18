@@ -13,8 +13,19 @@
 | Phase 2 Full MVP | ✅ **DONE 2026-07-18** — 4/5 (80% гейт), vision E2E, PLAN p50 7.9 s ([doc 06](docs/06-mvp-phases.md) § Phase 2) |
 | **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3) |
 | **Phase 4 Chat UI** | ✅ **DONE 2026-07-19** — UI + SSE + `planner: llm`; exit-прогоны целиком из Chat UI в браузере (Playwright): UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 → добран планнером до 4/4); 129 тестов ([doc 06](docs/06-mvp-phases.md) § Phase 4) |
+| **Phase 5 attended-режим** | 🛠 **2026-07-19** — human-in-the-loop прохождение anti-bot challenge (Cloudflare); 135 тестов. Реальный Cloudflare-прогон — за Антоном |
 
 **Next:** Phase 5+ backlog (doc 06) — приоритеты P1: structured schema input, regex assist, phase-batched multi-site (12 свопов → 3). Плюс хвосты ниже.
+
+## Phase 5 attended-режим (2026-07-19) — что построено
+
+Контекст: Антон просил заходить на сайты за Cloudflare managed challenge (напр. redib.org — 403 + «just a moment» на всё, включая robots.txt; наш агент честно → `robots_disallow`, 0 страниц). Обсудили границу: **обман детекта (fingerprint-спуфинг, undetected-браузеры, автоклик challenge, solver-сервисы, puppeteer-real-browser) — отказ навсегда** (подделка сигнала «я человек», против явной воли владельца + контракт no anti-bot bypass). Реализован **attended-режим = human-in-the-loop** (как Operator): проверку проходит человек в видимом браузере, агент делает остальное.
+- **Backend:** `orchestrator/attended.py` (AttendedGate Protocol + EventAttendedGate — пауза/resume/сброс challenge-снапшота, вынесено ради ≤500 LOC loop.py); статус run `waiting_user`; развилка в loop.py при `captcha` (attended → gate.try_clear → переобсёрвить); `browser.start(headless=not attended)` (видимое окно); `Settings.attended_wait_timeout_s=300`. resume: `POST /runs/{id}/resume` + `POST /sessions/{id}/resume` (симметрично cancel; `state.resume_events`/`session_resume_events`). **D-12: `active_run_id`/`startup_sweep` теперь считают `waiting_user` занятым** (браузер открыт, лок держится; рестарт → zombie→failed).
+- **SSE:** событие `challenge_wait {run_id,start_url,url,kind}` пока активный run в `waiting_user`.
+- **Frontend:** `ChallengeCard` в Chat.tsx (карточка-пауза + «✓ Я прошёл — продолжить»), тумблер «Attended-режим» (при старте сессии), `onChallenge`/`resumeSession` в api.ts.
+- **CLI:** `agent crawl --attended`.
+- **Пределы (честно):** `cf_clearance` привязан к IP+браузеру, живёт ограниченно → на длинной сессии challenge всплывёт снова; N доменов за стенкой = N ручных прохождений. Снимает рутину обхода страниц, не факт проверки. Backlog: persist cf_clearance между сессиями.
+- **Не тестировалось вживую** (реальный Cloudflare + видимый браузер) — только моки (FakeBrowser отдаёт captcha→контент по счётчику goto) + смоук API. Настоящий прогон на redib.org и т.п. — за Антоном.
 
 ## Phase 4 — что построено (2026-07-19)
 
@@ -59,7 +70,7 @@
 - **Модели установлены**: qwen2.5:14b-instruct, deepseek-r1:14b, qwen2.5vl:7b, qwen3:14b. **Дефолт кода: qwen3:14b (nav+synth)**. После работы — выгружать (`ollama ps` пуст).
 - **Venv'ы**: `backend/.venv` (uv sync --extra dev; rapidfuzz установлен) и корневой `.venv` (spike). **Фронт**: `frontend/` (Node 24; `npm install`, `npm run build` → dist, `npm run dev` → 5173 c proxy).
 - **Порты**: API 8001 (+ Chat UI статика на `/`) · Vite dev 5173 · fixtures 8901–8907 · Ollama 11434. Fixture-мапа (сайты сортируются по имени; `fixtures_server.py --print`): blog_alpha 8901 · blog_beta 8902 · blog_gamma 8903 · geo_kontak 8904 · pricing 8905 · simple_contact 8906 · spa_price 8907.
-- Гейты перед коммитом: `pytest` (129) · `ruff check app tests ../cli` · `check_module_size.py` · `npm run build` (tsc + vite).
+- Гейты перед коммитом: `pytest` (135) · `ruff check app tests ../cli` · `check_module_size.py` · `npm run build` (tsc + vite).
 
 ## Gotchas
 

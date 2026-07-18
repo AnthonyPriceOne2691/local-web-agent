@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.9** · 2026-07-19
+> Local Web Agent · Design doc · **v0.10** · 2026-07-19
 
 ## Engineering standards (все фазы)
 
@@ -214,6 +214,8 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 
 | Item | Priority | Effort |
 |------|----------|--------|
+| **Attended-режим (anti-bot challenge, human-in-the-loop)** | ✅ **DONE 2026-07-19** — doc 24 § Attended; видимый браузер + `waiting_user` + resume + SSE `challenge_wait` + Chat UI карточка + CLI `--attended`; 135 тестов |
+| Persist `cf_clearance` между сессиями (attended follow-up) | P2 | S |
 | Screenshot gallery in Web UI | P2 | S |
 | Structured schema input (`--schema`) | P1 | S |
 | Regex assist pre-pass | P1 | S |
@@ -265,4 +267,5 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-18 | **v0.6: Phase 2 ✅ DONE** — exit-бенчмарк на реальных LLM: 4/5 формальной пятёрки (80%), 7/8 с #6/#8; vision E2E подтверждён (#8 CSS-цена через qwen2.5vl); PLAN p50 7.9 s ≤ 8 s чисто; synth python.org 95.9 s (−53% vs Phase 0). Починены по итогам: S-H3b vision-reclass, S-H3c URL-факты (doc 13 v0.7.1), synthesizer-промпт vision-aware (doc 16), docs-словарь + develop/contribut (doc 21); #3 python.org — known-fail (backlog: аннотация проб) |
 | 2026-07-18 | **v0.7: Phase 3 ✅ DONE** — Layer 2 реализован (research/{meta_agent,runner,compare_synthesizer,report}, sessions storage/API/CLI; 115 тестов, cov 93%) и exit-бенчмарк пройден: UC-2 winner blog_alpha 95>75>50 с цитатами (~11 мин), UC-1 4-site design compare + report (~18.5 мин ≤ 20-мин бюджета, vision 0 сбоев, пик RAM 13 GB). Фиксы по бенчмарку: `_host` с портом, article-excerpt заполняет код (не LLM-перепечатка), устойчивость синтеза к невалидному article-блоку. Next: Phase 4 Chat UI |
 | 2026-07-19 | **v0.8: Phase 4 CODE COMPLETE** — Chat UI (`frontend/`: React 19 + Vite 7 + TS + Tailwind v4, три колонки: sidebar/чат/side panel) + бэкенд: SSE `/sessions/{id}/events` (poll-паттерн, doc 15 v0.6), `GET /sessions/{id}/report`, `GET /runs/{id}/steps/{pos}/screenshot`, статика `frontend/dist` с FastAPI (same-origin). 120 тестов. Остаток: UC-1/UC-2 exit из чата (реальные LLM) + `planner: llm` |
+| 2026-07-19 | **v0.10: Phase 5 attended-режим** — human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим): видимый браузер, статус `waiting_user`, resume-эндпоинты, SSE `challenge_wait`, Chat UI карточка-пауза + тумблер, CLI `--attended`; D-12 lock учитывает `waiting_user`; 135 тестов. Fingerprint-спуфинг/обход детекта — вне scope навсегда (контракт no anti-bot bypass) |
 | 2026-07-19 | **v0.9: Phase 4 ✅ DONE** — `planner: llm` реализован (`research/llm_planner.py`, doc 24 v0.6: rules fast-path + LLM для диалога, M-H1..M-H3 пост-валидация) и exit-прогоны пройдены целиком из Chat UI в браузере: UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 вживую: 8906 synth-таймаут → excluded, затем добран follow-up'ом через планнер до 4/4: 88/75/65/50). Фиксы: error_message при пустом str(exc), stale excluded при re-crawl. 129 тестов |

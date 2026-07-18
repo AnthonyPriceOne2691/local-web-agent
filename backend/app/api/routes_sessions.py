@@ -23,6 +23,7 @@ class CreateSession(BaseModel):
     title: str = ""
     max_sites: int | None = None
     rubric: str | None = None
+    attended: bool = False
 
 
 class UserMessage(BaseModel):
@@ -35,6 +36,7 @@ async def create_session(body: CreateSession, request: Request) -> dict:
     config = SessionConfig(
         max_sites=body.max_sites or state.settings.max_sites_per_session,
         rubric_override=body.rubric,
+        attended=body.attended,
     )
     record = SessionRecord(id=uuid.uuid4().hex[:12], title=body.title, config=config,
                            created_at=datetime.now(UTC).isoformat())
@@ -57,11 +59,14 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
                             detail={"error": "run_in_progress", "active_run_id": active})
     cancel_event = asyncio.Event()
     state.session_cancel_events[session_id] = cancel_event
+    resume_event = asyncio.Event()  # attended (Phase 5): пробрасывается в текущий crawl
+    state.session_resume_events[session_id] = resume_event
 
     async def _execute() -> None:
         try:
             runner = state.research_runner_factory()
-            await runner.run_message(session, body.content, cancel_event=cancel_event)
+            await runner.run_message(session, body.content, cancel_event=cancel_event,
+                                     resume_event=resume_event)
         except Exception as exc:  # noqa: BLE001 — сессия не должна виснуть в running_tools
             session.status = "failed"
             session.finished_at = datetime.now(UTC).isoformat()
@@ -69,6 +74,7 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
             print(f"session {session_id} failed: {exc}")
         finally:
             state.session_cancel_events.pop(session_id, None)
+            state.session_resume_events.pop(session_id, None)
 
     state.background_tasks.add(asyncio.create_task(_execute()))
     return {"session_id": session_id, "status": "running_tools"}
@@ -144,6 +150,23 @@ async def cancel_session(session_id: str, request: Request) -> dict:
         session.config.canceled_by_restart = True
         state.session_store.save(session)
     return {"session_id": session_id, "status": "canceling"}
+
+
+@router.post("/sessions/{session_id}/resume", status_code=202)
+async def resume_session(session_id: str, request: Request) -> dict:
+    """Attended (Phase 5): пользователь прошёл challenge → снять паузу активного crawl."""
+    state = request.app.state
+    session = state.session_store.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    active_id = state.run_store.active_run_id()
+    active = state.run_store.get(active_id) if active_id else None
+    if active is None or active.session_id != session_id or active.status != "waiting_user":
+        raise HTTPException(status_code=409, detail={"error": "not_waiting"})
+    event = state.session_resume_events.get(session_id)
+    if event is not None:
+        event.set()
+    return {"session_id": session_id, "status": "resuming"}
 
 
 @router.delete("/sessions/{session_id}")
