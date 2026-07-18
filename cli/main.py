@@ -151,6 +151,58 @@ def runs_show(
                                    ensure_ascii=False, indent=2))
 
 
+@app.command()
+def research(
+    urls: str = typer.Option(..., "--urls", help="comma-separated URLs"),
+    task: str = typer.Option(..., "--task"),
+    rubric: str | None = typer.Option(None, "--rubric",
+                                      help="design_diff|content_completeness|generic_merge"),
+    output: Path | None = typer.Option(None, "--output", help="ComparisonResult JSON to file"),
+    report: Path | None = typer.Option(None, "--report", help="copy comparison_report.md here"),
+    api_url: str = typer.Option(API_DEFAULT, "--api-url"),
+) -> None:
+    """Multi-site research (doc 24): sequential crawls + compare. Один chat-message без UI."""
+    console.print(DISCLAIMER, style="dim")
+    message = f"{task}\n" + "\n".join(u.strip() for u in urls.split(",") if u.strip())
+    with httpx.Client(base_url=api_url, timeout=60) as client:
+        try:
+            sid = client.post("/sessions", json={"rubric": rubric}).json()["session_id"]
+            r = client.post(f"/sessions/{sid}/messages", json={"content": message})
+        except httpx.HTTPError as exc:
+            console.print(f"[red]API unreachable:[/red] {exc}")
+            raise typer.Exit(3) from exc
+        if r.status_code == 409:
+            console.print(f"[red]409:[/red] {r.json()['detail']}")
+            raise typer.Exit(2)
+        r.raise_for_status()
+        console.print(f"Session started: [bold]{sid}[/bold]")
+        seen_msgs = 0
+        status = "running_tools"
+        while status in ("active", "running_tools", "comparing"):
+            time.sleep(3)
+            session = client.get(f"/sessions/{sid}").json()
+            status = session["status"]
+            for msg in session["messages"][seen_msgs:]:
+                if msg["role"] in ("tool", "assistant"):
+                    console.print(f"[{msg['role']}] {msg['content'][:200]}", highlight=False)
+            seen_msgs = len(session["messages"])
+        comparison = session.get("comparison_result")
+        console.print(f"\n[bold]Session:[/bold] {status} · runs: {len(session['run_ids'])}")
+        if comparison:
+            print(json.dumps(comparison, ensure_ascii=False, indent=2))
+            if output:
+                output.write_text(json.dumps(comparison, ensure_ascii=False, indent=2),
+                                  encoding="utf-8")
+                console.print(f"Saved: {output}")
+        src = Path("data/runs/artifacts") / sid / "comparison_report.md"
+        if report and src.is_file():  # CLI и сервер локальны (solo tool)
+            report.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            console.print(f"Report: {report}")
+        elif src.is_file():
+            console.print(f"Report: {src}")
+        raise typer.Exit(0 if status == "completed" else 2)
+
+
 @runs_app.command("cancel")
 def runs_cancel(
     run_id: str = typer.Argument("", help="run id; пусто — отменить активный"),

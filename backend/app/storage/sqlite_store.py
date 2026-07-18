@@ -49,6 +49,18 @@ CREATE TABLE IF NOT EXISTS crawl_steps (
     PRIMARY KEY (run_id, seq)
 );
 CREATE INDEX IF NOT EXISTS idx_runs_started ON crawl_runs(started_at DESC);
+CREATE TABLE IF NOT EXISTS research_sessions (
+    id                     TEXT PRIMARY KEY,
+    title                  TEXT NOT NULL DEFAULT '',
+    status                 TEXT NOT NULL,
+    research_intent        TEXT,
+    config_json            TEXT NOT NULL DEFAULT '{}',
+    messages_json          TEXT NOT NULL DEFAULT '[]',
+    run_ids_json           TEXT NOT NULL DEFAULT '[]',
+    comparison_result_json TEXT,
+    created_at             TEXT NOT NULL DEFAULT '',
+    finished_at            TEXT
+);
 """
 
 _FINAL_STATUSES = ("completed", "partial", "not_found", "blocked", "failed", "canceled")
@@ -81,21 +93,21 @@ class SqliteRunStore:
             con.execute(
                 """INSERT INTO crawl_runs (id, task, start_url, config_json, status, intent,
                        current_url, pages_visited, result_json, metadata_json, error_message,
-                       started_at, finished_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       started_at, finished_at, session_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                        status=excluded.status, intent=excluded.intent,
                        current_url=excluded.current_url, pages_visited=excluded.pages_visited,
                        result_json=excluded.result_json, metadata_json=excluded.metadata_json,
                        error_message=excluded.error_message, started_at=excluded.started_at,
-                       finished_at=excluded.finished_at""",
+                       finished_at=excluded.finished_at, session_id=excluded.session_id""",
                 (
                     record.id, record.config.task, record.config.start_url,
                     record.config.model_dump_json(), record.status, record.intent,
                     record.current_url, record.pages_visited,
                     record.result.model_dump_json() if record.result else None,
                     json.dumps(record.metadata, ensure_ascii=False), record.error_message,
-                    record.started_at, record.finished_at,
+                    record.started_at, record.finished_at, record.session_id,
                 ),
             )
             con.executemany(
@@ -158,6 +170,15 @@ class SqliteRunStore:
             ).fetchone()
         return row["id"] if row else None
 
+    def runs_for_session(self, session_id: str) -> list[str]:
+        """run_ids сессии в порядке старта (list_session_runs tool, doc 24)."""
+        with self._conn() as con:
+            rows = con.execute(
+                "SELECT id FROM crawl_runs WHERE session_id = ? ORDER BY started_at",
+                (session_id,),
+            ).fetchall()
+        return [r["id"] for r in rows]
+
     def delete(self, run_id: str) -> bool:
         """Удаляет запись + artifacts (doc 12 § Retention)."""
         with self._conn() as con:
@@ -192,6 +213,7 @@ def _record_from_rows(run: sqlite3.Row, steps: list[sqlite3.Row]) -> RunRecord:
             "id": run["id"],
             "config": json.loads(run["config_json"]),
             "status": run["status"],
+            "session_id": run["session_id"],
             "intent": run["intent"],
             "pages_visited": run["pages_visited"],
             "current_url": run["current_url"],

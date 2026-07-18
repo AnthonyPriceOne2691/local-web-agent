@@ -1,6 +1,6 @@
 # 12 — Session Storage (Crawl Runs)
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-18
+> Local Web Agent · Design doc · **v0.6** · 2026-07-18
 
 ## Назначение
 
@@ -146,3 +146,4 @@ Run lock — **производный от БД** (нет строк `running` �
 | 2026-07-05 | **v0.3 (review):** crawl_runs.metadata_json (referenced by docs 13/23 but missing); status canceled; crawl_steps.llm_stats_json (Ollama eval telemetry); SQLite WAL |
 | 2026-07-05 | **v0.4 (review-2):** startup sweep для zombie runs (running → failed при рестарте); run lock производный от БД |
 | 2026-07-18 | **v0.5 (Phase 2 impl):** SqliteRunStore реализован. crawl_runs + intent, current_url (runtime-поля RunRecord); crawl_steps: PK (run_id, seq) — step_index неуникален (OBSERVE+ACT), action/target_url/note плоскими колонками, screenshot_paths_json (мульти-профиль) вместо screenshot_path; legacy JSON Phase 1 автоимпортируется в БД (файлы → `legacy_json/`); `DELETE /runs/{id}` + `agent runs delete` (retention); result.json пишется в artifacts при финальном статусе |
+| 2026-07-18 | **v0.6 (Phase 3 impl):** research_sessions реализована (+ `research_intent`, `run_ids_json`); сообщения — `messages_json` в строке сессии вместо отдельной session_messages (объёмы CLI-диалога малы; нормализация — при Chat UI Phase 4, если понадобится); session sweep: running_tools/comparing → failed + `canceled_by_restart` в config_json; `crawl_runs.session_id` заполняется research-раннером; `runs_for_session()` |

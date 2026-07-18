@@ -14,7 +14,7 @@
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.6** | Phases 0–4; Phase 2 DONE (бенчмарк 2026-07-18) |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
-| [12-session-storage.md](12-session-storage.md) | ✅ **v0.5** | SQLite реализован (Phase 2); runs + sessions; legacy-импорт; startup sweep |
+| [12-session-storage.md](12-session-storage.md) | ✅ **v0.6** | SQLite + research sessions реализованы; legacy-импорт; sweep |
 | [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.7.1** (реализован Phase 2) | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.4** | + Meta + Compare; swap mechanics; A/B |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.5** | + /sessions, cancel, 409, ollama_version |
@@ -26,7 +26,7 @@
 | [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.7** | + content_search, sitemap P2.5, RU keywords |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
-| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.3** | Multi-site chat, compare; partial failure |
+| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.4** | Phase 3 реализован: rules-planner, compare, sessions |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -38,7 +38,7 @@
 | Phase 0 Benchmark | ✅ **DONE 2026-07-13** — все exit-критерии пройдены ([doc 19](19-phase0-benchmark-results.md) v1.0); хвосты: real re-check p50, qwen3 на real перед финалом D-2/D-3 |
 | Phase 1 Agent loop | ✅ **DONE 2026-07-18** — backend/app + cli + prompts; 30 тестов, coverage 87%, E2E 3/3 ([doc 06](06-mvp-phases.md) § Phase 1) |
 | **Phase 2 Full MVP** | ✅ **DONE 2026-07-18** — exit-бенчмарк 4/5 (80% гейт) + vision E2E (#8) + PLAN p50 7.9 s ([doc 06](06-mvp-phases.md) § Phase 2); 96 тестов, cov 93% |
-| **Phase 3 Research Agent** | 🔲 **Next** |
+| **Phase 3 Research Agent** | 🟡 **CODE COMPLETE (2026-07-18)** — runner/compare/sessions/CLI, 113 тестов; до закрытия: UC-1/UC-2 бенчмарк на реальных LLM |
 | Phase 4 Chat UI | 🔲 |
 
 ## Conventions

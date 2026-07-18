@@ -50,6 +50,7 @@ class RunRecord(BaseModel):
     id: str
     config: RunConfig
     status: RunStatus = "running"
+    session_id: str | None = None  # research session FK (Phase 3, doc 12)
     intent: str = "generic"
     pages_visited: int = 0
     current_url: str = ""

@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     respect_robots: bool = True
     top_k_candidates: int = 10
 
+    # Research sessions (Phase 3, doc 24)
+    max_sites_per_session: int = 10  # M-H2
+    site_cooldown_s: float = 2.0
+    site_cooldown_hot_s: float = 30.0  # N ≥ 4, fanless thermal
+    max_session_duration_min: float = 60.0
+
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
     runs_dir_override: Path | None = None  # тесты/сторонний размещение БД

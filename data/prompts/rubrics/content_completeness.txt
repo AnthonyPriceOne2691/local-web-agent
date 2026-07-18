@@ -1,0 +1,7 @@
+Dimensions for competitive article comparison (score each site 0-10 per dimension):
+- depth_sections: number and depth of sections, presence of FAQ, table of contents
+- data_examples: concrete data, odds/tables, worked examples, statistics
+- structure: heading hierarchy, scannability, logical flow
+- coverage: how many task-relevant subtopics are covered
+- freshness: publication/update dates, current references
+Pick a single winner: the site with the most COMPLETE article for the task. Quote evidence from article excerpts.

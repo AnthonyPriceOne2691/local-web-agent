@@ -15,13 +15,17 @@ from app.schemas.snapshot import PageSnapshot
 
 PAGE_TEXT_CAP = 1000  # doc 20 synthesis bundle
 PRIORITY_TEXT_CAP = 4000
+ARTICLE_TEXT_CAP = 12000  # content_search: полный excerpt для compare (doc 20)
 VISION_DESC_CAP = 400
 
 
-def build_pages_block(snapshots: list[PageSnapshot]) -> str:
+def build_pages_block(snapshots: list[PageSnapshot], intent: str = "generic") -> str:
     blocks = []
     for s in snapshots:
-        cap = PRIORITY_TEXT_CAP if s.priority else PAGE_TEXT_CAP
+        if s.priority:
+            cap = ARTICLE_TEXT_CAP if intent == "content_search" else PRIORITY_TEXT_CAP
+        else:
+            cap = PAGE_TEXT_CAP
         headings = "; ".join(h.text for h in s.headings[:8])
         block = f"URL: {s.url}\nTITLE: {s.title}\nHEADINGS: {headings}\nTEXT: {s.main_text[:cap]}\n"
         block += _vision_block(s)
@@ -54,9 +58,12 @@ class Synthesizer:
         self._system = (prompts / "synthesizer_system.txt").read_text(encoding="utf-8")
         self._user_tpl = Template((prompts / "synthesizer_user.j2").read_text(encoding="utf-8"))
 
-    async def synthesize(self, *, task: str, snapshots: list[PageSnapshot]) -> tuple[ExtractionResult, dict]:
+    async def synthesize(
+        self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
+    ) -> tuple[ExtractionResult, dict]:
         user = self._user_tpl.render(
-            task=task, pages_count=len(snapshots), pages_block=build_pages_block(snapshots)
+            task=task, intent=intent, pages_count=len(snapshots),
+            pages_block=build_pages_block(snapshots, intent),
         )
         content, stats = await self._client.chat(
             model=self._s.synth_model,

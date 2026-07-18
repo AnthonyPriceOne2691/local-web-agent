@@ -1,0 +1,2 @@
+Compare the sites on the user's task. Derive 3-6 task-specific dimensions yourself (score each site 0-10).
+Rank sites by how well they answer the task; explain the ranking with quotes from the extractions.

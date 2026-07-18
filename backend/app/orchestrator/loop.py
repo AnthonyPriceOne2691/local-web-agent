@@ -55,6 +55,20 @@ def _is_canceled(cancel_event: asyncio.Event | None) -> bool:
     return cancel_event is not None and cancel_event.is_set()
 
 
+def _looks_like_article(snapshot: PageSnapshot, task: str) -> bool:
+    """Article-кандидат (doc 24): path-маркер ИЛИ task-слова в title + длинный текст."""
+    from urllib.parse import urlparse
+
+    from app.navigation.sitemap import CONTENT_PATH_MARKERS
+
+    path = urlparse(snapshot.url).path.lower()
+    if any(m in path for m in CONTENT_PATH_MARKERS) and len(snapshot.main_text) > 800:
+        return True
+    title = snapshot.title.casefold()
+    task_words = [w for w in task.casefold().split() if len(w) > 3]
+    return len(snapshot.main_text) > 2000 and any(w in title for w in task_words)
+
+
 class CrawlOrchestrator:
     def __init__(
         self,
@@ -146,6 +160,8 @@ class CrawlOrchestrator:
                     current, origin = nav
                     just_visited = True
                     visited.add(current.url)
+                    if record.intent == "content_search" and _looks_like_article(current, cfg.task):
+                        current.priority = True  # article candidate (doc 24) → 12K excerpt
                     snapshots.append(current)
                     homepage = homepage or current
                     record.pages_visited = len(visited)
@@ -457,7 +473,8 @@ class CrawlOrchestrator:
         record.steps.append(CrawlStep(index=len(record.steps) + 1, state=State.SYNTHESIZE))
         self._store.save(record)
         await self._llm.unload(self._s.nav_model)  # swap nav → synth (doc 14)
-        result, stats = await self._synthesizer.synthesize(task=record.config.task, snapshots=snapshots)
+        result, stats = await self._synthesizer.synthesize(
+            task=record.config.task, snapshots=snapshots, intent=record.intent)
         record.steps[-1].llm_stats = stats
         return result
 

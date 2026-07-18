@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.3** · 2026-07-05
+> Local Web Agent · Design doc · **v0.4** · 2026-07-18
 
 ## Назначение
 
@@ -396,3 +396,4 @@ Separate from crawl ABC — enforced in `research/tool_executor.py`.
 | 2026-07-05 | v0.1: Research Chat Agent — UC-1/UC-2, tools, session, compare, phases |
 | 2026-07-05 | **v0.2 (review):** planner rules-first (Phase 3 без LLM-планирования; LLM meta — Phase 4); UC-1 max_pages=6 + session time budget (swap-математика: naive = до 12 загрузок моделей); cooldown 30–60 s при N≥4 (thermal); phase-batched execution в backlog |
 | 2026-07-05 | **v0.3 (review-2):** partial failure spec (compare по ≥2 выжившим, `excluded[]`, M-H4 edge); UC-2 — 3 article candidates per site; `max_session_duration_min: 60` graceful timeout |
+| 2026-07-18 | **v0.4 (Phase 3 impl):** реализовано `research/{meta_agent,runner,compare_synthesizer,report}` + `/sessions` API + `agent research` CLI. Уточнения: (1) plan/execute слиты в ResearchRunner — отдельного tool_executor-модуля нет, контракты M-H1..M-H4 enforced в раннере; (2) get_run_result/list_session_runs как отдельные tools не нужны rules-планнеру (runner читает store напрямую), для Phase 4 LLM-планнера — вернуть; (3) session-level cancel_event пробрасывается в текущий crawl (одно событие отменяет и очередь, и активный run); (4) `GET /sessions/{id}/events` SSE отложен до Phase 4 (CLI поллит GET /sessions/{id}); (5) винner/rankings: run_id проставляет код по url — LLM оперирует только url/label, выдуманные сайты отбрасываются |

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from app.api.routes_health import router as health_router
 from app.api.routes_runs import router as runs_router
+from app.api.routes_sessions import router as sessions_router
 from app.browser.playwright_session import PlaywrightSession
 from app.config import Settings, get_settings
 from app.contracts.enforcer import ContractEnforcer
@@ -17,6 +18,9 @@ from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
 from app.navigation.path_hints import PathHints
 from app.orchestrator.loop import CrawlOrchestrator
+from app.research.compare_synthesizer import CompareSynthesizer
+from app.research.runner import ResearchRunner
+from app.storage.session_store import SqliteSessionStore
 from app.storage.sqlite_store import SqliteRunStore
 
 
@@ -28,13 +32,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.llm_client = OllamaClient(settings.ollama_url, timeout_s=settings.llm_timeout_s)
         app.state.run_store = SqliteRunStore(settings.runs_dir)
+        app.state.session_store = SqliteSessionStore(settings.runs_dir)
         app.state.hints = PathHints.load(settings.navigation_dir)
         app.state.enforcer = ContractEnforcer.load(settings.contracts_dir)  # fail fast (doc 13)
         app.state.background_tasks = set()
         app.state.cancel_events = {}  # run_id → asyncio.Event (FR-3.8)
+        app.state.session_cancel_events = {}  # session_id → asyncio.Event (doc 24)
         swept = app.state.run_store.startup_sweep()  # zombie runs (doc 12)
+        swept += app.state.session_store.startup_sweep()  # zombie sessions
         if swept:
-            print(f"startup sweep: {swept} orphaned run(s) → failed")
+            print(f"startup sweep: {swept} orphaned record(s) → failed")
 
         def orchestrator_factory() -> CrawlOrchestrator:
             return CrawlOrchestrator(
@@ -49,12 +56,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
 
         app.state.orchestrator_factory = orchestrator_factory
+
+        def research_runner_factory() -> ResearchRunner:
+            return ResearchRunner(
+                settings=settings,
+                run_store=app.state.run_store,
+                session_store=app.state.session_store,
+                orchestrator_factory=app.state.orchestrator_factory,
+                compare=CompareSynthesizer(app.state.llm_client, settings),
+            )
+
+        app.state.research_runner_factory = research_runner_factory
         yield
         await app.state.llm_client.aclose()
 
     app = FastAPI(title="Local Web Agent", version="0.1.0", lifespan=lifespan)
     app.include_router(health_router)
     app.include_router(runs_router)
+    app.include_router(sessions_router)
     return app
 
 

@@ -1,0 +1,8 @@
+Dimensions for comparative design audit (score each site 0-10 per dimension):
+- colors: palette coherence, contrast, distinctiveness of brand colors
+- typography: font choices, hierarchy, readability
+- layout: structure, grid, whitespace, visual hierarchy
+- components: cards, buttons, navigation quality and consistency
+- mobile_vs_desktop: responsive quality, mobile navigation, content parity
+- brand_feel: overall polish, memorability, how distinct the visual identity is
+Focus on DIFFERENCES between the sites; winner is optional — the diff story matters more.
