@@ -73,7 +73,12 @@ class ResearchRunner:
         started = time.monotonic()
         session.messages.append(SessionMessage(role="user", content=message, created_at=_now()))
         session.title = session.title or message[:80]
-        urls = parse_urls(message, max_sites=session.config.max_sites)  # M-H2
+        found = parse_urls(message, max_sites=None)  # все distinct; M-H2 cap ниже — с предупреждением
+        cap = session.config.max_sites
+        urls = found[:cap]
+        if len(found) > cap:  # не глотаем лишние URL молча (честность перед пользователем)
+            self._note(session, f"В сообщении {len(found)} URL — беру первые {cap} "
+                                f"(лимит max_sites={cap}); отброшено {len(found) - cap}")
         if not urls:
             if self._planner is not None:  # Phase 4: свободный диалог → LLM-план
                 return await self._run_llm_plan(session, message, cancel_event, started)

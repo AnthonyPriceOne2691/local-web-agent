@@ -65,6 +65,12 @@ def test_parse_urls_dedupe_cap_and_strip():
     assert "сравни дизайн" in strip_urls(msg)
 
 
+def test_parse_urls_uncapped_returns_all():
+    msg = " ".join(f"https://s{i}.com" for i in range(15))
+    assert len(parse_urls(msg, max_sites=None)) == 15  # None → без cap (runner предупредит)
+    assert len(parse_urls(msg)) == 10  # default cap M-H2
+
+
 def test_research_intent_matrix():
     assert classify_research_intent("опиши дизайн, чем отличаются", 4) == "comparative_design"
     assert classify_research_intent("find the most complete article about betting",

@@ -46,8 +46,12 @@ class ToolCall(BaseModel):
     args: dict = Field(default_factory=dict)
 
 
-def parse_urls(message: str, *, max_sites: int = 10) -> list[str]:
-    """FR-6.1: URL-ы из сообщения; dedupe с сохранением порядка; cap M-H2."""
+def parse_urls(message: str, *, max_sites: int | None = 10) -> list[str]:
+    """FR-6.1: URL-ы из сообщения; dedupe с сохранением порядка; cap M-H2.
+
+    max_sites=None → без cap (вызывающий сам решает, что делать с избытком — runner
+    предупреждает пользователя, а не глотает лишние URL молча).
+    """
     seen: set[str] = set()
     urls: list[str] = []
     for match in URL_RE.findall(message):
@@ -55,7 +59,7 @@ def parse_urls(message: str, *, max_sites: int = 10) -> list[str]:
         if url not in seen:
             seen.add(url)
             urls.append(url)
-    return urls[:max_sites]
+    return urls if max_sites is None else urls[:max_sites]
 
 
 def classify_research_intent(message: str, n_urls: int) -> ResearchIntent:

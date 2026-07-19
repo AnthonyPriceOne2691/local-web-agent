@@ -102,6 +102,16 @@ async def test_uc1_happy_path_sequential_compare_report(tmp_path):
     assert session_store.get(session.id).status == "completed"
 
 
+async def test_url_count_over_cap_warns_and_truncates(tmp_path):
+    runner, _, session_store, visits, _ = make_runner(tmp_path)
+    session = new_session()  # max_sites default 10
+    session_store.save(session)
+    urls = " ".join(f"https://s{i}.com" for i in range(12))
+    session = await runner.run_message(session, f"сравни дизайн: {urls}")
+    assert len(visits) == 10  # M-H2: обойдены только первые 10, а не молча все 12
+    assert any("отброшено 2" in m.content for m in session.messages if m.role == "tool")
+
+
 async def test_partial_failure_excluded_and_partial_status(tmp_path):
     behavior = {"https://c.com": "blocked"}
     reply = dict(COMPARE_OK)
