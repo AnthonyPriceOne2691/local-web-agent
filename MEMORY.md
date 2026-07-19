@@ -1,7 +1,7 @@
 # MEMORY — состояние проекта
 
 > Снапшот для новых сессий Claude Code (обновлять при значимых вехах; история — в git).
-> Обновлено: **2026-07-19**, **Phase 4 ✅ DONE** — MVP-фазы 0–4 закрыты.
+> Обновлено: **2026-07-19**, **MVP-фазы 0–4 ✅ DONE** + Phase 5 attended-режим.
 
 ## Где мы
 
@@ -13,21 +13,21 @@
 | Phase 2 Full MVP | ✅ **DONE 2026-07-18** — 4/5 (80% гейт), vision E2E, PLAN p50 7.9 s ([doc 06](docs/06-mvp-phases.md) § Phase 2) |
 | **Phase 3 Research Agent** | ✅ **DONE 2026-07-18** — UC-1/UC-2 exit-бенчмарк ([doc 06](docs/06-mvp-phases.md) § Phase 3) |
 | **Phase 4 Chat UI** | ✅ **DONE 2026-07-19** — UI + SSE + `planner: llm`; exit-прогоны целиком из Chat UI в браузере (Playwright): UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 → добран планнером до 4/4); 129 тестов ([doc 06](docs/06-mvp-phases.md) § Phase 4) |
-| **Phase 5 attended-режим** | 🛠 **2026-07-19** — human-in-the-loop прохождение anti-bot challenge (Cloudflare); 135 тестов. Реальный Cloudflare-прогон — за Антоном |
+| **Phase 5 attended-режим** | ✅ **2026-07-19** — human-in-the-loop: на anti-bot проверке агент ставит паузу, пользователь проходит её сам в видимом браузере, агент продолжает; 137 тестов, проверено вживую |
 
 **Next:** Phase 5+ backlog (doc 06) — приоритеты P1: structured schema input, regex assist, phase-batched multi-site (12 свопов → 3). Плюс хвосты ниже.
 
 ## Phase 5 attended-режим (2026-07-19) — что построено
 
-Контекст: Антон просил заходить на сайты за Cloudflare managed challenge (напр. redib.org — 403 + «just a moment» на всё, включая robots.txt; наш агент честно → `robots_disallow`, 0 страниц). Обсудили границу: **обман детекта (fingerprint-спуфинг, undetected-браузеры, автоклик challenge, solver-сервисы, puppeteer-real-browser) — отказ навсегда** (подделка сигнала «я человек», против явной воли владельца + контракт no anti-bot bypass). Реализован **attended-режим = human-in-the-loop** (как Operator): проверку проходит человек в видимом браузере, агент делает остальное.
+Назначение: некоторые сайты показывают anti-bot проверку (напр. Cloudflare challenge — страница «just a moment», иногда и на robots.txt → агент честно `robots_disallow`, 0 страниц). Автоматически такую проверку агент не проходит — **принцип проекта: anti-bot проверку проходит только человек** (контракт no anti-bot bypass; автопрохождение/маскировка — вне scope). Реализован **attended-режим = human-in-the-loop** (как браузерные агенты Operator и ко.): агент на проверке ставит паузу, пользователь проходит её сам в видимом браузере, агент продолжает.
 - **Backend:** `orchestrator/attended.py` (AttendedGate Protocol + EventAttendedGate — пауза/resume/сброс challenge-снапшота, вынесено ради ≤500 LOC loop.py); статус run `waiting_user`; развилка в loop.py при `captcha` (attended → gate.try_clear → переобсёрвить); `browser.start(headless=not attended)` (видимое окно); `Settings.attended_wait_timeout_s=300`. resume: `POST /runs/{id}/resume` + `POST /sessions/{id}/resume` (симметрично cancel; `state.resume_events`/`session_resume_events`). **D-12: `active_run_id`/`startup_sweep` теперь считают `waiting_user` занятым** (браузер открыт, лок держится; рестарт → zombie→failed).
 - **SSE:** событие `challenge_wait {run_id,start_url,url,kind}` пока активный run в `waiting_user`.
 - **Frontend:** `ChallengeCard` в Chat.tsx (карточка-пауза + «✓ Я прошёл — продолжить»), тумблер «Attended-режим» (при старте сессии), `onChallenge`/`resumeSession` в api.ts.
 - **CLI:** `agent crawl --attended`.
-- **Пределы (честно):** `cf_clearance` привязан к IP+браузеру, живёт ограниченно → на длинной сессии challenge всплывёт снова; N доменов за стенкой = N ручных прохождений. Снимает рутину обхода страниц, не факт проверки. Backlog: persist cf_clearance между сессиями.
-- **Подтверждено вживую 2026-07-19** на redib.org (CF managed challenge): headless = 403 + 0 страниц; attended headful = пауза `waiting_user` → Антон прошёл проверку **один раз** → контент прочитан (`completed` 199 с, PT-страница про букмекеров, факт с цитатой). Механика human-in-the-loop доказана.
-- **Баги, пойманные на живом CF и починенные (137 тестов):** (1) OBSERVE падал `Execution context was destroyed` → `raw_snapshot` retry (playwright_session); (2) captcha не распознавалась — детектор знал только старые фразы → расширил CF-сигналы + **thin-guard** (сигнал в title или на тонкой заглушке, иначе встроенный Turnstile-виджет на реальной странице давал ложную паузу); (3) SPA-fallback давал challenge проскочить → пропускаем networkidle на challenge (`looks_like_challenge`); (4) **две галочки** — после resume делался повторный `goto` → CF re-challenge; теперь `reobserve_in_place` читает открытую страницу без навигации (`browser.page_url()`).
-- **Хвост:** cancel во время `waiting_user`-паузы не прерывает мгновенно (gate ждёт resume/timeout, cancel_event в gate не пробрасывается) — не блокер, поправить при случае. Persist cf_clearance между сессиями — backlog (doc 06).
+- **Пределы (честно):** cookie сессии привязан к IP+браузеру и живёт ограниченно → в новой сессии проверку нужно пройти снова. Снимает рутину навигации по страницам, не сам факт проверки. Backlog: сохранять cookie сессии по доменам, чтобы повторные заходы не требовали повторной проверки, пока cookie жив.
+- **Подтверждено вживую 2026-07-19** на публичном сайте за managed challenge: пауза `waiting_user` → пользователь прошёл проверку **один раз** → контент прочитан (`completed`, ~199 с, факт с цитатой). Механика human-in-the-loop работает end-to-end.
+- **Баги, пойманные вживую и починенные (137 тестов):** (1) OBSERVE падал `Execution context was destroyed` (challenge-страница дёргается редиректами) → `raw_snapshot` retry (playwright_session); (2) проверка не детектилась → расширил `blockers._CAPTCHA_SIGNALS` + **thin-guard** (сигнал в title или на «тонкой» заглушке, иначе встроенный виджет на реальной контентной странице давал ложную паузу); (3) SPA-fallback давал проверке проскочить мимо паузы → пропускаем networkidle на challenge-странице (`looks_like_challenge`); (4) **двойная проверка** — после resume делался повторный `goto` (провоцировал новую проверку) → `reobserve_in_place` читает уже открытую пользователем страницу без навигации (`browser.page_url()`).
+- **Хвост:** cancel во время `waiting_user`-паузы не прерывает мгновенно (gate ждёт resume/timeout, cancel_event в gate не пробрасывается) — не блокер, поправить при случае. Сохранение cookie сессии по доменам — backlog (doc 06).
 
 ## Phase 4 — что построено (2026-07-19)
 
