@@ -70,6 +70,21 @@ async def test_happy_path_navigate_extract_synthesize(tmp_path, two_page_site):
     assert llm.unloaded  # swap: nav model выгружена перед synthesis
 
 
+async def test_persist_session_passes_profile_path(tmp_path, two_page_site):
+    orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
+        {"action": "stop", "reasoning": "done"}, SYNTH_OK])
+    await orch.run(record_for(f"{ORIGIN}/", persist_session=True))
+    assert two_page_site.storage_state_path is not None  # профиль передан в браузер
+    assert two_page_site.storage_state_path.endswith("127.0.0.1_8901.json")  # ключ = host
+
+
+async def test_no_persist_session_by_default(tmp_path, two_page_site):
+    orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
+        {"action": "stop", "reasoning": "done"}, SYNTH_OK])
+    await orch.run(record_for(f"{ORIGIN}/"))  # persist_session off по умолчанию
+    assert two_page_site.storage_state_path is None
+
+
 async def test_fabricated_url_recovers_via_fallback(tmp_path, two_page_site):
     orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
         {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "invented"},  # I-H6

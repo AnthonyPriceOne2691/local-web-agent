@@ -3,6 +3,8 @@ downloads blocked (I-H4), fresh context per run."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.observer.snapshot import INTERACTIVE_SELECTOR, OBSERVE_JS
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -13,16 +15,22 @@ class PlaywrightSession:
         self._pw = None
         self._browser = None
         self._page = None
+        self._context = None
+        self._persist_path: str | None = None
 
-    async def start(self, *, headless: bool = True) -> None:
+    async def start(self, *, headless: bool = True, storage_state_path: str | None = None) -> None:
         from playwright.async_api import async_playwright
 
         # attended-режим (Phase 5): headless=False — видимое окно, чтобы человек
         # прошёл anti-bot challenge сам; cf_clearance-cookie живёт в контексте run'а
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(headless=headless)
-        context = await self._browser.new_context(viewport=DESKTOP, accept_downloads=False)
-        self._page = await context.new_page()
+        self._persist_path = storage_state_path
+        ctx_kwargs: dict = {"viewport": DESKTOP, "accept_downloads": False}
+        if storage_state_path and Path(storage_state_path).exists():
+            ctx_kwargs["storage_state"] = storage_state_path  # cookie прошлой сессии (doc 24)
+        self._context = await self._browser.new_context(**ctx_kwargs)
+        self._page = await self._context.new_page()
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         await self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
@@ -91,6 +99,12 @@ class PlaywrightSession:
         return None
 
     async def close(self) -> None:
+        try:  # сохранить cookie сессии по домену (persist_session, doc 24) — не валит run
+            if self._persist_path and self._context is not None:
+                Path(self._persist_path).parent.mkdir(parents=True, exist_ok=True)
+                await self._context.storage_state(path=self._persist_path)
+        except Exception:  # noqa: BLE001
+            pass
         if self._browser:
             await self._browser.close()
         if self._pw:

@@ -26,8 +26,8 @@
 | [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.7** | + content_search, sitemap P2.5, RU keywords |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
-| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.7** | Phase 4 DONE + Phase 5 attended-режим (anti-bot challenge) |
-| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.3** | Агент действует на сайте: тиры 0-3; Tier 1 click ✅ + Tier 2 attended-логин ✅ (Phase 6) |
+| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.8** | Phase 4 DONE; Phase 5 attended; Phase 6 attended-login + persist-session |
+| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.4** | Агент действует на сайте: тиры 0-3; Tier 1 click ✅, Tier 2 attended-логин ✅, persist-session ✅ (Phase 6) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 

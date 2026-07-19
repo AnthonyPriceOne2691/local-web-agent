@@ -7,7 +7,10 @@ from typing import Protocol
 
 
 class BrowserSession(Protocol):
-    async def start(self, *, headless: bool = True) -> None: ...
+    async def start(self, *, headless: bool = True, storage_state_path: str | None = None) -> None:
+        """storage_state_path: если задан и файл есть — грузим cookie сессии; при close
+        сохраняем обратно (персистентная сессия по доменам, Phase 6 — паролей не храним)."""
+        ...
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         """Navigate + settle; возвращает ФИНАЛЬНЫЙ URL (redirects — I-H9)."""

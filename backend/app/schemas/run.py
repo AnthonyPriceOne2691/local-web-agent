@@ -23,6 +23,7 @@ class RunConfig(BaseModel):
     vision_enabled: Literal["auto", "always", "never"] = "auto"  # doc 23
     allow_private: bool = False  # I-H8 override (doc 13); fixtures/интранет
     attended: bool = False  # Phase 5: на anti-bot challenge пауза → человек проходит сам
+    persist_session: bool = False  # Phase 6: cookie сессии по доменам → без повторного логина
 
 
 class Violation(BaseModel):

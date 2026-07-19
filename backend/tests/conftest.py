@@ -69,9 +69,11 @@ class FakeBrowserSession:
         self.consent_click_result: str | None = None
         self.click_attempts: list[list[str]] = []
         self.clicked_indices: list[int] = []  # Tier 1 click (doc 25)
+        self.storage_state_path: str | None = None  # persist_session (doc 24)
 
-    async def start(self, *, headless: bool = True) -> None:  # pragma: no cover - trivial
+    async def start(self, *, headless: bool = True, storage_state_path: str | None = None) -> None:
         self.headless = headless
+        self.storage_state_path = storage_state_path
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         final = self.redirects.get(url, url)

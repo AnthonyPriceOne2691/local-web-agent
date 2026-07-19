@@ -1,4 +1,5 @@
-# Local data — not committed when populated
+# Local data — not committed when populated.
+# incl. runs/profiles/ — session cookies (cf_clearance/login) — auth material, НИКОГДА не коммитим.
 data/runs/
 *.db
 

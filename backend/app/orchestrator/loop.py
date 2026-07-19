@@ -134,7 +134,9 @@ class CrawlOrchestrator:
             )
             alive_probes, legal_probes, probe_links = await self._probe_slugs(record.intent, origin)
             sitemap_urls = await self._sitemap_urls(record, origin, robots)  # P2.5
-            await self._browser.start(headless=not cfg.attended)  # attended → видимое окно
+            profile = (self._s.profile_path(origin)
+                       if (cfg.persist_session or self._s.persist_session) else None)
+            await self._browser.start(headless=not cfg.attended, storage_state_path=profile)
 
             current: PageSnapshot | None = None
             next_url: str | None = normalize_url(cfg.start_url)

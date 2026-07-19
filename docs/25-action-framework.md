@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.3** · 2026-07-20
+> Local Web Agent · Design doc · **v0.4** · 2026-07-20
 
 ## Назначение
 
@@ -123,6 +123,12 @@ resume → агент читает контент под логином (`reobse
 хранения секретов и держит privacy-first. Хранилище credentials (Keychain и т.п.) понадобилось
 бы только для **unattended**-логина — а он вне scope (login = Tier 2 = требует человека).
 
+**Повторный вход не нужен (persist_session, реализовано):** cookie сессии (cf_clearance +
+login) сохраняется в профиль по хосту (`runs/profiles/<host>.json`, gitignored — auth-материал);
+следующие заходы на домен уже авторизованы, пока cookie жив. Человек логинится/проходит проверку
+**один раз на домен**, не каждую сессию. Паролей всё равно не храним — только cookie. Включается
+`persist_session` (config/RunConfig); по умолчанию off (запись auth-cookie на диск — сознательный выбор).
+
 ---
 
 ## Phase mapping
@@ -181,3 +187,4 @@ resume → агент читает контент под логином (`reobse
 | 2026-07-19 | v0.1: Action Framework — агент действует на сайте. Ось автономность×обратимость; тиры 0-3; Action registry вместо `KNOWN_TOOLS`; подтверждение через attended-субстрат (Phase 5); cloud carve-out для sink; FR-4.2 инверсия (спина — правится отдельно) |
 | 2026-07-20 | **v0.2 (Tier 1 старт):** уточнено — Tier 1 click НЕ инвертирует FR-4.2, а делает его границей Tier 1/Tier 2 (submit/login = порог). Спина правлена: doc 00 v0.4, doc 01 v0.5 (FR-7), doc 13 v0.8 (I-H7+click, I-H10 click-safety). A-1 закрыт (нумерация элементов). Спайк A-1 element referencing реализован (read-only) |
 | 2026-07-20 | **v0.3 (Tier 2 login):** attended-логин реализован — `login_wall` + attended → пауза (человек логинится в видимом браузере), паролей агент не хранит/не видит; `looks_like_challenge` расширен на login_wall + login thin-guard (виджет на толстой странице ≠ login_wall). **A-3 credentials закрыт** (человек вводит сам). doc 13 v0.8.1 (I-H3 attended), doc 01 v0.5.1 (FR-7.4). Next Tier 2: submit-формы под action_confirm (A-2) |
+| 2026-07-20 | **v0.4 (persist-session):** § Credentials — `persist_session`: storage_state (cookie сессии cf_clearance+login) по хосту в `runs/profiles/` (gitignored), повторный заход без нового логина/проверки, пока cookie жив; паролей не храним. `Settings.profile_path`, `PlaywrightSession` load/save storage_state, opt-in флаг. Закрывает backlog doc 24 «cookie сессии по доменам» (doc 24 v0.8). Живой смоук: cookie run1 → виден в run2 |

@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # Attended-режим (Phase 5, doc 24): пауза на anti-bot challenge, человек проходит сам
     attended_wait_timeout_s: float = 300.0  # не дождались resume → сайт blocked
 
+    # Персистентная сессия (Phase 6, doc 24 backlog): storage_state (cookies) по доменам →
+    # повторный заход не требует нового логина/прохождения challenge, пока сессия жива.
+    # Паролей НЕ храним — только cookie сессии, которую человек честно создал.
+    persist_session: bool = False
+
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
     runs_dir_override: Path | None = None  # тесты/сторонний размещение БД
@@ -71,6 +76,15 @@ class Settings(BaseSettings):
     @property
     def artifacts_dir(self) -> Path:
         return self.runs_dir / "artifacts"
+
+    @property
+    def profiles_dir(self) -> Path:
+        return self.runs_dir / "profiles"  # storage_state по доменам; под data/runs → gitignored
+
+    def profile_path(self, origin: str) -> str:
+        """storage_state-файл сессии по хосту (persist_session, doc 24)."""
+        key = (origin.split("://")[-1] or "profile").replace(":", "_")
+        return str(self.profiles_dir / f"{key}.json")
 
     @property
     def prompts_dir(self) -> Path:
