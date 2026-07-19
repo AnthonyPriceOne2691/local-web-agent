@@ -1,6 +1,6 @@
 # 00 — Project Overview
 
-> Local Web Agent · Design doc · **v0.3** · 2026-07-05
+> Local Web Agent · Design doc · **v0.4** · 2026-07-20
 
 ## One-liner
 
@@ -62,6 +62,7 @@
 | Multi-site | **Sequential queue** only (M5 RAM) | ✅ D-7 closed |
 | Two-layer architecture | Layer 2 meta-agent + Layer 1 crawl worker | ✅ D-8 ([doc 24](24-research-chat-agent.md)) |
 | **Навигация по сайту** | **Hybrid:** deterministic hints (slug dictionaries, ref SEOLB) + LLM top-K | ✅ ([doc 21](21-navigation-hints.md)) |
+| **Действия на сайте (Phase 6)** | Action framework: Tier 0 sink + Tier 1 автономная безопасная интеракция (click не-submit); Tier 2+ (submit/login) под attended-подтверждением | 🛠 started ([doc 25](25-action-framework.md)) |
 | **Контроль модели** | **Agent Behavioral Contracts** (arXiv:2602.22302) — runtime enforcer **до** Playwright | ✅ ([doc 13](13-behavioral-contracts.md)) |
 | Tech stack | Python FastAPI + Playwright + Ollama (doc 07) | ✅ зафиксировано |
 | LLM split | Qwen 14B (nav) + **qwen2.5vl:7b** (vision) + R1 14B (JSON) | ✅ **provisional** — A/B в Phase 0 (qwen3:14b single-model, gpt-oss:20b — doc 14) |
@@ -109,3 +110,4 @@
 | 2026-07-05 | Page screenshots (Playwright PNG, doc 22); vision batch Phase 2 (doc 23) |
 | 2026-07-05 | **v0.2:** two-layer architecture; Research Chat (doc 24); D-7/D-8/D-9 |
 | 2026-07-05 | **v0.3 (review):** vision-тег → qwen2.5vl:7b; LLM split помечен provisional (Phase 0 A/B); решения D-11 (cookie banners), D-12 (concurrency=1) |
+| 2026-07-20 | **v0.4 (Phase 6 start):** идентичность эволюционирует read-only research → **action-capable** — агент не только читает, но и действует на сайте (Action framework, [doc 25](25-action-framework.md)): Tier 0 sink + Tier 1 автономная безопасная интеракция; Tier 2+ под подтверждением. Anti-bot bypass по-прежнему out of scope (галочку CF жмёт человек, attended) |

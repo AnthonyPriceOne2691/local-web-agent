@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.1** · 2026-07-19
+> Local Web Agent · Design doc · **v0.2** · 2026-07-20
 
 ## Назначение
 
@@ -8,10 +8,12 @@
 и анализирует, но и **выполняет действия** — доставляет результат наружу (Google Docs,
 файл) и **взаимодействует с самим сайтом** (клик, раскрытие, ввод, submit).
 
-Это **сознательная инверсия спины проекта**: FR-4.2 (P0 hard: «never submit forms /
-POST / login») из абсолютного запрета становится **условным** («запрещено, кроме
-авторизованных действий»). Изменение требует правки doc 01 / doc 13 / doc 00 — см.
-§ Requirements impact. Anti-bot bypass как был, так и остаётся **вне scope навсегда**
+Это **сознательная эволюция спины проекта** (Phase 6). Уточнение по тирам: **Tier 1
+(click по не-submit элементу) НЕ инвертирует FR-4.2** — он делает FR-4.2 **границей
+Tier 1/Tier 2** (submit/login по-прежнему hard, но теперь как порог, а не тотальный
+запрет всякой интеракции). Полная conditional-формулировка FR-4.2 нужна лишь на **Tier 2**
+(submit/login под подтверждением). Правки: doc 01 (FR-7 + FR-4.2 note) / doc 13
+(I-H7 +click, I-H10 click-safety) / doc 00 (идентичность) — см. § Requirements impact. Anti-bot bypass как был, так и остаётся **вне scope навсегда**
 (doc 24): агент честно действует как авторизованный пользователь, а не притворяется
 человеком перед защитой. Challenge проходит человек (attended, doc 24).
 
@@ -127,7 +129,7 @@ macOS / зашифрованный файл), ввод человеком в в�
 |------|-------|
 | Action registry + Protocol (рефактор `KNOWN_TOOLS`) | 6 |
 | Tier 0 — sink: export → файл, Google Docs | 6 |
-| Tier 1 — safe interaction (click/expand/paginate), автономно | 6 |
+| Tier 1 — safe interaction (click/expand/paginate), автономно | **6 🛠** |
 | Browser interaction-примитивы + ACT-типы | 6 |
 | Tier 2 — submit/login + action_confirm карточка | 7 |
 | Credentials secure storage | 7 |
@@ -152,9 +154,9 @@ macOS / зашифрованный файл), ввод человеком в в�
 
 | Doc | Изменение |
 |-----|-----------|
-| doc 01 | **FR-4.2**: absolute hard → conditional (авторизованные действия разрешены; формы/login по политике тиров). Новый FR-7 Action Framework |
-| doc 13 | Новый класс контрактов A-* для Layer 2 действий; enforcer с per-action политикой |
-| doc 00 | Идентичность: read-only research → action-capable research agent |
+| doc 01 | ✅ **FR-7** добавлен (v0.5); FR-4.2 уточнён как граница Tier 1/Tier 2; Login automation → Tier 2 |
+| doc 13 | ✅ **I-H7** +click, **I-H10** click-safety, `click_safety` YAML (v0.8, Tier 1); класс A-* для sink — при Tier 0 |
+| doc 00 | ✅ идентичность read-only → **action-capable** (v0.4) |
 | doc 24 | Реестр вместо `KNOWN_TOOLS`; связка с attended для action_confirm |
 
 ---
@@ -163,7 +165,7 @@ macOS / зашифрованный файл), ввод человеком в в�
 
 | ID | Вопрос | Статус |
 |----|--------|--------|
-| A-1 | Селекторы для click/fill: LLM отдаёт CSS/текст, или агент нумерует интерактивные элементы (как a11y-tree)? | 🔲 TBD |
+| A-1 | Селекторы для click/fill: CSS/текст vs нумерация элементов | ✅ **нумерация** (element referencing, спайк A-1 2026-07-20): агент ссылается по `index` ∈ `interactive_elements`; click-time — тот же селектор + visibility + document order |
 | A-2 | Форма: агент заполняет по одному полю с подтверждением, или всю целиком → один submit-confirm? | 🔲 TBD |
 | A-3 | Где хранить credentials на macOS (Keychain vs зашифрованный файл)? | 🔲 TBD |
 
@@ -174,3 +176,4 @@ macOS / зашифрованный файл), ввод человеком в в�
 | Дата | Изменение |
 |------|-----------|
 | 2026-07-19 | v0.1: Action Framework — агент действует на сайте. Ось автономность×обратимость; тиры 0-3; Action registry вместо `KNOWN_TOOLS`; подтверждение через attended-субстрат (Phase 5); cloud carve-out для sink; FR-4.2 инверсия (спина — правится отдельно) |
+| 2026-07-20 | **v0.2 (Tier 1 старт):** уточнено — Tier 1 click НЕ инвертирует FR-4.2, а делает его границей Tier 1/Tier 2 (submit/login = порог). Спина правлена: doc 00 v0.4, doc 01 v0.5 (FR-7), doc 13 v0.8 (I-H7+click, I-H10 click-safety). A-1 закрыт (нумерация элементов). Спайк A-1 element referencing реализован (read-only) |

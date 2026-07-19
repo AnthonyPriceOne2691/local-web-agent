@@ -1,6 +1,6 @@
 # 01 — Requirements
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-05
+> Local Web Agent · Design doc · **v0.5** · 2026-07-20
 
 ## Функциональные требования
 
@@ -88,7 +88,7 @@
 | ID | Требование | MVP | Priority |
 |----|------------|-----|----------|
 | FR-4.1 | **Contract Enforcer** проверяет каждое действие агента **перед execution** | ✅ | P0 |
-| FR-4.2 | Hard: never submit forms / POST / login | ✅ | P0 |
+| FR-4.2 | Hard: never submit forms / POST / login — **граница Tier 1/Tier 2** (doc 25): submit/login **не автономно**; автономный Tier 1 `click` по не-submit элементу разрешён (FR-7.3) | ✅ | P0 |
 | FR-4.3 | Hard: stay within allowed domain(s) | ✅ | P0 |
 | FR-4.4 | Hard: max pages / max depth enforced by orchestrator, not LLM | ✅ | P0 |
 | FR-4.5 | Soft: prefer shorter paths to answer (link scoring heuristic) | partial | P1 |
@@ -108,6 +108,19 @@
 | FR-5.3 | List / inspect past runs | ✅ | P1 |
 | FR-5.4 | Delete run | ✅ | P1 |
 | FR-5.5 | Full HTML archive | ❌ | P2 |
+
+### FR-7 Action Framework (агент действует на сайте) — Phase 6
+
+> См. [25-action-framework.md](25-action-framework.md). Ось **автономность × обратимость**: автономно на обратимом, подтверждение на необратимом.
+
+| ID | Требование | MVP | Priority |
+|----|------------|-----|----------|
+| FR-7.1 | **Реестр действий** (Action registry): агент выполняет только зарегистрированные типизированные действия (A-H1) | 🛠 | P1 (Phase 6) |
+| FR-7.2 | **Tier 0 sink** — доставка результата наружу (файл, Google Docs); действие «наружу» требует явного user-consent (A-H4) | 🛠 | P1 (Phase 6) |
+| FR-7.3 | **Tier 1 safe interaction** — автономный `click` по **не-submit / не-login** элементу (раскрыть, пагинация) по индексу ∈ `snapshot.interactive_elements` | 🛠 | P1 (Phase 6) |
+| FR-7.4 | **Tier 2 consequential** — submit формы / login: только под attended-подтверждением (A-H2), не автономно | 🔲 | P2 (Phase 6) |
+| FR-7.5 | **Tier 3 destructive** — купить/удалить/отправить: агент **не** выполняет, только готовит (A-H3) | 🔲 | P2 |
+| FR-7.6 | **Element referencing** — `PageSnapshot.interactive_elements` с устойчивой нумерацией (спайк A-1) | ✅ | P1 (Phase 6) |
 
 ## Нефункциональные требования
 
@@ -177,7 +190,7 @@
 - Multi-tenant / auth
 - Distributed crawling / queue workers
 - CAPTCHA solving
-- Login automation
+- Login automation — **пересмотрено (Phase 6):** Tier 2 (submit/login под attended-подтверждением, doc 25), **не автономно**
 - Cloud LLM fallback
 - Mobile app
 - Real-time collaborative UI
@@ -209,3 +222,4 @@
 | 2026-07-05 | **v0.2:** FR-6 Research Chat; D-7/D-8/D-9 closed (doc 24); OQ-1 closed |
 | 2026-07-05 | **v0.3 (review):** FR-1.12 sitemap; FR-1.13 SSRF guard; FR-1.14 redirect re-check; FR-3.8 cancel; FR-1.4 + Crawl-delay; NFR-2.5 bind localhost; NFR-4.4 concurrency=1 (D-12); NFR-1.2 p50/p95 согласован; OQ-2 закрыт (tldextract); OQ-4 cookie banners (D-11) |
 | 2026-07-05 | **v0.4 (review-2):** FR-1.2 max_depth = hop depth (D-13); FR-1.14 landing-domain исключение для первой навигации |
+| 2026-07-20 | **v0.5 (Phase 6):** FR-7 Action Framework (агент действует на сайте, doc 25) — Tier 0 sink / Tier 1 автономный click / Tier 2 submit-login под подтверждением / Tier 3 не автономно; FR-7.6 element referencing (спайк A-1). FR-4.2 уточнён как граница Tier 1/Tier 2. Login automation вынесен из out-of-scope в Tier 2 (attended) |

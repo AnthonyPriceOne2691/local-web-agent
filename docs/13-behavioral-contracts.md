@@ -1,6 +1,6 @@
 # 13 — Behavioral Contracts (ABC-lite)
 
-> Local Web Agent · Design doc · **v0.7.1** · 2026-07-18  
+> Local Web Agent · Design doc · **v0.8** · 2026-07-20  
 > **Источник правды (контроль модели):** Bhardwaj, «Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents», arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) — локальная копия: `/Users/anthony/Documents/2602.22302v1.pdf`  
 > Контракт **C = (P, I, G, R)**, hard/soft split, bounded recovery, **runtime enforcement на уровне действий** (до Playwright)
 
@@ -80,13 +80,14 @@ LLM **не решает** budget страниц — только orchestrator (�
 | ID | Rule | Enforcement |
 |----|------|-------------|
 | I-H1 | **Allowed domains only** — navigate target ∈ allowed set | URL parser vs config |
-| I-H2 | **No form submit** — no click submit, no POST | navigate-only MVP; reject `submit` actions |
+| I-H2 | **No form submit** — no submit-click, no POST, no login-click | reject `submit`/login actions; Tier 1 `click` разрешён только по не-submit элементу (I-H10, doc 25) |
 | I-H3 | **No authentication** — no fill password/email login flows | blocker detect + reject ACT |
 | I-H4 | **No file download execute** | Playwright download blocked |
 | I-H6 | **Never fabricate URLs** — navigate only to URL ∈ **CandidateQueue** = snapshot links ∪ slug probes из `path_hints` ∪ sitemap URLs (doc 21) ∪ `{start_url}` | set membership on normalized URL |
-| I-H7 | **Action schema valid** — JSON parses to `navigate \| extract_now \| stop` | Action Planner |
+| I-H7 | **Action schema valid** — JSON parses to `navigate \| extract_now \| click \| stop` | Action Planner |
 | I-H8 | **No private network / bad scheme** — only `http(s)`; reject loopback, RFC1918, link-local, `.local`/`.internal` hosts (защита от SSRF на локальный API/роутер) unless `--allow-private` | URL parse + IP range check, < 1 ms |
 | I-H9 | **Post-redirect re-check** — после `goto` финальный URL повторно проверяется на I-H1/I-H8; off-domain redirect → snapshot discarded, URL помечен `redirect_offsite`, вернуться к queue. **Исключение — step 0:** редирект первой навигации переопределяет `allowed_domains` от landing URL (переезд домена; doc 04 INIT), I-H8 применяется всё равно | orchestrator after navigation |
+| I-H10 | **Click safety (Tier 1, doc 25)** — `click` только по `element_index` ∈ `snapshot.interactive_elements`, и целевой элемент **не** submit/password/login (проверка `kind`/`input_type`). submit/login-элемент → reject как Tier 2 (нужно attended-подтверждение, вне автономного Tier 1) | enforcer: index membership + kind check |
 
 > I-H5 (evidence) относится к synthesis pass — см. ниже.  
 > **Замечание к I-H6:** LLM по-прежнему не может *изобрести* URL — slug probes и sitemap URLs детерминированно конструируются оркестратором (doc 21), LLM лишь выбирает из готовой очереди. Формулировка «href ∈ snapshot links» из v0.4 противоречила P2/P3 slug probes doc 21 — исправлено.  
@@ -314,6 +315,7 @@ Per-run aggregates (в `crawl_runs.metadata_json`):
 | I-H8 private network URL | Skip URL, log; no replan needed (кандидат просто исключается из queue) |
 | I-H9 off-domain redirect | Discard snapshot; mark URL `redirect_offsite`; next candidate from queue |
 | I-H2 submit attempt | Replan: «Navigate only, no forms» |
+| I-H10 unsafe click (submit/login element) | Reject; replan «click only non-submit element, or navigate» |
 | G-H5 robots disallow | Skip URL; pick next link from scorer |
 | G-H1 max pages | Force `stop` → SYNTHESIZE |
 | Blocker (captcha/login) | No recovery → `status: blocked` |
@@ -371,6 +373,10 @@ invariants:
     - id: no_submit
       check: action_not_in
       forbidden: [submit, fill_form, click_submit]
+    - id: click_safety                    # I-H10 (doc 25 Tier 1)
+      check: click_target_safe
+      index_in: snapshot.interactive_elements
+      forbidden_kinds: [submit, password]   # submit/login → Tier 2 (attended)
     - id: no_auth
       check: not_login_wall_action
   soft:
@@ -546,6 +552,8 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 | FR-4.1 enforcer before execution | Runtime pipeline |
 | FR-4.2 no form submit | I-H2 |
 | FR-4.4 limits by orchestrator | G-H1, G-H2 + orchestrator owner |
+| FR-7.3 Tier 1 click (safe interaction) | I-H7 (+click), I-H10 |
+| FR-7.4 Tier 2 submit/login (confirm) | I-H2 reject autonomous + attended (doc 24) |
 
 ---
 
@@ -586,3 +594,4 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 | 2026-07-05 | **v0.6 (review-2):** G-H2 = hop depth (D-13); I-H9 исключение step 0 (landing domain); S-H3 — in-memory проверка при synthesis (работает с --no-artifacts) |
 | 2026-07-18 | **v0.7 (Phase 2 impl):** ContractEnforcer реализован (`contracts/{loader,enforcer,context,rules/}`), YAML-файлы в `data/contracts/` созданы. Уточнения: (1) правила получили поле `code` (constraint_id для violation log); (2) порядок hard-проверок фиксирован приоритетом кодов — G-H1 первым (budget → force stop, не replan); (3) G-H4 rate floor и G-H6 timeout — enforcement by construction (clamp через `effective_rate_ms`/`effective_timeout_ms`, private hosts exempt для fixtures), не reject; (4) drift auto-tighten реализован: hard ≥3 → temp 0.2, I-H6 ≥2 → top-5, recovery <50% (≥2 попыток) → fallback-only; правило «second half» покрыто пороговым hard ≥3; (5) I-H9 остался orchestrator-owned (`guards.check_redirect`), per-action guards Phase 1 переехали в `rules/` |
 | 2026-07-18 | **v0.7.1 (по итогам exit-бенчмарка):** (1) **S-H3b enforcement уточнён** — quote-проверка против DOM применяется только к `source: dom`-evidence; цитата, не найденная в DOM, но совпадающая с vision_insights страницы (token_set_ratio ≥ 0.85 — устойчив к вставкам слов, в отличие от verbatim partial_ratio S-H3a), **переклассифицируется** в `source: vision` вместо удаления факта (маленькие модели нестабильно ставят source сами; S-H6 downgrade применяется после reclass); (2) **S-H3c (новое):** факт, чей `value` содержит URL посещённой страницы, при провале всех цитат не удаляется — визит и есть evidence (`quote: ""`), confidence cap `medium`; fabricated URL (∉ visited) режется как прежде |
+| 2026-07-20 | **v0.8 (Phase 6 Tier 1 click, doc 25):** I-H7 схема действий +`click`; I-H2 уточнён (submit/login reject, Tier 1 click по не-submit разрешён); **I-H10 click safety** (click по `element_index` ∈ `interactive_elements`, не submit/password → иначе Tier 2/attended); `crawl.contract.yaml` +`click_safety`; recovery +I-H10; reqmap +FR-7.3/7.4. Спайк A-1 (element referencing) закрыт |

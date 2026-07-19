@@ -6,8 +6,8 @@
 
 | Doc | Status | Description |
 |-----|--------|-------------|
-| [00-project-overview.md](00-project-overview.md) | ✅ **v0.3** | Two-layer arch; Research Chat UX |
-| [01-requirements.md](01-requirements.md) | ✅ **v0.4** | FR/NFR incl. FR-6; SSRF, cancel, D-12, hop depth |
+| [00-project-overview.md](00-project-overview.md) | ✅ **v0.4** | Two-layer arch; Research Chat UX; action-capable (Phase 6) |
+| [01-requirements.md](01-requirements.md) | ✅ **v0.5** | FR/NFR incl. FR-6/FR-7 (actions); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
 | [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.7** | Playwright; URL norm; redirect/landing policy; trafilatura |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
@@ -15,7 +15,7 @@
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.10** | **Phases 0–4 DONE**; Phase 5 attended-режим |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.6** | SQLite + research sessions реализованы; legacy-импорт; sweep |
-| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.7.1** (реализован Phase 2) | ABC; I-H8 SSRF; I-H9 redirect; hop depth |
+| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.8** | ABC; I-H8 SSRF; I-H9 redirect; I-H10 click-safety (Tier 1) |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.5** | qwen3 single-model канон; VLM; fallback-пара |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.7** | + SSE events, report, статика UI, attended resume/challenge_wait |
 | [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.5** | Params: structured outputs, think; top-10 |
@@ -27,7 +27,7 @@
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.7** | Phase 4 DONE + Phase 5 attended-режим (anti-bot challenge) |
-| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.1** | Агент действует на сайте: тиры 0-3, автономность×обратимость, action registry (Phase 6+) |
+| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.2** | Агент действует на сайте: тиры 0-3, автономность×обратимость; Tier 1 click в работе (Phase 6) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
