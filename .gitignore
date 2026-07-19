@@ -29,3 +29,7 @@ playwright/.cache/
 # Coverage artifacts
 .coverage
 coverage.xml
+
+# Локальный контекст Claude Code (не часть кодовой базы)
+CLAUDE.md
+MEMORY.md
