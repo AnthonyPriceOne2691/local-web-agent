@@ -40,7 +40,8 @@ def hints() -> PathHints:
 
 
 def page_raw(*, title: str = "", text: str = "", links: list[tuple[str, str]] | None = None,
-             password: bool = False, meta: str = "") -> dict:
+             password: bool = False, meta: str = "",
+             interactive: list[dict] | None = None) -> dict:
     """Хелпер: сырой результат OBSERVE_JS."""
     return {
         "title": title,
@@ -48,6 +49,7 @@ def page_raw(*, title: str = "", text: str = "", links: list[tuple[str, str]] | 
         "headings": [{"level": 1, "text": title}] if title else [],
         "main_text": text,
         "links": [{"href": h, "text": t} for h, t in (links or [])],
+        "interactive": interactive or [],
         "has_password_field": password,
     }
 

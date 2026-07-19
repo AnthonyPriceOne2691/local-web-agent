@@ -27,6 +27,22 @@ class ScreenshotRef(BaseModel):
     height: int
 
 
+class InteractiveElement(BaseModel):
+    """Кликабельный/вводимый элемент страницы для action-режима (doc 25 A-1).
+
+    `index` — устойчивый порядковый номер в document order: агент ссылается на
+    элемент по номеру, а не по хрупкому селектору. Инвариант для будущего click
+    (Tier 1): тот же селектор + visibility-фильтр + document order → тот же index.
+    """
+
+    index: int
+    kind: str = ""  # button / text / email / password / submit / select / textarea / checkbox …
+    label: str = ""
+    input_type: str = ""  # для <input>: тип поля (submit/password → Tier 2, doc 25)
+    name: str = ""
+    disabled: bool = False
+
+
 class PageSnapshot(BaseModel):
     url: str
     status: PageStatus = "ok"
@@ -35,6 +51,7 @@ class PageSnapshot(BaseModel):
     headings: list[Heading] = Field(default_factory=list)
     main_text: str = ""
     links: list[Link] = Field(default_factory=list)
+    interactive_elements: list[InteractiveElement] = Field(default_factory=list)  # doc 25 A-1
     screenshots: list[ScreenshotRef] = Field(default_factory=list)
     vision_insights: list[dict] = Field(default_factory=list)  # VisionInsight dumps (doc 23)
     truncated: bool = False

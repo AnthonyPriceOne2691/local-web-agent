@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.observer import blockers, links
-from app.schemas.snapshot import Heading, Link, PageSnapshot
+from app.schemas.snapshot import Heading, InteractiveElement, Link, PageSnapshot
 
 OBSERVE_JS = """() => {
   const pick = sel => document.querySelector(sel);
@@ -17,6 +17,23 @@ OBSERVE_JS = """() => {
     links: [...document.querySelectorAll('a[href]')].map(a => ({
       href: a.getAttribute('href') || '', text: (a.innerText || '').trim()
     })),
+    interactive: [...document.querySelectorAll(
+        'button, input:not([type=hidden]), select, textarea, [role=button], [onclick]'
+      )]
+      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
+      .slice(0, 60)
+      .map(el => {
+        const tag = el.tagName.toLowerCase();
+        const at = n => el.getAttribute(n) || '';
+        const isField = tag === 'input' || tag === 'select' || tag === 'textarea';
+        const itype = tag === 'input' ? (at('type') || 'text') : '';
+        const kind = tag === 'input' ? itype
+          : (tag === 'button' || tag === 'select' || tag === 'textarea') ? tag : 'button';
+        const label = (isField
+          ? (at('aria-label') || at('placeholder') || el.value || at('name'))
+          : (el.innerText || at('aria-label') || at('title'))).trim();
+        return {kind, label, input_type: itype, name: at('name'), disabled: !!el.disabled};
+      }),
     has_password_field: !!pick('input[type=password]'),
   };
 }"""
@@ -27,6 +44,8 @@ META_CAP = 300
 HEADING_CAP = 200
 MAIN_TEXT_CAP = 8000
 LINKS_CAP = 40
+INTERACTIVE_CAP = 50  # doc 20 token budget — интерактивных элементов на страницу
+INTERACTIVE_LABEL_CAP = 120
 
 
 def build_snapshot(raw: dict, *, page_url: str, origin: str) -> PageSnapshot:
@@ -38,6 +57,17 @@ def build_snapshot(raw: dict, *, page_url: str, origin: str) -> PageSnapshot:
         if (h.get("text") or "").strip()
     ]
     link_dicts = links.clean_links(page_url, raw.get("links") or [], origin, cap=LINKS_CAP)
+    interactive = [
+        InteractiveElement(
+            index=i,
+            kind=(el.get("kind") or "")[:24],
+            label=(el.get("label") or "")[:INTERACTIVE_LABEL_CAP],
+            input_type=(el.get("input_type") or "")[:24],
+            name=(el.get("name") or "")[:80],
+            disabled=bool(el.get("disabled")),
+        )
+        for i, el in enumerate((raw.get("interactive") or [])[:INTERACTIVE_CAP])
+    ]
     status = blockers.detect_status(
         url=page_url,
         main_text=main_text,
@@ -52,5 +82,6 @@ def build_snapshot(raw: dict, *, page_url: str, origin: str) -> PageSnapshot:
         headings=headings,
         main_text=main_text,
         links=[Link(**d) for d in link_dicts],
+        interactive_elements=interactive,
         truncated=truncated,
     )

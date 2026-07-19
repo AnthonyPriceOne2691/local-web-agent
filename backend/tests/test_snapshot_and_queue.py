@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.navigation.candidate_queue import build_candidates
-from app.observer.snapshot import MAIN_TEXT_CAP, build_snapshot
+from app.observer.snapshot import INTERACTIVE_CAP, MAIN_TEXT_CAP, build_snapshot
 from tests.conftest import page_raw
 
 ORIGIN = "http://127.0.0.1:8901"
@@ -51,3 +51,36 @@ def test_queue_excludes_visited(hints):
         alive_probes=[], legal_probes=[],
     )
     assert cands == []
+
+
+# --- interactive elements (doc 25 A-1: element referencing) ---
+
+def test_interactive_elements_parsed_and_indexed():
+    raw = page_raw(title="Contact", text="reach us", interactive=[
+        {"kind": "text", "label": "Name", "input_type": "text", "name": "name"},
+        {"kind": "email", "label": "Email", "input_type": "email", "name": "email"},
+        {"kind": "button", "label": "Send"},
+    ])
+    els = build_snapshot(raw, page_url=f"{ORIGIN}/contact", origin=ORIGIN).interactive_elements
+    assert [e.index for e in els] == [0, 1, 2]
+    assert els[1].kind == "email" and els[1].input_type == "email" and els[1].name == "email"
+    assert els[2].kind == "button" and els[2].label == "Send"
+
+
+def test_interactive_elements_cap_and_reindex():
+    many = [{"kind": "button", "label": f"b{i}"} for i in range(INTERACTIVE_CAP + 12)]
+    els = snap(f"{ORIGIN}/", title="T", text="x", interactive=many).interactive_elements
+    assert len(els) == INTERACTIVE_CAP
+    assert [e.index for e in els] == list(range(INTERACTIVE_CAP))  # contiguous reindex после cap
+
+
+def test_interactive_label_truncated():
+    els = snap(f"{ORIGIN}/", title="T", text="x",
+               interactive=[{"kind": "button", "label": "z" * 300}]).interactive_elements
+    assert len(els[0].label) == 120
+
+
+def test_snapshot_without_interactive_key_is_empty():
+    # backward-compat: старый raw без ключа interactive (напр. FakeBrowser-страницы)
+    s = build_snapshot({"title": "T", "main_text": "hi"}, page_url=f"{ORIGIN}/", origin=ORIGIN)
+    assert s.interactive_elements == []

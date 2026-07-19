@@ -27,6 +27,7 @@
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.7** | Phase 4 DONE + Phase 5 attended-режим (anti-bot challenge) |
+| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.1** | Агент действует на сайте: тиры 0-3, автономность×обратимость, action registry (Phase 6+) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
