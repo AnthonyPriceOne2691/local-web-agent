@@ -13,21 +13,36 @@ from app.schemas.run import RunRecord
 from app.schemas.snapshot import AgentAction, PageSnapshot
 
 
+def _is_submit(el) -> bool:
+    return "submit" in ((getattr(el, "kind", "") or "").lower(),
+                        (getattr(el, "input_type", "") or "").lower())
+
+
 async def act_on_element(
     browser: BrowserSession,
     record: RunRecord,
     action: AgentAction,
+    current: PageSnapshot,
     *,
     origin: str,
     step_index: int,
     snapshots: list[PageSnapshot],
     visited: set[str],
     rate_ms: int,
-) -> PageSnapshot:
-    """Tier 1/2 (doc 25): click (Tier 1) или fill (Tier 2) по element_index, затем
-    re-observe той же страницы БЕЗ goto (DOM изменился, URL — нет). Enforcer уже
-    проверил I-H10/I-H11 до вызова. Возвращает новый снапшот для PLAN."""
+    gate=None,
+) -> PageSnapshot | None:
+    """Tier 1/2 (doc 25): click/fill по element_index, затем re-observe без goto.
+
+    Submit-элемент (Tier 2) требует attended-подтверждения человека: `None` →
+    не подтверждено (сигнал остановки). Enforcer уже проверил I-H10/I-H11 до вызова.
+    """
     idx = action.element_index
+    els = current.interactive_elements
+    el = els[idx] if idx is not None and 0 <= idx < len(els) else None
+    if action.action == "click" and el is not None and _is_submit(el):
+        desc = f"submit «{el.label or 'форма'}» на {current.url}"
+        if gate is None or not await gate.confirm_action(record, desc):
+            return None  # человек не подтвердил submit → стоп
     try:
         if action.action == "fill":
             await browser.fill_element(idx, action.value)

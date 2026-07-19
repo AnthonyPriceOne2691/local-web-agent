@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from app.config import Settings
 from app.contracts.context import ActionContext
 from app.contracts.enforcer import ContractEnforcer
 from app.contracts.rules.navigation import click_target_safe
+from app.orchestrator.attended import EventAttendedGate
 from app.schemas.snapshot import AgentAction, InteractiveElement
 from tests.conftest import REPO_ROOT, FakeBrowserSession, page_raw
 from tests.test_orchestrator import ORIGIN, make_orchestrator, record_for
@@ -20,9 +23,9 @@ def _enforcer() -> ContractEnforcer:
     return ContractEnforcer.load(Settings(data_dir=REPO_ROOT / "data").contracts_dir)
 
 
-def _ctx(elements: list[InteractiveElement]) -> ActionContext:
+def _ctx(elements: list[InteractiveElement], attended: bool = False) -> ActionContext:
     return ActionContext(origin=ORIGIN, start_url=f"{ORIGIN}/", current_url=f"{ORIGIN}/",
-                         interactive_elements=elements)
+                         interactive_elements=elements, attended=attended)
 
 
 # --- schema ---
@@ -147,3 +150,62 @@ async def test_fill_password_rejected_in_loop(tmp_path):
     record = await orch.run(record_for(f"{ORIGIN}/"))
     assert site.filled == []  # enforcer заблокировал fill в password (I-H11)
     assert [v for s in record.steps for v in s.violations if v.constraint_id == "I-H11"]
+
+
+# --- Tier 2 submit под attended-подтверждением ---
+
+def test_click_submit_allowed_when_attended():
+    els = [InteractiveElement(index=0, kind="button", input_type="submit", label="Search")]
+    hard, _ = _enforcer().validate_click(
+        AgentAction(action="click", element_index=0), _ctx(els, attended=True))
+    assert hard is None  # submit разрешён enforcer'ом (подтверждение — в ACT)
+
+
+def test_click_submit_blocked_without_attended():
+    els = [InteractiveElement(index=0, kind="button", input_type="submit", label="Search")]
+    hard, _ = _enforcer().validate_click(
+        AgentAction(action="click", element_index=0), _ctx(els, attended=False))
+    assert hard is not None and hard.constraint_id == "I-H10"
+
+
+def _submit_site():
+    return FakeBrowserSession({
+        f"{ORIGIN}/": page_raw(title="Form", text="Search form here " * 30,
+                               interactive=[{"kind": "button", "input_type": "submit",
+                                             "label": "Search"}]),
+    })
+
+
+async def test_submit_confirmed_executes(tmp_path):
+    site = _submit_site()
+    orch, store, _ = make_orchestrator(tmp_path, site, [
+        {"action": "click", "element_index": 0, "reasoning": "submit search"},
+        {"action": "stop", "reasoning": "done"},
+        SYNTH_MIN,
+    ])
+    resume = asyncio.Event()
+    gate = EventAttendedGate(resume, store, timeout_s=5.0)
+    record = record_for(f"{ORIGIN}/", task="search", attended=True)
+    task = asyncio.create_task(orch.run(record, attended_gate=gate))
+    for _ in range(300):  # ждём паузу на подтверждение
+        if record.status == "waiting_user":
+            break
+        await asyncio.sleep(0.01)
+    assert record.metadata["challenge"]["kind"] == "confirm_submit"
+    resume.set()  # человек подтвердил
+    await task
+    assert site.clicked_indices == [0]  # submit выполнен ПОСЛЕ подтверждения
+
+
+async def test_submit_declined_stops(tmp_path):
+    site = _submit_site()
+    orch, store, _ = make_orchestrator(tmp_path, site, [
+        {"action": "click", "element_index": 0, "reasoning": "submit"},
+        SYNTH_MIN,
+    ])
+    resume = asyncio.Event()  # никто не подтвердит
+    gate = EventAttendedGate(resume, store, timeout_s=0.05)
+    record = record_for(f"{ORIGIN}/", task="search", attended=True)
+    result = await orch.run(record, attended_gate=gate)
+    assert site.clicked_indices == []  # без подтверждения submit НЕ выполнен
+    assert result.status in ("completed", "partial", "not_found", "failed")

@@ -149,21 +149,25 @@ function ChallengeCard({ challenge, onResume }: {
   challenge: ChallengeWait
   onResume: () => void
 }) {
-  const isLogin = challenge.kind === 'login_wall'
   const host = new URL(challenge.start_url).host
+  const isLogin = challenge.kind === 'login_wall'
+  const isConfirm = challenge.kind === 'confirm_submit'
+  const title = isConfirm ? 'Подтвердите действие' : isLogin ? 'Нужен вход' : 'Нужна проверка'
+  const body = isConfirm
+    ? 'Агент хочет отправить форму на этой странице. Проверь в открытом браузере и подтверди — тогда агент нажмёт submit.'
+    : isLogin
+      ? 'Сайт требует входа. Я открыл браузер — залогинься сам в появившемся окне (пароль остаётся у тебя, агент его не видит и не хранит), потом нажми «Продолжить».'
+      : `Сайт показал anti-bot проверку (${challenge.kind}). Я открыл браузер — пройди её в появившемся окне, потом нажми «Продолжить».`
+  const btn = isConfirm ? '✓ Подтвердить отправку' : isLogin ? '✓ Я вошёл — продолжить' : '✓ Я прошёл — продолжить'
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
-      <div className="font-semibold mb-1">⏸ {isLogin ? 'Нужен вход' : 'Нужна проверка'} — {host}</div>
-      <p className="text-xs text-amber-800 mb-2.5">
-        {isLogin
-          ? 'Сайт требует входа. Я открыл браузер — залогинься сам в появившемся окне (пароль остаётся у тебя, агент его не видит и не хранит), потом нажми «Продолжить».'
-          : `Сайт показал anti-bot проверку (${challenge.kind}). Я открыл браузер — пройди её в появившемся окне, потом нажми «Продолжить».`}
-      </p>
+      <div className="font-semibold mb-1">⏸ {title} — {host}</div>
+      <p className="text-xs text-amber-800 mb-2.5">{body}</p>
       <button
         onClick={onResume}
         className="rounded-md bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-xs font-medium"
       >
-        {isLogin ? '✓ Я вошёл — продолжить' : '✓ Я прошёл — продолжить'}
+        {btn}
       </button>
     </div>
   )

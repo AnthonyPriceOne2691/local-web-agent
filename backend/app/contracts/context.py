@@ -29,3 +29,18 @@ class ActionContext:
     forbidden_paths: tuple[str, ...] = ()
     allow_private: bool = False
     interactive_elements: list = field(default_factory=list)  # InteractiveElement (I-H10, doc 25)
+    attended: bool = False  # Tier 2 (doc 25): submit разрешён под подтверждением человека
+
+
+def build_action_context(record, current, candidates, visited, hops, origin, robots) -> ActionContext:
+    """ActionContext из состояния оркестратора (вынесено из loop.py ради ≤500 LOC, doc 18)."""
+    from app.observer.links import normalize_url
+
+    cfg = record.config
+    return ActionContext(
+        origin=origin, start_url=cfg.start_url, current_url=current.url,
+        intent=record.intent, candidates={normalize_url(c.href) for c in candidates},
+        visited=visited, hops=hops, max_pages=cfg.max_pages, max_depth=cfg.max_depth,
+        pages_visited=len(visited), robots=robots, allow_private=cfg.allow_private,
+        interactive_elements=current.interactive_elements, attended=cfg.attended,
+    )

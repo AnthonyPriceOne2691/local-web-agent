@@ -14,7 +14,7 @@ from app.browser.base import BrowserSession
 from app.browser.consent import ConsentHandler
 from app.config import Settings
 from app.contracts import guards
-from app.contracts.context import ActionContext
+from app.contracts.context import build_action_context
 from app.contracts.enforcer import ContractEnforcer
 from app.extraction.synthesis_validator import SynthesisValidator
 from app.llm.navigator import Navigator
@@ -242,8 +242,11 @@ class CrawlOrchestrator:
                     continue
                 if action.action in ("click", "fill") and action.element_index is not None:  # doc 25
                     current = await act_on_element(
-                        self._browser, record, action, origin=origin, step_index=step_index,
-                        snapshots=snapshots, visited=visited, rate_ms=rate_ms)
+                        self._browser, record, action, current, origin=origin,
+                        step_index=step_index, snapshots=snapshots, visited=visited,
+                        rate_ms=rate_ms, gate=attended_gate)
+                    if current is None:  # Tier 2 submit не подтверждён человеком
+                        break
                     homepage = homepage or current
                     just_visited = True
                     continue
@@ -366,19 +369,6 @@ class CrawlOrchestrator:
                                                         for s in snapshot.screenshots}))
         return snapshot, new_origin
 
-    def _action_ctx(
-        self, record: RunRecord, current: PageSnapshot, candidates: list[Candidate],
-        visited: set[str], hops: dict[str, int], origin: str, robots: RobotsPolicy,
-    ) -> ActionContext:
-        return ActionContext(
-            origin=origin, start_url=record.config.start_url, current_url=current.url,
-            intent=record.intent, candidates={normalize_url(c.href) for c in candidates},
-            visited=visited, hops=hops, max_pages=record.config.max_pages,
-            max_depth=record.config.max_depth, pages_visited=len(visited), robots=robots,
-            allow_private=record.config.allow_private,
-            interactive_elements=current.interactive_elements,  # I-H10 click-safety (doc 25)
-        )
-
     async def _dismiss_consent(self, record: RunRecord, url: str) -> None:
         """D-11: detect → hide → click(reject-first); статус в metadata (честность UC-1)."""
         cfg = record.config
@@ -412,7 +402,7 @@ class CrawlOrchestrator:
             "drift", {"hard_total": 0, "ih6": 0, "replan_ok": 0, "replan_fail": 0, "fallbacks": 0}
         )
         cands = candidates[: 5 if drift["ih6"] >= DRIFT_IH6_FOR_TOP5 else None]
-        ctx = self._action_ctx(record, current, cands, visited, hops, origin, robots)
+        ctx = build_action_context(record, current, cands, visited, hops, origin, robots)
 
         replans_used = 0
         if not self._fallback_only(drift):

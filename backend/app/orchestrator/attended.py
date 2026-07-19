@@ -27,6 +27,8 @@ class AttendedGate(Protocol):
         snapshots: list[PageSnapshot], visited: set[str],
     ) -> bool: ...
 
+    async def confirm_action(self, record: RunRecord, description: str) -> bool: ...
+
 
 class EventAttendedGate:
     """Пауза на challenge → ожидание resume_event с таймаутом → сброс для повторного захода."""
@@ -64,6 +66,29 @@ class EventAttendedGate:
             snapshots.remove(snapshot)
         visited.discard(snapshot.url)
         record.pages_visited = len(visited)
+        self._store.save(record)
+        return True
+
+    async def confirm_action(self, record: RunRecord, description: str) -> bool:
+        """Tier 2 (doc 25): пауза на подтверждение действия (submit) — человек жмёт resume.
+        True — подтвердил (выполняем), False — таймаут (не выполняем). Переиспользует
+        `waiting_user` + resume-event, что и challenge (kind=confirm_submit для SSE/карточки)."""
+        self._resume.clear()
+        record.status = "waiting_user"
+        record.metadata["challenge"] = {
+            "url": record.current_url, "kind": "confirm_submit",
+            "action": description, "since": datetime.now(UTC).isoformat(),
+        }
+        self._store.save(record)  # SSE увидит через poll → challenge_wait (kind=confirm_submit)
+        try:
+            await asyncio.wait_for(self._resume.wait(), timeout=self._timeout_s)
+        except TimeoutError:
+            record.metadata.pop("challenge", None)
+            record.status = "running"
+            self._store.save(record)
+            return False
+        record.metadata.pop("challenge", None)
+        record.status = "running"
         self._store.save(record)
         return True
 

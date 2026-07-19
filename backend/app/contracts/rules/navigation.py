@@ -119,10 +119,13 @@ def click_target_safe(
     if idx is None or idx < 0 or idx >= len(elements):
         return Violation(constraint_id=code, message=f"click index {idx} out of range")
     el = elements[idx]
-    forbidden = {k.lower() for k in params.get("forbidden_kinds", ("submit", "password"))}
     kind = (getattr(el, "kind", "") or "").lower()
     itype = (getattr(el, "input_type", "") or "").lower()
+    # submit → Tier 2: разрешён под attended-подтверждением (проверяется в ACT), иначе reject
+    if "submit" in (kind, itype) and ctx.attended:
+        return None
+    forbidden = {k.lower() for k in params.get("forbidden_kinds", ("submit", "password"))}
     if kind in forbidden or itype in forbidden:
-        return Violation(constraint_id=code,
-                         message=f"click on '{kind or itype}' needs Tier 2 (confirmation)")
+        hint = "login (attended)" if "password" in (kind, itype) else "Tier 2 confirmation"
+        return Violation(constraint_id=code, message=f"click on '{kind or itype}' needs {hint}")
     return None

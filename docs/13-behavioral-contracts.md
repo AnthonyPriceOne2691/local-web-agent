@@ -1,6 +1,6 @@
 # 13 — Behavioral Contracts (ABC-lite)
 
-> Local Web Agent · Design doc · **v0.8.2** · 2026-07-20  
+> Local Web Agent · Design doc · **v0.8.3** · 2026-07-20  
 > **Источник правды (контроль модели):** Bhardwaj, «Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents», arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) — локальная копия: `/Users/anthony/Documents/2602.22302v1.pdf`  
 > Контракт **C = (P, I, G, R)**, hard/soft split, bounded recovery, **runtime enforcement на уровне действий** (до Playwright)
 
@@ -87,7 +87,7 @@ LLM **не решает** budget страниц — только orchestrator (�
 | I-H7 | **Action schema valid** — JSON parses to `navigate \| extract_now \| click \| stop` | Action Planner |
 | I-H8 | **No private network / bad scheme** — only `http(s)`; reject loopback, RFC1918, link-local, `.local`/`.internal` hosts (защита от SSRF на локальный API/роутер) unless `--allow-private` | URL parse + IP range check, < 1 ms |
 | I-H9 | **Post-redirect re-check** — после `goto` финальный URL повторно проверяется на I-H1/I-H8; off-domain redirect → snapshot discarded, URL помечен `redirect_offsite`, вернуться к queue. **Исключение — step 0:** редирект первой навигации переопределяет `allowed_domains` от landing URL (переезд домена; doc 04 INIT), I-H8 применяется всё равно | orchestrator after navigation |
-| I-H10 | **Click safety (Tier 1, doc 25)** — `click` только по `element_index` ∈ `snapshot.interactive_elements`, и целевой элемент **не** submit/password/login (проверка `kind`/`input_type`). submit/login-элемент → reject как Tier 2 (нужно attended-подтверждение, вне автономного Tier 1) | enforcer: index membership + kind check |
+| I-H10 | **Click safety (doc 25)** — `click` по `element_index` ∈ `interactive_elements`. Не-submit → автономно (Tier 1). **Submit → под attended-подтверждением** (Tier 2: `ctx.attended` пропускает, `confirm_action` в ACT); без attended → reject. Password → login (attended) | enforcer: index + kind; `ctx.attended` |
 | I-H11 | **Fill safety (Tier 2, doc 25)** — `fill` только в текстовые поля (`element_index` ∈ `interactive_elements`, kind/type ∈ text/email/search/tel/url/number/textarea), **никогда в password** (креды вводит человек, attended) | enforcer: index + kind check |
 
 > I-H5 (evidence) относится к synthesis pass — см. ниже.  
@@ -599,3 +599,4 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 | 2026-07-20 | **v0.8 (Phase 6 Tier 1 click, doc 25):** I-H7 схема действий +`click`; I-H2 уточнён (submit/login reject, Tier 1 click по не-submit разрешён); **I-H10 click safety** (click по `element_index` ∈ `interactive_elements`, не submit/password → иначе Tier 2/attended); `crawl.contract.yaml` +`click_safety`; recovery +I-H10; reqmap +FR-7.3/7.4. Спайк A-1 (element referencing) закрыт |
 | 2026-07-20 | **v0.8.1 (Tier 2 attended login):** I-H3 уточнён — attended: `login_wall` → пауза, человек логинится в видимом браузере сам (агент паролей не хранит/не касается); unattended-логин по-прежнему reject. `looks_like_challenge` покрывает login_wall (детерминированная пауза) |
 | 2026-07-20 | **v0.8.2 (Tier 2 fill):** I-H11 fill-safety — `fill` только в текстовые поля (`element_index` ∈ interactive_elements), никогда в password (креды — человек). `crawl.contract.yaml` +`fill_safety`; enforcer `validate_fill`; reqmap +FR-7.4 fill |
+| 2026-07-20 | **v0.8.3 (Tier 2 submit):** I-H10 уточнён — submit-элемент разрешён под attended-подтверждением (`ctx.attended`; `confirm_action` в ACT), без attended → reject. `ActionContext.attended` добавлен |

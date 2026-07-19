@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-20
+> Local Web Agent · Design doc · **v0.6** · 2026-07-20
 
 ## Назначение
 
@@ -141,7 +141,7 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | Browser interaction-примитивы + ACT-типы | 6 |
 | Tier 2 login — attended-пауза (человек логинится сам, паролей не храним) | **6 ✅** |
 | Tier 2 fill — заполнение текстовых полей (I-H11, не password) | **6 ✅** |
-| Tier 2 submit — click submit под attended-подтверждением (action_confirm) | 7 |
+| Tier 2 submit — click submit под attended-подтверждением (confirm_action) | **6 ✅** |
 | Credentials secure storage | 7 |
 | Tier 3 — «агент готовит, человек нажимает» | 7+ |
 
@@ -190,3 +190,4 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | 2026-07-20 | **v0.3 (Tier 2 login):** attended-логин реализован — `login_wall` + attended → пауза (человек логинится в видимом браузере), паролей агент не хранит/не видит; `looks_like_challenge` расширен на login_wall + login thin-guard (виджет на толстой странице ≠ login_wall). **A-3 credentials закрыт** (человек вводит сам). doc 13 v0.8.1 (I-H3 attended), doc 01 v0.5.1 (FR-7.4). Next Tier 2: submit-формы под action_confirm (A-2) |
 | 2026-07-20 | **v0.4 (persist-session):** § Credentials — `persist_session`: storage_state (cookie сессии cf_clearance+login) по хосту в `runs/profiles/` (gitignored), повторный заход без нового логина/проверки, пока cookie жив; паролей не храним. `Settings.profile_path`, `PlaywrightSession` load/save storage_state, opt-in флаг. Закрывает backlog doc 24 «cookie сессии по доменам» (doc 24 v0.8). Живой смоук: cookie run1 → виден в run2 |
 | 2026-07-20 | **v0.5 (Tier 2 fill):** `fill`-действие — агент вписывает текст в поля (`AgentAction.fill`+value, `Browser.fill_element`, `interaction.act_on_element` для click+fill). **I-H11** fill-safety (только текстовые поля, никогда password — doc 13 v0.8.2). Навигатор учит fill. Живой смоук: text/textarea заполнены на реальном DOM, password не тронут. **Next: submit** — click submit под attended-подтверждением (reuse `waiting_user`/resume; A-2 = вся форма + один confirm) |
+| 2026-07-20 | **v0.6 (Tier 2 submit — submit-формы завершены):** submit под attended-подтверждением. `EventAttendedGate.confirm_action` (пауза `waiting_user`, kind=`confirm_submit`, reuse resume + SSE `challenge_wait` + `ChallengeCard`); `ctx.attended` + `click_target_safe` пропускает submit при attended (иначе reject); `act_on_element` паузит на submit → confirmed=execute / declined(timeout)=None→stop. `build_action_context` вынесен из loop.py (headroom). doc 13 v0.8.3 (I-H10), doc 24 v0.9. Живой смоук: fill+submit onsubmit на реальной форме |
