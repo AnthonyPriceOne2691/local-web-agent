@@ -22,15 +22,20 @@ class ContractEnforcer:
     def __init__(self, spec: ContractSpec, forbidden_paths: tuple[str, ...] = ()):
         self.spec = spec
         self.forbidden_paths = forbidden_paths
+        _routed = ("click_target_safe", "fill_target_safe")  # свои пути, не в navigate-shield
         enforced = [
             r for r in (spec.governance_hard + spec.invariants_hard)
-            if r.check in ACTION_CHECKS and r.check != "click_target_safe"
+            if r.check in ACTION_CHECKS and r.check not in _routed
         ]
         enforced.sort(key=lambda r: _PRIORITY.get(r.code, 99))
         self._action_hard = enforced
         self._click_hard = [  # I-H10: отдельный путь — navigate-проверки к click неприменимы
             r for r in (spec.invariants_hard + spec.governance_hard)
             if r.check == "click_target_safe"
+        ]
+        self._fill_hard = [  # I-H11: fill-safety (текстовые поля, не password)
+            r for r in (spec.invariants_hard + spec.governance_hard)
+            if r.check == "fill_target_safe"
         ]
         self._action_soft = [
             r for r in (spec.invariants_soft + spec.governance_soft) if r.check in ACTION_CHECKS
@@ -100,6 +105,18 @@ class ContractEnforcer:
     ) -> tuple[Violation | None, list[Violation]]:
         """I-H10 click-safety: только click-правила (URL-инварианты к click неприменимы)."""
         for rule in self._click_hard:
+            violation = ACTION_CHECKS[rule.check](rule.code, rule.params, action, ctx)
+            if violation is not None:
+                violation.severity = "hard"
+                violation.recovered = False
+                return violation, []
+        return None, []
+
+    def validate_fill(
+        self, action: AgentAction, ctx: ActionContext
+    ) -> tuple[Violation | None, list[Violation]]:
+        """I-H11 fill-safety: только fill-правила (текстовые поля, не password)."""
+        for rule in self._fill_hard:
             violation = ACTION_CHECKS[rule.check](rule.code, rule.params, action, ctx)
             if violation is not None:
                 violation.severity = "hard"

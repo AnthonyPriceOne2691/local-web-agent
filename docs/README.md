@@ -7,7 +7,7 @@
 | Doc | Status | Description |
 |-----|--------|-------------|
 | [00-project-overview.md](00-project-overview.md) | ✅ **v0.4** | Two-layer arch; Research Chat UX; action-capable (Phase 6) |
-| [01-requirements.md](01-requirements.md) | ✅ **v0.5.1** | FR/NFR incl. FR-6/FR-7 (actions); SSRF, cancel, D-12, hop depth |
+| [01-requirements.md](01-requirements.md) | ✅ **v0.5.2** | FR/NFR incl. FR-6/FR-7 (actions); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
 | [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.7** | Playwright; URL norm; redirect/landing policy; trafilatura |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
@@ -15,7 +15,7 @@
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.10** | **Phases 0–4 DONE**; Phase 5 attended-режим |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.6** | SQLite + research sessions реализованы; legacy-импорт; sweep |
-| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.8.1** | ABC; I-H10 click-safety (Tier 1); I-H3 attended login (Tier 2) |
+| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.8.2** | ABC; I-H10 click / I-H11 fill safety; I-H3 attended login |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.5** | qwen3 single-model канон; VLM; fallback-пара |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.7** | + SSE events, report, статика UI, attended resume/challenge_wait |
 | [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.5** | Params: structured outputs, think; top-10 |
@@ -27,7 +27,7 @@
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.8** | Phase 4 DONE; Phase 5 attended; Phase 6 attended-login + persist-session |
-| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.4** | Агент действует на сайте: тиры 0-3; Tier 1 click ✅, Tier 2 attended-логин ✅, persist-session ✅ (Phase 6) |
+| [25-action-framework.md](25-action-framework.md) | 🛠 **v0.5** | Агент действует на сайте: Tier 1 click ✅, Tier 2 login+fill ✅, persist-session ✅; next submit (Phase 6) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 

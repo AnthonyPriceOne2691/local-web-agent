@@ -69,6 +69,7 @@ class FakeBrowserSession:
         self.consent_click_result: str | None = None
         self.click_attempts: list[list[str]] = []
         self.clicked_indices: list[int] = []  # Tier 1 click (doc 25)
+        self.filled: list[tuple[int, str]] = []  # Tier 2 fill (doc 25)
         self.storage_state_path: str | None = None  # persist_session (doc 24)
 
     async def start(self, *, headless: bool = True, storage_state_path: str | None = None) -> None:
@@ -113,6 +114,9 @@ class FakeBrowserSession:
 
     async def click_element(self, index: int) -> None:  # Tier 1 click (doc 25)
         self.clicked_indices.append(index)
+
+    async def fill_element(self, index: int, value: str) -> None:  # Tier 2 fill (doc 25)
+        self.filled.append((index, value))
 
     async def close(self) -> None:
         self.closed = True

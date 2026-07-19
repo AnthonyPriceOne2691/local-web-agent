@@ -85,6 +85,24 @@ class PlaywrightSession:
         )
         await self._page.wait_for_timeout(500)  # DOM settle после клика
 
+    async def fill_element(self, index: int, value: str) -> None:
+        """Tier 2 (doc 25): вписать текст в index-е поле (тот же порядок, что OBSERVE_JS)."""
+        await self._page.evaluate(
+            """(args) => {
+              const [sel, i, val] = args;
+              const els = [...document.querySelectorAll(sel)]
+                .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+              const el = els[i];
+              if (!el) throw new Error('no interactive element at index ' + i);
+              el.focus();
+              el.value = val;
+              el.dispatchEvent(new Event('input', {bubbles: true}));
+              el.dispatchEvent(new Event('change', {bubbles: true}));
+            }""",
+            [INTERACTIVE_SELECTOR, index, value],
+        )
+        await self._page.wait_for_timeout(200)
+
     async def click_first(self, selectors: list[str], *, timeout_ms: int) -> str | None:
         deadline_per_sel = max(200, timeout_ms // max(len(selectors), 1))
         for sel in selectors:

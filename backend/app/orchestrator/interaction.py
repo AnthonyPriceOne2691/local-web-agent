@@ -10,29 +10,35 @@ from __future__ import annotations
 from app.browser.base import BrowserSession
 from app.orchestrator.attended import reobserve_in_place
 from app.schemas.run import RunRecord
-from app.schemas.snapshot import PageSnapshot
+from app.schemas.snapshot import AgentAction, PageSnapshot
 
 
-async def click_and_reobserve(
+async def act_on_element(
     browser: BrowserSession,
     record: RunRecord,
+    action: AgentAction,
     *,
-    index: int,
     origin: str,
     step_index: int,
     snapshots: list[PageSnapshot],
     visited: set[str],
     rate_ms: int,
 ) -> PageSnapshot:
-    """Клик по интерактивному элементу #index, затем re-observe той же страницы
-    БЕЗ goto (DOM изменился, URL — нет). Возвращает новый снапшот для PLAN."""
+    """Tier 1/2 (doc 25): click (Tier 1) или fill (Tier 2) по element_index, затем
+    re-observe той же страницы БЕЗ goto (DOM изменился, URL — нет). Enforcer уже
+    проверил I-H10/I-H11 до вызова. Возвращает новый снапшот для PLAN."""
+    idx = action.element_index
     try:
-        await browser.click_element(index)
-    except Exception as exc:  # noqa: BLE001 — неудачный клик не валит run
-        record.metadata.setdefault("click_errors", []).append(f"#{index}: {str(exc)[:120]}")
+        if action.action == "fill":
+            await browser.fill_element(idx, action.value)
+        else:
+            await browser.click_element(idx)
+    except Exception as exc:  # noqa: BLE001 — неудачное действие не валит run
+        record.metadata.setdefault("action_errors", []).append(
+            f"{action.action} #{idx}: {str(exc)[:120]}")
     await browser.wait(rate_ms)
     return await reobserve_in_place(
         browser, record, origin=origin, step_index=step_index,
         snapshots=snapshots, visited=visited,
-        note=f"Tier 1: re-observe after click #{index}",
+        note=f"Tier: re-observe after {action.action} #{idx}",
     )

@@ -82,6 +82,31 @@ def intent_conditional_paths(
     return None
 
 
+_FILLABLE_KINDS = ("text", "email", "search", "tel", "url", "number", "textarea")
+
+
+def fill_target_safe(
+    code: str, params: dict, action: AgentAction, ctx: ActionContext
+) -> Violation | None:
+    """I-H11 (doc 25 Tier 2): fill только в текстовые поля; НИКОГДА в password (креды
+    вводит человек, attended), не в кнопки/чекбоксы/select."""
+    if action.action != "fill":
+        return None
+    idx = action.element_index
+    els = ctx.interactive_elements
+    if idx is None or idx < 0 or idx >= len(els):
+        return Violation(constraint_id=code, message=f"fill index {idx} out of range")
+    el = els[idx]
+    kind = (getattr(el, "kind", "") or "").lower()
+    itype = (getattr(el, "input_type", "") or "").lower()
+    if "password" in (kind, itype):
+        return Violation(constraint_id=code, message="fill into password → human-only (Tier 2)")
+    allowed = set(params.get("fillable_kinds", _FILLABLE_KINDS))
+    if kind not in allowed and itype not in allowed:
+        return Violation(constraint_id=code, message=f"fill target '{kind or itype}' not a text field")
+    return None
+
+
 def click_target_safe(
     code: str, params: dict, action: AgentAction, ctx: ActionContext
 ) -> Violation | None:

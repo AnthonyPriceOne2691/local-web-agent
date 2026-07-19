@@ -43,4 +43,9 @@ class BrowserSession(Protocol):
         тот же порядок, что OBSERVE_JS). I-H10 (click-safety) проверяется enforcer'ом до вызова."""
         ...
 
+    async def fill_element(self, index: int, value: str) -> None:
+        """Tier 2 (doc 25): вписать текст в index-е текстовое поле. Только текстовые поля;
+        password/submit/не-инпут отсекает enforcer (I-H11) до вызова."""
+        ...
+
     async def close(self) -> None: ...

@@ -46,6 +46,10 @@ invariants:
       code: I-H10
       check: click_target_safe
       forbidden_kinds: [submit, password]
+    - id: fill_safety            # I-H11 (doc 25 Tier 2): fill только в текстовые поля
+      code: I-H11
+      check: fill_target_safe
+      fillable_kinds: [text, email, search, tel, url, number, textarea]
     - id: no_revisit             # dual: orchestrator visited set
       code: G-H3
       check: url_not_visited

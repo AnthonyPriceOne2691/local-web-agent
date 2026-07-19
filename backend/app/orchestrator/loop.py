@@ -30,7 +30,7 @@ from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.attended import AttendedGate, reobserve_in_place
 from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
-from app.orchestrator.interaction import click_and_reobserve
+from app.orchestrator.interaction import act_on_element
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
@@ -240,10 +240,10 @@ class CrawlOrchestrator:
                     if extract_streak >= 2 or pages_left <= 0:  # loop guard, policy #11
                         break
                     continue
-                if action.action == "click" and action.element_index is not None:  # Tier 1 (doc 25)
-                    current = await click_and_reobserve(
-                        self._browser, record, index=action.element_index, origin=origin,
-                        step_index=step_index, snapshots=snapshots, visited=visited, rate_ms=rate_ms)
+                if action.action in ("click", "fill") and action.element_index is not None:  # doc 25
+                    current = await act_on_element(
+                        self._browser, record, action, origin=origin, step_index=step_index,
+                        snapshots=snapshots, visited=visited, rate_ms=rate_ms)
                     homepage = homepage or current
                     just_visited = True
                     continue
@@ -433,10 +433,11 @@ class CrawlOrchestrator:
                 if action.action in ("extract_now", "stop"):
                     self._mark_recovered(violations, replans_used, drift)
                     return action, violations, llm_stats
-                if action.action == "click":  # I-H10 click-safety (doc 25 Tier 1)
-                    hard, softs = self._enforcer.validate_click(action, ctx)
-                else:
-                    hard, softs = self._enforcer.validate_navigate(action, ctx)
+                # click→I-H10, fill→I-H11, иначе navigate-shield (doc 25)
+                _validate = {"click": self._enforcer.validate_click,
+                             "fill": self._enforcer.validate_fill}
+                hard, softs = _validate.get(
+                    action.action, self._enforcer.validate_navigate)(action, ctx)
                 violations.extend(softs)
                 if hard is None:
                     self._mark_recovered(violations, replans_used, drift)

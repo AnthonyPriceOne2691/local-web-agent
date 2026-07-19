@@ -94,3 +94,56 @@ async def test_click_on_submit_rejected_then_replan(tmp_path):
     assert site.clicked_indices == []  # клик заблокирован enforcer'ом до Playwright
     ih10 = [v for s in record.steps for v in s.violations if v.constraint_id == "I-H10"]
     assert ih10  # violation зафиксирован
+
+
+# --- I-H11 fill-safety (Tier 2) ---
+
+def test_fill_text_field_passes():
+    els = [InteractiveElement(index=0, kind="text", input_type="text", label="Search")]
+    hard, _ = _enforcer().validate_fill(
+        AgentAction(action="fill", element_index=0, value="hi"), _ctx(els))
+    assert hard is None
+
+
+def test_fill_password_blocked():
+    els = [InteractiveElement(index=0, kind="password", input_type="password")]
+    hard, _ = _enforcer().validate_fill(
+        AgentAction(action="fill", element_index=0, value="secret"), _ctx(els))
+    assert hard is not None and hard.constraint_id == "I-H11"  # креды вводит человек
+
+
+def test_fill_non_text_blocked():
+    els = [InteractiveElement(index=0, kind="button", label="Send")]
+    hard, _ = _enforcer().validate_fill(
+        AgentAction(action="fill", element_index=0, value="x"), _ctx(els))
+    assert hard is not None and hard.constraint_id == "I-H11"
+
+
+async def test_fill_executes(tmp_path):
+    site = FakeBrowserSession({
+        f"{ORIGIN}/": page_raw(title="Search", text="Search page here " * 30,
+                               interactive=[{"kind": "text", "input_type": "text", "label": "q"}]),
+    })
+    orch, _, _ = make_orchestrator(tmp_path, site, [
+        {"action": "fill", "element_index": 0, "value": "football", "reasoning": "type query"},
+        {"action": "stop", "reasoning": "done"},
+        SYNTH_MIN,
+    ])
+    record = await orch.run(record_for(f"{ORIGIN}/", task="search the site"))
+    assert site.filled == [(0, "football")]  # fill выполнен
+    assert any(s.action == "fill" for s in record.steps)
+
+
+async def test_fill_password_rejected_in_loop(tmp_path):
+    site = FakeBrowserSession({
+        f"{ORIGIN}/": page_raw(title="Login", text="Login page here " * 30,
+                               interactive=[{"kind": "password", "input_type": "password"}]),
+    })
+    orch, _, _ = make_orchestrator(tmp_path, site, [
+        {"action": "fill", "element_index": 0, "value": "secret", "reasoning": "type password"},
+        {"action": "stop", "reasoning": "cannot"},
+        SYNTH_MIN,
+    ])
+    record = await orch.run(record_for(f"{ORIGIN}/"))
+    assert site.filled == []  # enforcer заблокировал fill в password (I-H11)
+    assert [v for s in record.steps for v in s.violations if v.constraint_id == "I-H11"]
