@@ -80,3 +80,24 @@ def intent_conditional_paths(
                          message="legal/utility page — soft avoid",
                          proposed_url=normalize_url(action.url or ""))
     return None
+
+
+def click_target_safe(
+    code: str, params: dict, action: AgentAction, ctx: ActionContext
+) -> Violation | None:
+    """I-H10 (doc 25 Tier 1): click только по существующему интерактивному элементу,
+    не submit/password/login. submit/login → Tier 2 (нужно attended-подтверждение)."""
+    if action.action != "click":
+        return None
+    idx = action.element_index
+    elements = ctx.interactive_elements
+    if idx is None or idx < 0 or idx >= len(elements):
+        return Violation(constraint_id=code, message=f"click index {idx} out of range")
+    el = elements[idx]
+    forbidden = {k.lower() for k in params.get("forbidden_kinds", ("submit", "password"))}
+    kind = (getattr(el, "kind", "") or "").lower()
+    itype = (getattr(el, "input_type", "") or "").lower()
+    if kind in forbidden or itype in forbidden:
+        return Violation(constraint_id=code,
+                         message=f"click on '{kind or itype}' needs Tier 2 (confirmation)")
+    return None

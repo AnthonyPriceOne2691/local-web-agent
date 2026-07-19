@@ -29,17 +29,18 @@ from app.observer.blockers import looks_like_challenge
 from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.attended import AttendedGate, reobserve_in_place
+from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
+from app.orchestrator.interaction import click_and_reobserve
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
 from app.reporting.markdown import build_report
 from app.schemas.extraction import ExtractionResult
 from app.schemas.run import CrawlStep, RunRecord, Violation
-from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot, ScreenshotRef
+from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
 from app.storage.run_store import RunStore
 from app.vision.analyzer import VisionAnalyzer
 
-SPA_TEXT_THRESHOLD = 200
 # Drift auto-tighten (doc 13 § Drift detection)
 DRIFT_HARD_FOR_LOW_TEMP = 3   # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
 DRIFT_IH6_FOR_TOP5 = 2        # fabricated URL ≥ 2 → shrink candidate list to top 5
@@ -235,6 +236,13 @@ class CrawlOrchestrator:
                     if extract_streak >= 2 or pages_left <= 0:  # loop guard, policy #11
                         break
                     continue
+                if action.action == "click" and action.element_index is not None:  # Tier 1 (doc 25)
+                    current = await click_and_reobserve(
+                        self._browser, record, index=action.element_index, origin=origin,
+                        step_index=step_index, snapshots=snapshots, visited=visited, rate_ms=rate_ms)
+                    homepage = homepage or current
+                    just_visited = True
+                    continue
                 break  # stop
 
             # ---------------- SYNTHESIZE (пропускается при cancel — doc 15)
@@ -346,29 +354,13 @@ class CrawlOrchestrator:
                 pass
             raw = await self._browser.raw_snapshot()
         snapshot = build_snapshot(raw, page_url=final_url, origin=new_origin)
-        await self._maybe_screenshot(record, snapshot, step_index)
+        await maybe_screenshot(
+            self._browser, self._store, self._dismiss_consent, record, snapshot, step_index)
         record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=snapshot.url,
                                       duration_ms=int((time.perf_counter() - t_nav) * 1000),
                                       screenshot_paths={s.profile: s.relative_path
                                                         for s in snapshot.screenshots}))
         return snapshot, new_origin
-
-    async def _maybe_screenshot(self, record: RunRecord, snapshot: PageSnapshot, step_index: int) -> None:
-        mode = record.config.capture_screenshots
-        spa_fallback = len(snapshot.main_text) < SPA_TEXT_THRESHOLD  # docs 03/22
-        if mode == "never" or (mode == "auto" and not spa_fallback):
-            return
-        await self._dismiss_consent(record, snapshot.url)  # D-11: перед скриншотом
-        rel = f"screenshots/{step_index:03d}_desktop.png"
-        path = self._store.artifacts_dir(record.id) / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            await self._browser.screenshot(str(path))
-            snapshot.screenshots.append(
-                ScreenshotRef(profile="desktop", relative_path=rel, width=1440, height=900)
-            )
-        except Exception:  # noqa: BLE001 — скриншот не валит run
-            pass
 
     def _action_ctx(
         self, record: RunRecord, current: PageSnapshot, candidates: list[Candidate],
@@ -380,6 +372,7 @@ class CrawlOrchestrator:
             visited=visited, hops=hops, max_pages=record.config.max_pages,
             max_depth=record.config.max_depth, pages_visited=len(visited), robots=robots,
             allow_private=record.config.allow_private,
+            interactive_elements=current.interactive_elements,  # I-H10 click-safety (doc 25)
         )
 
     async def _dismiss_consent(self, record: RunRecord, url: str) -> None:
@@ -433,10 +426,13 @@ class CrawlOrchestrator:
                     drift["hard_total"] += 1
                     retry_note = "response was not valid action JSON"
                     continue
-                if action.action != "navigate":
+                if action.action in ("extract_now", "stop"):
                     self._mark_recovered(violations, replans_used, drift)
                     return action, violations, llm_stats
-                hard, softs = self._enforcer.validate_navigate(action, ctx)
+                if action.action == "click":  # I-H10 click-safety (doc 25 Tier 1)
+                    hard, softs = self._enforcer.validate_click(action, ctx)
+                else:
+                    hard, softs = self._enforcer.validate_navigate(action, ctx)
                 violations.extend(softs)
                 if hard is None:
                     self._mark_recovered(violations, replans_used, drift)

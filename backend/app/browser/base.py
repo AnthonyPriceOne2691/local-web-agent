@@ -35,4 +35,9 @@ class BrowserSession(Protocol):
         """Кликнуть первый видимый селектор; вернуть его или None (D-11 ступень 2)."""
         ...
 
+    async def click_element(self, index: int) -> None:
+        """Tier 1 (doc 25): клик по index-му интерактивному элементу (INTERACTIVE_SELECTOR,
+        тот же порядок, что OBSERVE_JS). I-H10 (click-safety) проверяется enforcer'ом до вызова."""
+        ...
+
     async def close(self) -> None: ...

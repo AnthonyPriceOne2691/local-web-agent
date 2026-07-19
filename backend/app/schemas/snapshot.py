@@ -62,8 +62,9 @@ class AgentAction(BaseModel):
     """LLM action schema (doc 04). Также используется как JSON Schema для
     structured outputs Ollama (doc 16)."""
 
-    action: Literal["navigate", "extract_now", "stop"]
+    action: Literal["navigate", "extract_now", "click", "stop"]
     url: str | None = None
+    element_index: int | None = None  # click: индекс ∈ interactive_elements (doc 25 Tier 1)
     reasoning: str = ""
     confidence: Literal["high", "medium", "low"] = "medium"
 

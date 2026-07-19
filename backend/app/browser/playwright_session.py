@@ -3,7 +3,7 @@ downloads blocked (I-H4), fresh context per run."""
 
 from __future__ import annotations
 
-from app.observer.snapshot import OBSERVE_JS
+from app.observer.snapshot import INTERACTIVE_SELECTOR, OBSERVE_JS
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -59,6 +59,23 @@ class PlaywrightSession:
 
     async def eval_js(self, script: str):
         return await self._page.evaluate(script)
+
+    async def click_element(self, index: int) -> None:
+        """Tier 1 (doc 25): клик по index-му элементу в том же порядке, что OBSERVE_JS
+        (INTERACTIVE_SELECTOR + visibility-фильтр + document order) → индекс совпадает."""
+        await self._page.evaluate(
+            """(args) => {
+              const [sel, i] = args;
+              const els = [...document.querySelectorAll(sel)]
+                .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+              const el = els[i];
+              if (!el) throw new Error('no interactive element at index ' + i);
+              el.scrollIntoView({block: 'center'});
+              el.click();
+            }""",
+            [INTERACTIVE_SELECTOR, index],
+        )
+        await self._page.wait_for_timeout(500)  # DOM settle после клика
 
     async def click_first(self, selectors: list[str], *, timeout_ms: int) -> str | None:
         deadline_per_sel = max(200, timeout_ms // max(len(selectors), 1))

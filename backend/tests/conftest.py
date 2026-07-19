@@ -68,6 +68,7 @@ class FakeBrowserSession:
         self.consent_js_detects: list[bool] = []
         self.consent_click_result: str | None = None
         self.click_attempts: list[list[str]] = []
+        self.clicked_indices: list[int] = []  # Tier 1 click (doc 25)
 
     async def start(self, *, headless: bool = True) -> None:  # pragma: no cover - trivial
         self.headless = headless
@@ -107,6 +108,9 @@ class FakeBrowserSession:
     async def click_first(self, selectors: list[str], *, timeout_ms: int) -> str | None:
         self.click_attempts.append(list(selectors))
         return self.consent_click_result
+
+    async def click_element(self, index: int) -> None:  # Tier 1 click (doc 25)
+        self.clicked_indices.append(index)
 
     async def close(self) -> None:
         self.closed = True

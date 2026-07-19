@@ -28,3 +28,4 @@ class ActionContext:
     robots: RobotsLike | None = None
     forbidden_paths: tuple[str, ...] = ()
     allow_private: bool = False
+    interactive_elements: list = field(default_factory=list)  # InteractiveElement (I-H10, doc 25)

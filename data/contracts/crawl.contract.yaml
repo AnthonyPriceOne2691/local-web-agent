@@ -41,7 +41,11 @@ invariants:
     - id: no_submit
       code: I-H2
       check: action_not_in
-      forbidden: [submit, fill_form, click_submit, click]
+      forbidden: [submit, fill_form, click_submit]
+    - id: click_safety           # I-H10 (doc 25 Tier 1): click по не-submit элементу
+      code: I-H10
+      check: click_target_safe
+      forbidden_kinds: [submit, password]
     - id: no_revisit             # dual: orchestrator visited set
       code: G-H3
       check: url_not_visited

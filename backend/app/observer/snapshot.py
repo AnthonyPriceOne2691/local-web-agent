@@ -5,6 +5,10 @@ from __future__ import annotations
 from app.observer import blockers, links
 from app.schemas.snapshot import Heading, InteractiveElement, Link, PageSnapshot
 
+# Интерактивные элементы для action-режима (doc 25 Tier 1) — единый источник правды:
+# OBSERVE_JS (сбор) и PlaywrightSession.click_element (клик по индексу) используют его.
+INTERACTIVE_SELECTOR = "button, input:not([type=hidden]), select, textarea, [role=button], [onclick]"
+
 OBSERVE_JS = """() => {
   const pick = sel => document.querySelector(sel);
   const mainEl = pick('main') || pick('[role=main]') || pick('article') || document.body;
@@ -17,16 +21,18 @@ OBSERVE_JS = """() => {
     links: [...document.querySelectorAll('a[href]')].map(a => ({
       href: a.getAttribute('href') || '', text: (a.innerText || '').trim()
     })),
-    interactive: [...document.querySelectorAll(
-        'button, input:not([type=hidden]), select, textarea, [role=button], [onclick]'
-      )]
+    interactive: [...document.querySelectorAll('""" + INTERACTIVE_SELECTOR + """')]
       .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
       .slice(0, 60)
       .map(el => {
         const tag = el.tagName.toLowerCase();
         const at = n => el.getAttribute(n) || '';
         const isField = tag === 'input' || tag === 'select' || tag === 'textarea';
-        const itype = tag === 'input' ? (at('type') || 'text') : '';
+        // button submits только если type=submit И внутри формы; иначе это JS-кнопка (safe)
+        const submitter = tag === 'button' && el.type === 'submit' && !!el.form;
+        const itype = tag === 'input' ? (el.type || 'text')
+          : submitter ? 'submit' : (tag === 'button' && el.type === 'reset') ? 'reset'
+          : tag === 'button' ? 'button' : '';
         const kind = tag === 'input' ? itype
           : (tag === 'button' || tag === 'select' || tag === 'textarea') ? tag : 'button';
         const label = (isField

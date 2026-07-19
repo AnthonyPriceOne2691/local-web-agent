@@ -14,6 +14,17 @@ from app.llm.parsing import extract_json
 from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
 
 
+def _interactive_block(snapshot: PageSnapshot, cap: int = 30) -> str:
+    """Нумерованные интерактивные элементы для click (doc 25 Tier 1). submit/password/
+    disabled помечены небезопасными — enforcer их всё равно заблокирует (I-H10)."""
+    lines = []
+    for el in snapshot.interactive_elements[:cap]:
+        unsafe = el.kind in ("submit", "password") or el.input_type in ("submit", "password") or el.disabled
+        tag = "  ⚠ do NOT click (submit/login/disabled)" if unsafe else ""
+        lines.append(f"{el.index}. [{el.kind}] {el.label[:50]}{tag}")
+    return "\n".join(lines) or "(none)"
+
+
 class Navigator:
     def __init__(self, client: OllamaClient, settings: Settings):
         self._client = client
@@ -47,6 +58,7 @@ class Navigator:
             main_text=snapshot.main_text[:3000],
             visited_json=json.dumps(sorted(visited), ensure_ascii=False),
             candidates_block=cand_block,
+            interactive_block=_interactive_block(snapshot),
         )
         if retry_note:
             user += f"\n\nPREVIOUS ATTEMPT REJECTED: {retry_note}. Choose strictly from the candidate list."

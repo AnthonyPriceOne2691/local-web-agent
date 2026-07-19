@@ -72,11 +72,13 @@ async def reobserve_in_place(
     browser: BrowserSession, record: RunRecord, *,
     origin: str, step_index: int,
     snapshots: list[PageSnapshot], visited: set[str],
+    note: str = "attended: re-observe after resume",
 ) -> PageSnapshot:
-    """OBSERVE текущей (пройденной человеком) страницы БЕЗ повторного goto.
+    """OBSERVE текущей открытой страницы БЕЗ повторного goto.
 
-    Повторная навигация после resume снова упирает в CF challenge (человеку
-    пришлось бы проходить проверку дважды) — читаем уже открытую страницу на месте.
+    Используется после resume (attended, doc 24) и после Tier 1 click (doc 25):
+    повторный goto заново упёрся бы в CF challenge / потерял бы результат клика —
+    читаем уже открытую страницу на месте.
     """
     raw = await browser.raw_snapshot()
     url = browser.page_url() or record.current_url
@@ -85,6 +87,5 @@ async def reobserve_in_place(
     visited.add(snap.url)
     record.pages_visited = len(visited)
     record.current_url = snap.url
-    record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=snap.url,
-                                  note="attended: re-observe after resume"))
+    record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=snap.url, note=note))
     return snap

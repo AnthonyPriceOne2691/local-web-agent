@@ -24,10 +24,14 @@ class ContractEnforcer:
         self.forbidden_paths = forbidden_paths
         enforced = [
             r for r in (spec.governance_hard + spec.invariants_hard)
-            if r.check in ACTION_CHECKS
+            if r.check in ACTION_CHECKS and r.check != "click_target_safe"
         ]
         enforced.sort(key=lambda r: _PRIORITY.get(r.code, 99))
         self._action_hard = enforced
+        self._click_hard = [  # I-H10: отдельный путь — navigate-проверки к click неприменимы
+            r for r in (spec.invariants_hard + spec.governance_hard)
+            if r.check == "click_target_safe"
+        ]
         self._action_soft = [
             r for r in (spec.invariants_soft + spec.governance_soft) if r.check in ACTION_CHECKS
         ]
@@ -90,6 +94,18 @@ class ContractEnforcer:
                 violation.severity = "soft"
                 softs.append(violation)
         return None, softs
+
+    def validate_click(
+        self, action: AgentAction, ctx: ActionContext
+    ) -> tuple[Violation | None, list[Violation]]:
+        """I-H10 click-safety: только click-правила (URL-инварианты к click неприменимы)."""
+        for rule in self._click_hard:
+            violation = ACTION_CHECKS[rule.check](rule.code, rule.params, action, ctx)
+            if violation is not None:
+                violation.severity = "hard"
+                violation.recovered = False
+                return violation, []
+        return None, []
 
     # ------------------------------------------------------------ recovery
     @property
