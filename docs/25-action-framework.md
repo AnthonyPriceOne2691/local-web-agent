@@ -129,7 +129,7 @@ macOS / зашифрованный файл), ввод человеком в в�
 |------|-------|
 | Action registry + Protocol (рефактор `KNOWN_TOOLS`) | 6 |
 | Tier 0 — sink: export → файл, Google Docs | 6 |
-| Tier 1 — safe interaction (click/expand/paginate), автономно | **6 🛠** |
+| Tier 1 — safe interaction (click/expand/paginate), автономно | **6 ✅** (I-H10) |
 | Browser interaction-примитивы + ACT-типы | 6 |
 | Tier 2 — submit/login + action_confirm карточка | 7 |
 | Credentials secure storage | 7 |
