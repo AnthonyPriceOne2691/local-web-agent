@@ -1,6 +1,6 @@
 # 01 — Requirements
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-20
+> Local Web Agent · Design doc · **v0.5.1** · 2026-07-20
 
 ## Функциональные требования
 
@@ -118,7 +118,7 @@
 | FR-7.1 | **Реестр действий** (Action registry): агент выполняет только зарегистрированные типизированные действия (A-H1) | 🛠 | P1 (Phase 6) |
 | FR-7.2 | **Tier 0 sink** — доставка результата наружу (файл, Google Docs); действие «наружу» требует явного user-consent (A-H4) | 🛠 | P1 (Phase 6) |
 | FR-7.3 | **Tier 1 safe interaction** — автономный `click` по **не-submit / не-login** элементу (раскрыть, пагинация) по индексу ∈ `snapshot.interactive_elements` | 🛠 | P1 (Phase 6) |
-| FR-7.4 | **Tier 2 consequential** — submit формы / login: только под attended-подтверждением (A-H2), не автономно | 🔲 | P2 (Phase 6) |
+| FR-7.4 | **Tier 2 consequential** — login: attended-пауза (человек логинится сам, паролей не храним) ✅; submit форм — под подтверждением (след. срез) | 🛠 | P2 (Phase 6) |
 | FR-7.5 | **Tier 3 destructive** — купить/удалить/отправить: агент **не** выполняет, только готовит (A-H3) | 🔲 | P2 |
 | FR-7.6 | **Element referencing** — `PageSnapshot.interactive_elements` с устойчивой нумерацией (спайк A-1) | ✅ | P1 (Phase 6) |
 
@@ -223,3 +223,4 @@
 | 2026-07-05 | **v0.3 (review):** FR-1.12 sitemap; FR-1.13 SSRF guard; FR-1.14 redirect re-check; FR-3.8 cancel; FR-1.4 + Crawl-delay; NFR-2.5 bind localhost; NFR-4.4 concurrency=1 (D-12); NFR-1.2 p50/p95 согласован; OQ-2 закрыт (tldextract); OQ-4 cookie banners (D-11) |
 | 2026-07-05 | **v0.4 (review-2):** FR-1.2 max_depth = hop depth (D-13); FR-1.14 landing-domain исключение для первой навигации |
 | 2026-07-20 | **v0.5 (Phase 6):** FR-7 Action Framework (агент действует на сайте, doc 25) — Tier 0 sink / Tier 1 автономный click / Tier 2 submit-login под подтверждением / Tier 3 не автономно; FR-7.6 element referencing (спайк A-1). FR-4.2 уточнён как граница Tier 1/Tier 2. Login automation вынесен из out-of-scope в Tier 2 (attended) |
+| 2026-07-20 | **v0.5.1 (Tier 2 login):** FR-7.4 — attended-логин реализован (login_wall → пауза, человек логинится в видимом браузере; агент паролей не хранит). Credentials-хранилище не нужно (unattended вне scope) |

@@ -33,6 +33,25 @@ class ChallengeBrowser(FakeBrowserSession):
         return self.pages[self.current_url]
 
 
+LOGIN_PAGE = page_raw(title="Sign in", text="Please log in to continue", password=True)
+
+
+class LoginBrowser(FakeBrowserSession):
+    """login_url → login_wall-заглушка (password-поле, тонкая); после resume
+    re-observe → контент под логином. Tier 2 (doc 25): человек логинится сам."""
+
+    def __init__(self, pages: dict, *, login_url: str):
+        super().__init__(pages)
+        self._login_url = login_url
+        self._served_login = False
+
+    async def raw_snapshot(self) -> dict:
+        if self.current_url == self._login_url and not self._served_login:
+            self._served_login = True
+            return LOGIN_PAGE
+        return self.pages[self.current_url]
+
+
 async def _wait_status(record: RunRecord, status: str, *, tries: int = 300) -> bool:
     for _ in range(tries):
         if record.status == status:
@@ -67,6 +86,18 @@ def test_detect_status_ignores_embedded_widget_on_real_page():
                          title="Casas de Apostas 2026", has_password_field=False) == "ok"
 
 
+def test_login_wall_thin_guard_ignores_widget_on_fat_page():
+    """password-поле на толстой контентной странице (login-виджет) → ok, не login_wall."""
+    fat = "Real article content here. " * 60  # >800 симв
+    assert detect_status(url="https://x.test/article", main_text=fat, title="Article",
+                         has_password_field=True) == "ok"
+    # тонкая страница с password → login_wall; login-URL → login_wall независимо от текста
+    assert detect_status(url="https://x.test/acct", main_text="Sign in", title="Login",
+                         has_password_field=True) == "login_wall"
+    assert detect_status(url="https://x.test/login", main_text="x" * 2000, title="",
+                         has_password_field=False) == "login_wall"
+
+
 # ---------------------------------------------------------- orchestrator
 async def test_attended_pause_resume_then_observe(tmp_path):
     origin = "http://127.0.0.1:8911"
@@ -96,6 +127,34 @@ async def test_attended_pause_resume_then_observe(tmp_path):
     # goto был ОДИН раз (challenge); после resume — re-observe без нового goto,
     # иначе CF показал бы проверку повторно (баг двух галочек)
     assert browser.visited_log.count(f"{origin}/") == 1
+    assert result.status in ("completed", "partial", "not_found")
+
+
+async def test_attended_login_wall_pause_resume(tmp_path):
+    """Tier 2 (doc 25): login_wall + attended → пауза (человек логинится сам) →
+    resume → re-observe контента под логином. Паролей агент не хранит и не видит."""
+    origin = "http://127.0.0.1:8914"
+    browser = LoginBrowser(
+        {f"{origin}/": page_raw(title="Dashboard", text="Logged-in content here " * 40)},
+        login_url=f"{origin}/")
+    orch, store, _llm = make_orchestrator(tmp_path, browser, [
+        {"action": "stop", "reasoning": "content visible"},
+        {"summary": "read after login", "facts": [], "not_found": []},
+    ])
+    resume = asyncio.Event()
+    gate = EventAttendedGate(resume, store, timeout_s=5.0)
+    record = record_for(f"{origin}/", task="read dashboard", attended=True,
+                        respect_robots=False, vision_enabled="never",
+                        capture_screenshots="never")
+
+    task = asyncio.create_task(orch.run(record, attended_gate=gate))
+    assert await _wait_status(record, "waiting_user"), "login не встал на паузу"
+    assert record.metadata["challenge"]["kind"] == "login_wall"
+    resume.set()  # человек залогинился в видимом браузере
+    result = await task
+
+    assert result.metadata.get("blocked_by") is None
+    assert result.metadata.get("challenge_cleared") == 1
     assert result.status in ("completed", "partial", "not_found")
 
 

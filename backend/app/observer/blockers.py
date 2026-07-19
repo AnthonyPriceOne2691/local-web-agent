@@ -28,15 +28,19 @@ def detect_status(*, url: str, main_text: str, title: str, has_password_field: b
     thin = len(main_text or "") < _CHALLENGE_MAX_TEXT
     if in_title or (thin and any(s in body for s in _CAPTCHA_SIGNALS)):
         return "captcha"
-    if has_password_field or any(h in url.lower() for h in _LOGIN_URL_HINTS):
+    # login_wall: страница логина по URL, ИЛИ password-поле на «тонкой» странице.
+    # Толстая контентная страница со встроенным login-виджетом → ok (thin-guard, как у captcha)
+    is_login_url = any(h in url.lower() for h in _LOGIN_URL_HINTS)
+    if is_login_url or (has_password_field and thin):
         return "login_wall"
     return "ok"
 
 
 def looks_like_challenge(raw: dict) -> bool:
-    """anti-bot challenge на сыром снапшоте — чтобы OBSERVE не ждал SPA-networkidle
-    (это ожидание даёт challenge пройти и проскочить attended-паузу, Phase 5)."""
+    """Full-page блокер (captcha ИЛИ login_wall) на сыром снапшоте — чтобы OBSERVE не
+    ждал SPA-networkidle: это ожидание + повторный snapshot дают блокеру проскочить
+    attended-паузу (Phase 5 — captcha; Tier 2 doc 25 — login_wall)."""
     return detect_status(
         url="", main_text=raw.get("main_text") or "", title=raw.get("title") or "",
         has_password_field=bool(raw.get("has_password_field")),
-    ) == "captcha"
+    ) in ("captcha", "login_wall")

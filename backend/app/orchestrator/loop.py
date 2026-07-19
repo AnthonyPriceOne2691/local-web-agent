@@ -171,7 +171,9 @@ class CrawlOrchestrator:
                     record.pages_visited = len(visited)
                     record.current_url = current.url
                     if current.status in ("captcha", "login_wall"):  # blocker (doc 04)
-                        if (attended_gate is not None and current.status == "captcha"
+                        # attended: и captcha (человек проходит проверку), и login_wall
+                        # (человек логинится в видимом браузере — Tier 2, doc 25; паролей не храним)
+                        if (attended_gate is not None
                                 and await attended_gate.try_clear(
                                     record, current, snapshots, visited)):
                             current = await reobserve_in_place(  # без goto → CF не re-challenge

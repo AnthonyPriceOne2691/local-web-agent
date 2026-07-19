@@ -149,18 +149,21 @@ function ChallengeCard({ challenge, onResume }: {
   challenge: ChallengeWait
   onResume: () => void
 }) {
+  const isLogin = challenge.kind === 'login_wall'
+  const host = new URL(challenge.start_url).host
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
-      <div className="font-semibold mb-1">⏸ Нужна проверка — {new URL(challenge.start_url).host}</div>
+      <div className="font-semibold mb-1">⏸ {isLogin ? 'Нужен вход' : 'Нужна проверка'} — {host}</div>
       <p className="text-xs text-amber-800 mb-2.5">
-        Сайт показал anti-bot проверку ({challenge.kind}). Я открыл браузер — пройди её
-        в появившемся окне, потом нажми «Продолжить». Сессию для этого домена запомню.
+        {isLogin
+          ? 'Сайт требует входа. Я открыл браузер — залогинься сам в появившемся окне (пароль остаётся у тебя, агент его не видит и не хранит), потом нажми «Продолжить».'
+          : `Сайт показал anti-bot проверку (${challenge.kind}). Я открыл браузер — пройди её в появившемся окне, потом нажми «Продолжить».`}
       </p>
       <button
         onClick={onResume}
         className="rounded-md bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-xs font-medium"
       >
-        ✓ Я прошёл — продолжить
+        {isLogin ? '✓ Я вошёл — продолжить' : '✓ Я прошёл — продолжить'}
       </button>
     </div>
   )

@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.2** · 2026-07-20
+> Local Web Agent · Design doc · **v0.3** · 2026-07-20
 
 ## Назначение
 
@@ -115,11 +115,13 @@ Google Docs / Notion — это **облако**, а проект privacy-first 
 
 ---
 
-## Credentials (Tier 2, отдельный sub-дизайн)
+## Credentials (Tier 2)
 
-Login = агент держит логины/пароли — домена нет в проекте. Требования, когда дойдём:
-никогда в логах, **никогда в контексте LLM**, секретное локальное хранилище (Keychain
-macOS / зашифрованный файл), ввод человеком в видимом браузере как дефолт.
+**Attended-логин (реализовано): агент паролей НЕ хранит и НЕ видит.** `login_wall` → пауза
+(та же машинерия, что challenge в Phase 5) → человек логинится в видимом браузере сам →
+resume → агент читает контент под логином (`reobserve_in_place`). Это снимает весь домен
+хранения секретов и держит privacy-first. Хранилище credentials (Keychain и т.п.) понадобилось
+бы только для **unattended**-логина — а он вне scope (login = Tier 2 = требует человека).
 
 ---
 
@@ -131,7 +133,8 @@ macOS / зашифрованный файл), ввод человеком в в�
 | Tier 0 — sink: export → файл, Google Docs | 6 |
 | Tier 1 — safe interaction (click/expand/paginate), автономно | **6 ✅** (I-H10) |
 | Browser interaction-примитивы + ACT-типы | 6 |
-| Tier 2 — submit/login + action_confirm карточка | 7 |
+| Tier 2 login — attended-пауза (человек логинится сам, паролей не храним) | **6 ✅** |
+| Tier 2 submit-формы + action_confirm карточка | 7 |
 | Credentials secure storage | 7 |
 | Tier 3 — «агент готовит, человек нажимает» | 7+ |
 
@@ -167,7 +170,7 @@ macOS / зашифрованный файл), ввод человеком в в�
 |----|--------|--------|
 | A-1 | Селекторы для click/fill: CSS/текст vs нумерация элементов | ✅ **нумерация** (element referencing, спайк A-1 2026-07-20): агент ссылается по `index` ∈ `interactive_elements`; click-time — тот же селектор + visibility + document order |
 | A-2 | Форма: агент заполняет по одному полю с подтверждением, или всю целиком → один submit-confirm? | 🔲 TBD |
-| A-3 | Где хранить credentials на macOS (Keychain vs зашифрованный файл)? | 🔲 TBD |
+| A-3 | Credentials storage | ✅ **не нужно**: attended-логин — человек вводит пароль в видимом браузере, агент не хранит/не видит; unattended-логин вне scope |
 
 ---
 
@@ -177,3 +180,4 @@ macOS / зашифрованный файл), ввод человеком в в�
 |------|-----------|
 | 2026-07-19 | v0.1: Action Framework — агент действует на сайте. Ось автономность×обратимость; тиры 0-3; Action registry вместо `KNOWN_TOOLS`; подтверждение через attended-субстрат (Phase 5); cloud carve-out для sink; FR-4.2 инверсия (спина — правится отдельно) |
 | 2026-07-20 | **v0.2 (Tier 1 старт):** уточнено — Tier 1 click НЕ инвертирует FR-4.2, а делает его границей Tier 1/Tier 2 (submit/login = порог). Спина правлена: doc 00 v0.4, doc 01 v0.5 (FR-7), doc 13 v0.8 (I-H7+click, I-H10 click-safety). A-1 закрыт (нумерация элементов). Спайк A-1 element referencing реализован (read-only) |
+| 2026-07-20 | **v0.3 (Tier 2 login):** attended-логин реализован — `login_wall` + attended → пауза (человек логинится в видимом браузере), паролей агент не хранит/не видит; `looks_like_challenge` расширен на login_wall + login thin-guard (виджет на толстой странице ≠ login_wall). **A-3 credentials закрыт** (человек вводит сам). doc 13 v0.8.1 (I-H3 attended), doc 01 v0.5.1 (FR-7.4). Next Tier 2: submit-формы под action_confirm (A-2) |
