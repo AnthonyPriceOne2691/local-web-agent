@@ -81,6 +81,9 @@ class FakeBrowserSession:
     async def raw_snapshot(self) -> dict:
         return self.pages[self.current_url]
 
+    def page_url(self) -> str:
+        return self.current_url
+
     async def wait(self, ms: int) -> None:
         pass
 

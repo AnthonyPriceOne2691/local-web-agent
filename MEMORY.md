@@ -25,7 +25,9 @@
 - **Frontend:** `ChallengeCard` в Chat.tsx (карточка-пауза + «✓ Я прошёл — продолжить»), тумблер «Attended-режим» (при старте сессии), `onChallenge`/`resumeSession` в api.ts.
 - **CLI:** `agent crawl --attended`.
 - **Пределы (честно):** `cf_clearance` привязан к IP+браузеру, живёт ограниченно → на длинной сессии challenge всплывёт снова; N доменов за стенкой = N ручных прохождений. Снимает рутину обхода страниц, не факт проверки. Backlog: persist cf_clearance между сессиями.
-- **Не тестировалось вживую** (реальный Cloudflare + видимый браузер) — только моки (FakeBrowser отдаёт captcha→контент по счётчику goto) + смоук API. Настоящий прогон на redib.org и т.п. — за Антоном.
+- **Подтверждено вживую 2026-07-19** на redib.org (CF managed challenge): headless = 403 + 0 страниц; attended headful = пауза `waiting_user` → Антон прошёл проверку **один раз** → контент прочитан (`completed` 199 с, PT-страница про букмекеров, факт с цитатой). Механика human-in-the-loop доказана.
+- **Баги, пойманные на живом CF и починенные (137 тестов):** (1) OBSERVE падал `Execution context was destroyed` → `raw_snapshot` retry (playwright_session); (2) captcha не распознавалась — детектор знал только старые фразы → расширил CF-сигналы + **thin-guard** (сигнал в title или на тонкой заглушке, иначе встроенный Turnstile-виджет на реальной странице давал ложную паузу); (3) SPA-fallback давал challenge проскочить → пропускаем networkidle на challenge (`looks_like_challenge`); (4) **две галочки** — после resume делался повторный `goto` → CF re-challenge; теперь `reobserve_in_place` читает открытую страницу без навигации (`browser.page_url()`).
+- **Хвост:** cancel во время `waiting_user`-паузы не прерывает мгновенно (gate ждёт resume/timeout, cancel_event в gate не пробрасывается) — не блокер, поправить при случае. Persist cf_clearance между сессиями — backlog (doc 06).
 
 ## Phase 4 — что построено (2026-07-19)
 

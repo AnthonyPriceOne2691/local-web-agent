@@ -13,7 +13,10 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Protocol
 
-from app.schemas.run import RunRecord
+from app.browser.base import BrowserSession
+from app.observer.snapshot import build_snapshot
+from app.orchestrator.states import State
+from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import PageSnapshot
 from app.storage.run_store import RunStore
 
@@ -63,3 +66,25 @@ class EventAttendedGate:
         record.pages_visited = len(visited)
         self._store.save(record)
         return True
+
+
+async def reobserve_in_place(
+    browser: BrowserSession, record: RunRecord, *,
+    origin: str, step_index: int,
+    snapshots: list[PageSnapshot], visited: set[str],
+) -> PageSnapshot:
+    """OBSERVE текущей (пройденной человеком) страницы БЕЗ повторного goto.
+
+    Повторная навигация после resume снова упирает в CF challenge (человеку
+    пришлось бы проходить проверку дважды) — читаем уже открытую страницу на месте.
+    """
+    raw = await browser.raw_snapshot()
+    url = browser.page_url() or record.current_url
+    snap = build_snapshot(raw, page_url=url, origin=origin)
+    snapshots.append(snap)
+    visited.add(snap.url)
+    record.pages_visited = len(visited)
+    record.current_url = snap.url
+    record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=snap.url,
+                                  note="attended: re-observe after resume"))
+    return snap

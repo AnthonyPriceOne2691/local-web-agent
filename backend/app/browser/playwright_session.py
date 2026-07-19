@@ -30,7 +30,23 @@ class PlaywrightSession:
         return self._page.url
 
     async def raw_snapshot(self) -> dict:
-        return await self._page.evaluate(OBSERVE_JS)
+        # anti-bot challenge-страницы (Cloudflare) дёргаются редиректами → evaluate
+        # падает с "Execution context was destroyed". Ретраим, дав странице осесть —
+        # так OBSERVE поймает challenge-снапшот и сработает attended-пауза (doc 24)
+        for attempt in (1, 2, 3):
+            try:
+                return await self._page.evaluate(OBSERVE_JS)
+            except Exception:  # noqa: BLE001
+                if attempt == 3:
+                    raise
+                try:
+                    await self._page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except Exception:  # noqa: BLE001
+                    pass
+                await self._page.wait_for_timeout(1500)
+
+    def page_url(self) -> str:
+        return self._page.url if self._page else ""
 
     async def wait(self, ms: int) -> None:
         await self._page.wait_for_timeout(ms)

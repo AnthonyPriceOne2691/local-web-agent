@@ -250,6 +250,12 @@ When crawl finds candidate article page:
 
 **Пределы (честно):** `cf_clearance` привязан к IP+браузеру и живёт ограниченно — на длинной сессии challenge всплывёт снова; на N доменов за стенкой — N ручных прохождений. Снимает рутину обхода страниц, не сам факт проверки. Видимый браузер требует, чтобы агент и пользователь были на одной машине (для локального privacy-first инструмента — всегда так).
 
+**Подтверждено вживую (2026-07-19, redib.org за CF managed challenge):** headless давал 403 + 0 страниц; attended headful — пауза `waiting_user` → пользователь прошёл проверку **один раз** → контент прочитан (`completed`, PT-страница про букмекеров). Баги, пойманные на живом Cloudflare и починенные:
+- **OBSERVE падал** `Execution context was destroyed` — CF дёргает challenge-страницу редиректами; `raw_snapshot` теперь ретраит с ожиданием (`playwright_session`).
+- **captcha не распознавалась** — детектор знал только «checking your browser»; добавлены актуальные CF-формулировки («just a moment», «enable javascript and cookies», «verifying you are human», …). Плюс **thin-guard**: сигнал засчитывается только в `title` или на «тонкой» странице-заглушке — иначе встроенный Turnstile-виджет на реальной контентной странице давал ложную паузу.
+- **SPA-fallback давал challenge «проскочить»** — его networkidle-ожидание пропускаем на challenge-странице (`looks_like_challenge`), чтобы пауза была детерминированной.
+- **две галочки** — после resume агент делал повторный `goto`, и CF показывал проверку ещё раз; теперь `reobserve_in_place` читает уже открытую пользователем страницу **без новой навигации** (`browser.page_url()`).
+
 ## Multi-site execution (D-7 closed)
 
 | Rule | Value |

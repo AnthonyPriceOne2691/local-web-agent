@@ -25,9 +25,10 @@ from app.navigation.intent import classify_intent
 from app.navigation.path_hints import PathHints
 from app.navigation.probes import filter_alive, probe_slugs_f1
 from app.navigation.sitemap import fetch_sitemap_candidates, sitemap_enabled
+from app.observer.blockers import looks_like_challenge
 from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
-from app.orchestrator.attended import AttendedGate
+from app.orchestrator.attended import AttendedGate, reobserve_in_place
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
@@ -172,9 +173,11 @@ class CrawlOrchestrator:
                         if (attended_gate is not None and current.status == "captcha"
                                 and await attended_gate.try_clear(
                                     record, current, snapshots, visited)):
-                            next_url = current.url  # человек прошёл → переобсёрвить (doc 24)
-                            homepage = snapshots[-1] if snapshots else None
-                            continue
+                            current = await reobserve_in_place(  # без goto → CF не re-challenge
+                                self._browser, record, origin=origin, step_index=step_index,
+                                snapshots=snapshots, visited=visited)
+                            homepage = homepage or current
+                            continue  # next_url is None → сразу PLAN c этой страницей
                         record.metadata["blocked_by"] = current.status
                         break
                     self._store.save(record)
@@ -334,7 +337,9 @@ class CrawlOrchestrator:
             record.metadata["landing_domain_adopted"] = new_origin
 
         raw = await self._browser.raw_snapshot()
-        if len(raw.get("main_text") or "") < SPA_TEXT_THRESHOLD:
+        # SPA-fallback пропускаем на challenge-странице: его networkidle-ожидание даёт
+        # anti-bot проверке пройти и проскочить attended-паузу (doc 24)
+        if len(raw.get("main_text") or "") < SPA_TEXT_THRESHOLD and not looks_like_challenge(raw):
             try:
                 await self._browser.wait_networkidle(10000)
             except Exception:  # noqa: BLE001

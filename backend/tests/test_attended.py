@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 
+from app.observer.blockers import detect_status
 from app.orchestrator.attended import EventAttendedGate
 from app.schemas.research import SessionRecord
 from app.schemas.run import RunConfig, RunRecord
@@ -17,24 +18,17 @@ CHALLENGE = page_raw(title="Just a moment", text="Checking your browser cloudfla
 
 
 class ChallengeBrowser(FakeBrowserSession):
-    """Первый ЗАХОД на challenge_url → captcha, повторный (после resume) → контент.
-
-    Счётчик по goto, не по raw_snapshot: SPA-fallback делает два raw_snapshot за
-    один заход — challenge должен держаться до нового goto (как на реальном сайте)."""
+    """Первый OBSERVE challenge_url → captcha-заглушка; после resume re-observe
+    (без нового goto) → реальный контент. Challenge держится до прохождения."""
 
     def __init__(self, pages: dict, *, challenge_url: str):
         super().__init__(pages)
         self._challenge_url = challenge_url
-        self._goto_count = 0
-
-    async def goto(self, url: str, *, timeout_ms: int) -> str:
-        final = await super().goto(url, timeout_ms=timeout_ms)
-        if final == self._challenge_url:
-            self._goto_count += 1
-        return final
+        self._served_challenge = False
 
     async def raw_snapshot(self) -> dict:
-        if self.current_url == self._challenge_url and self._goto_count <= 1:
+        if self.current_url == self._challenge_url and not self._served_challenge:
+            self._served_challenge = True
             return CHALLENGE
         return self.pages[self.current_url]
 
@@ -45,6 +39,32 @@ async def _wait_status(record: RunRecord, status: str, *, tries: int = 300) -> b
             return True
         await asyncio.sleep(0.01)
     return False
+
+
+# ------------------------------------------------------- captcha detect
+def test_detect_status_recognizes_modern_cloudflare():
+    """Актуальные формулировки CF managed challenge (2026) → captcha (не 'ok')."""
+    for title, text in [
+        ("Just a moment...", "Enable JavaScript and cookies to continue"),
+        ("", "Verifying you are human. This may take a few seconds."),
+        ("Attention Required! | Cloudflare", "needs to review the security of your connection"),
+    ]:
+        assert detect_status(url="https://x.test/", main_text=text, title=title,
+                             has_password_field=False) == "captcha", title
+    # обычная страница не ловится как captcha
+    assert detect_status(url="https://x.test/", main_text="Наша команда и контакты",
+                         title="О компании", has_password_field=False) == "ok"
+
+
+def test_detect_status_ignores_embedded_widget_on_real_page():
+    """Толстая контентная страница со встроенным Turnstile-текстом → ok, не captcha.
+
+    Регрессия: расширенные сигналы ложно ловили виджет 'verifying you are human'
+    на реальной странице (форма регистрации) → бесконечная attended-пауза."""
+    real = "Melhores casas de apostas online no Brasil em 2026. " * 40  # >800 симв
+    real += " Registre-se: verifying you are human."  # встроенный Turnstile-виджет
+    assert detect_status(url="https://bet.test/apostas", main_text=real,
+                         title="Casas de Apostas 2026", has_password_field=False) == "ok"
 
 
 # ---------------------------------------------------------- orchestrator
@@ -73,7 +93,9 @@ async def test_attended_pause_resume_then_observe(tmp_path):
     assert result.metadata.get("blocked_by") is None       # не заблокирован
     assert result.metadata.get("challenge_cleared") == 1
     assert result.metadata.get("challenge") is None         # снят
-    assert browser.visited_log.count(f"{origin}/") == 2     # captcha + повторный заход
+    # goto был ОДИН раз (challenge); после resume — re-observe без нового goto,
+    # иначе CF показал бы проверку повторно (баг двух галочек)
+    assert browser.visited_log.count(f"{origin}/") == 1
     assert result.status in ("completed", "partial", "not_found")
 
 
