@@ -1,6 +1,6 @@
 # 13 — Behavioral Contracts (ABC-lite)
 
-> Local Web Agent · Design doc · **v0.8.3** · 2026-07-20  
+> Local Web Agent · Design doc · **v0.9** · 2026-07-20  
 > **Источник правды (контроль модели):** Bhardwaj, «Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents», arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) — локальная копия: `/Users/anthony/Documents/2602.22302v1.pdf`  
 > Контракт **C = (P, I, G, R)**, hard/soft split, bounded recovery, **runtime enforcement на уровне действий** (до Playwright)
 
@@ -89,6 +89,7 @@ LLM **не решает** budget страниц — только orchestrator (�
 | I-H9 | **Post-redirect re-check** — после `goto` финальный URL повторно проверяется на I-H1/I-H8; off-domain redirect → snapshot discarded, URL помечен `redirect_offsite`, вернуться к queue. **Исключение — step 0:** редирект первой навигации переопределяет `allowed_domains` от landing URL (переезд домена; doc 04 INIT), I-H8 применяется всё равно | orchestrator after navigation |
 | I-H10 | **Click safety (doc 25)** — `click` по `element_index` ∈ `interactive_elements`. Не-submit → автономно (Tier 1). **Submit → под attended-подтверждением** (Tier 2: `ctx.attended` пропускает, `confirm_action` в ACT); без attended → reject. Password → login (attended) | enforcer: index + kind; `ctx.attended` |
 | I-H11 | **Fill safety (Tier 2, doc 25)** — `fill` только в текстовые поля (`element_index` ∈ `interactive_elements`, kind/type ∈ text/email/search/tel/url/number/textarea), **никогда в password** (креды вводит человек, attended) | enforcer: index + kind check |
+| I-H12 | **Destructive click = handoff (Tier 3, doc 25)** — click по элементу с destructive-сигналом в label (`destructive_signals` словарь: buy/pay/оплат/удал/…) агент **не исполняет никогда**: unattended → reject; attended → `handoff_action` (пауза kind=`handoff`, **человек жмёт кнопку сам** в видимом браузере) → resume → re-observe. Проверяется **до** attended-пропуска submit из I-H10 (submit «Оплатить» не может пройти через confirm, где нажал бы агент) | enforcer: label match до I-H10; ACT-развилка handoff |
 
 > I-H5 (evidence) относится к synthesis pass — см. ниже.  
 > **Замечание к I-H6:** LLM по-прежнему не может *изобрести* URL — slug probes и sitemap URLs детерминированно конструируются оркестратором (doc 21), LLM лишь выбирает из готовой очереди. Формулировка «href ∈ snapshot links» из v0.4 противоречила P2/P3 slug probes doc 21 — исправлено.  
@@ -317,6 +318,8 @@ Per-run aggregates (в `crawl_runs.metadata_json`):
 | I-H9 off-domain redirect | Discard snapshot; mark URL `redirect_offsite`; next candidate from queue |
 | I-H2 submit attempt | Replan: «Navigate only, no forms» |
 | I-H10 unsafe click (submit/login element) | Reject; replan «click only non-submit element, or navigate» |
+| I-H12 destructive click unattended | Reject; replan «irreversible step needs attended mode — navigate or stop» |
+| I-H12 destructive click attended | Не reject: ACT → handoff-пауза (человек жмёт сам) → resume → re-observe |
 | G-H5 robots disallow | Skip URL; pick next link from scorer |
 | G-H1 max pages | Force `stop` → SYNTHESIZE |
 | Blocker (captcha/login) | No recovery → `status: blocked` |
@@ -374,6 +377,9 @@ invariants:
     - id: no_submit
       check: action_not_in
       forbidden: [submit, fill_form, click_submit]
+    - id: click_destructive_handoff       # I-H12 (doc 25 Tier 3) — ДО click_safety
+      check: click_not_destructive
+      destructive_signals: [buy, pay, purchase, checkout, "place order", ...]
     - id: click_safety                    # I-H10 (doc 25 Tier 1)
       check: click_target_safe
       index_in: snapshot.interactive_elements
@@ -556,6 +562,7 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 | FR-7.3 Tier 1 click (safe interaction) | I-H7 (+click), I-H10 |
 | FR-7.4 Tier 2 submit/login (confirm) | I-H2 reject autonomous + attended (doc 24) |
 | FR-7.4 Tier 2 fill (текстовые поля) | I-H11 |
+| FR-7.5 Tier 3 destructive (handoff) | I-H12 + attended `handoff_action` (doc 25) |
 
 ---
 
@@ -600,3 +607,4 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 | 2026-07-20 | **v0.8.1 (Tier 2 attended login):** I-H3 уточнён — attended: `login_wall` → пауза, человек логинится в видимом браузере сам (агент паролей не хранит/не касается); unattended-логин по-прежнему reject. `looks_like_challenge` покрывает login_wall (детерминированная пауза) |
 | 2026-07-20 | **v0.8.2 (Tier 2 fill):** I-H11 fill-safety — `fill` только в текстовые поля (`element_index` ∈ interactive_elements), никогда в password (креды — человек). `crawl.contract.yaml` +`fill_safety`; enforcer `validate_fill`; reqmap +FR-7.4 fill |
 | 2026-07-20 | **v0.8.3 (Tier 2 submit):** I-H10 уточнён — submit-элемент разрешён под attended-подтверждением (`ctx.attended`; `confirm_action` в ACT), без attended → reject. `ActionContext.attended` добавлен |
+| 2026-07-20 | **v0.9 (Tier 3 handoff, doc 25):** **I-H12** destructive click — словарь `destructive_signals` в `crawl.contract.yaml` (`click_not_destructive`, ДО `click_safety`): unattended → reject, attended → handoff (агент не жмёт — человек сам в видимом браузере). Recovery: unattended → replan, attended → пауза-handoff. Reqmap +FR-7.5. Закрывает дыру: destructive-submit больше не проходит Tier 2 confirm |

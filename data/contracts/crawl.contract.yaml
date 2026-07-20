@@ -42,6 +42,12 @@ invariants:
       code: I-H2
       check: action_not_in
       forbidden: [submit, fill_form, click_submit]
+    - id: click_destructive_handoff  # I-H12 (doc 25 Tier 3): необратимую кнопку агент не жмёт
+      code: I-H12                    # unattended → reject; attended → handoff (человек жмёт сам)
+      check: click_not_destructive
+      destructive_signals: [buy, pay, purchase, checkout, "place order", "submit order",
+                            "order now", delete, remove, publish, "post now",
+                            оплат, купи, покупк, заказ, удал, опубликов]
     - id: click_safety           # I-H10 (doc 25 Tier 1): click по не-submit элементу
       code: I-H10
       check: click_target_safe

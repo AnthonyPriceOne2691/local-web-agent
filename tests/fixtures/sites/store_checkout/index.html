@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>WidgetStore — оформление заказа</title>
+<meta name="description" content="WidgetStore: заказ промышленного виджета WX-9."></head>
+<body>
+<header><nav><a href="/">Магазин</a></nav></header>
+<main>
+  <h1>Заказ: виджет WX-9</h1>
+  <p>Промышленный виджет WX-9, цена 4 900 ₽. Доставка 3–5 дней по всей стране.
+     Заполните форму и оплатите заказ — подтверждение придёт на почту.</p>
+  <form id="order" onsubmit="event.preventDefault();
+      document.getElementById('order').style.display='none';
+      document.getElementById('done').style.display='block';">
+    <label>Имя <input type="text" name="name" placeholder="Имя получателя"></label>
+    <label>Email <input type="email" name="email" placeholder="you@example.com"></label>
+    <label>Адрес <input type="text" name="address" placeholder="Город, улица, дом"></label>
+    <button type="submit">Оплатить заказ</button>
+  </form>
+  <button onclick="document.getElementById('order').reset()">Удалить корзину</button>
+  <div id="done" style="display:none">
+    <h2>Заказ принят</h2>
+    <p>Номер заказа: WX9-1337. Списано 4 900 ₽. Подтверждение отправлено на почту.</p>
+  </div>
+</main>
+<footer><a href="/privacy">Privacy</a></footer>
+</body>
+</html>

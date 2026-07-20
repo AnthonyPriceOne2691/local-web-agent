@@ -1,6 +1,6 @@
 # 01 — Requirements
 
-> Local Web Agent · Design doc · **v0.5.3** · 2026-07-20
+> Local Web Agent · Design doc · **v0.6** · 2026-07-20
 
 ## Функциональные требования
 
@@ -115,11 +115,11 @@
 
 | ID | Требование | MVP | Priority |
 |----|------------|-----|----------|
-| FR-7.1 | **Реестр действий** (Action registry): агент выполняет только зарегистрированные типизированные действия (A-H1) | 🛠 | P1 (Phase 6) |
-| FR-7.2 | **Tier 0 sink** — доставка результата наружу (файл, Google Docs); действие «наружу» требует явного user-consent (A-H4) | 🛠 | P1 (Phase 6) |
-| FR-7.3 | **Tier 1 safe interaction** — автономный `click` по **не-submit / не-login** элементу (раскрыть, пагинация) по индексу ∈ `snapshot.interactive_elements` | 🛠 | P1 (Phase 6) |
+| FR-7.1 | **Реестр действий** (Action registry): агент выполняет только зарегистрированные типизированные действия (A-H1) | ✅ | P1 (Phase 6) |
+| FR-7.2 | **Tier 0 sink** — доставка результата наружу (файл ✅, Google Docs ✅); действие «наружу» (облако) требует явного user-consent (A-H4), локальный файл — без consent | ✅ | P1 (Phase 6) |
+| FR-7.3 | **Tier 1 safe interaction** — автономный `click` по **не-submit / не-login** элементу (раскрыть, пагинация) по индексу ∈ `snapshot.interactive_elements` | ✅ | P1 (Phase 6) |
 | FR-7.4 | **Tier 2 consequential** — login attended ✅ + fill текстовых полей ✅ (I-H11, не password) + **submit под attended-подтверждением** ✅; unattended submit → reject | ✅ | P2 (Phase 6) |
-| FR-7.5 | **Tier 3 destructive** — купить/удалить/отправить: агент **не** выполняет, только готовит (A-H3) | 🔲 | P2 |
+| FR-7.5 | **Tier 3 destructive (handoff)** — купить/удалить/оплатить: агент **не жмёт никогда** (A-H3/I-H12); attended → готовит и передаёт финальный клик человеку в видимом браузере, unattended → reject | ✅ | P2 (Phase 7) |
 | FR-7.6 | **Element referencing** — `PageSnapshot.interactive_elements` с устойчивой нумерацией (спайк A-1) | ✅ | P1 (Phase 6) |
 
 ## Нефункциональные требования
@@ -226,3 +226,4 @@
 | 2026-07-20 | **v0.5.1 (Tier 2 login):** FR-7.4 — attended-логин реализован (login_wall → пауза, человек логинится в видимом браузере; агент паролей не хранит). Credentials-хранилище не нужно (unattended вне scope) |
 | 2026-07-20 | **v0.5.2 (Tier 2 fill):** FR-7.4 — fill текстовых полей реализован (агент вписывает текст; I-H11: не password). Next — submit под attended-подтверждением |
 | 2026-07-20 | **v0.5.3 (Tier 2 submit — submit-формы завершены):** FR-7.4 — submit под attended-подтверждением (человек подтверждает в чате перед отправкой; без attended reject). Tier 2 = login+fill+submit ✅ |
+| 2026-07-20 | **v0.6 (Phase 6 закрыта + Tier 3 handoff):** FR-7.1 registry ✅, FR-7.2 sinks ✅ (Google Docs + файл). **FR-7.5 Tier 3 реализован (Phase 7)**: handoff — агент готовит (fill/раскрытия), финальную кнопку жмёт человек в видимом браузере (I-H12: unattended reject, attended пауза-handoff); подтверждения в чате для необратимого недостаточно — отличие от Tier 2 |

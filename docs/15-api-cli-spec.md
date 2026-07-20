@@ -1,6 +1,6 @@
 # 15 — API & CLI Spec
 
-> Local Web Agent · Design doc · **v0.7** · 2026-07-19
+> Local Web Agent · Design doc · **v0.8** · 2026-07-20
 
 ## Base URL
 
@@ -190,7 +190,7 @@ SSE-прогресс сессии (Phase 4). **Poll-паттерн поверх 
 | `status` | `{session_id, status}` | смена статуса сессии; `comparing` = старт compare-фазы |
 | `message` | `{index, role, content, created_at}` | новое SessionMessage; `role: tool` = tool-note M-S1 (старт crawl_site) |
 | `crawl_progress` | `{run_id, status, start_url, pages_visited, max_pages, current_url}` | изменение активного run этой сессии (orchestrator чекпоинтит каждый шаг) |
-| `challenge_wait` | `{run_id, start_url, url, kind}` | активный run сессии встал на anti-bot challenge (attended, Phase 5) — UI показывает карточку-паузу с resume |
+| `challenge_wait` | `{run_id, start_url, url, kind, action?}` | активный run сессии ждёт человека (attended): `kind` = anti-bot challenge / `login_wall` (Phase 5) / `confirm_submit` (Tier 2) / `handoff` (Tier 3 — человек жмёт кнопку сам); `action` — описание подготовленного шага (confirm_submit/handoff). UI показывает карточку-паузу с resume |
 | `done` | `{session_id, status}` | терминальный статус — поток закрывается |
 
 Комментарий `: ping` раз в `sse_heartbeat_s` (15 s) держит соединение в паузах. 404 если сессии нет.
@@ -358,3 +358,4 @@ MVP: CLI polls `GET /runs/{id}` every 2 s.
 | 2026-07-05 | **v0.5 (review-2):** startup sweep в concurrency-таблице (lock из БД); /health + ollama_version (≥0.9 для think, doc 16) |
 | 2026-07-19 | **v0.6 (Phase 4 impl):** SSE `/sessions/{id}/events` реализован poll-паттерном поверх store; протокол уточнён — события `status`/`message`/`crawl_progress`/`done` + heartbeat (вместо черновых tool_start/compare_start: tool_start = `message` role=tool, compare_start = `status: comparing`), реконнект `?since_messages=N`. Новая ручка `GET /sessions/{id}/report` (text/markdown). `steps/{step_index}/screenshot` реализован; step_index = позиция в steps[]. Статика Chat UI: mount `frontend/dist` на `/` (same-origin, без CORS); dev — Vite proxy |
 | 2026-07-19 | **v0.7 (Phase 5 attended):** `POST /runs/{id}/resume` + `POST /sessions/{id}/resume` (снять паузу `waiting_user`); SSE-событие `challenge_wait`; CLI `--attended`; `POST /sessions` принимает `attended`. Human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим) |
+| 2026-07-20 | **v0.8 (Tier 3 handoff, doc 25):** `challenge_wait` payload +`action?` (описание подготовленного шага); `kind` пополнен `confirm_submit` (Tier 2, был с v0.6 doc 24) и `handoff` (Tier 3 — человек жмёт финальную кнопку сам в видимом браузере) |

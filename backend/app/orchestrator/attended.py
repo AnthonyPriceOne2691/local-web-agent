@@ -29,6 +29,8 @@ class AttendedGate(Protocol):
 
     async def confirm_action(self, record: RunRecord, description: str) -> bool: ...
 
+    async def handoff_action(self, record: RunRecord, description: str) -> bool: ...
+
 
 class EventAttendedGate:
     """Пауза на challenge → ожидание resume_event с таймаутом → сброс для повторного захода."""
@@ -71,15 +73,25 @@ class EventAttendedGate:
 
     async def confirm_action(self, record: RunRecord, description: str) -> bool:
         """Tier 2 (doc 25): пауза на подтверждение действия (submit) — человек жмёт resume.
-        True — подтвердил (выполняем), False — таймаут (не выполняем). Переиспользует
-        `waiting_user` + resume-event, что и challenge (kind=confirm_submit для SSE/карточки)."""
+        True — подтвердил (агент выполняет), False — таймаут (не выполняем)."""
+        return await self._pause_for_user(record, "confirm_submit", description)
+
+    async def handoff_action(self, record: RunRecord, description: str) -> bool:
+        """Tier 3 (doc 25): handoff — агент подготовил необратимый шаг, **кнопку жмёт
+        человек сам** в видимом браузере; агент не кликает ни до, ни после. True —
+        человек завершил (re-observe покажет исход), False — таймаут."""
+        return await self._pause_for_user(record, "handoff", description)
+
+    async def _pause_for_user(self, record: RunRecord, kind: str, description: str) -> bool:
+        """Общая пауза Tier 2/3: `waiting_user` + resume-event, что и challenge
+        (kind → SSE challenge_wait → kind-aware карточка в Chat UI)."""
         self._resume.clear()
         record.status = "waiting_user"
         record.metadata["challenge"] = {
-            "url": record.current_url, "kind": "confirm_submit",
+            "url": record.current_url, "kind": kind,
             "action": description, "since": datetime.now(UTC).isoformat(),
         }
-        self._store.save(record)  # SSE увидит через poll → challenge_wait (kind=confirm_submit)
+        self._store.save(record)  # SSE увидит через poll → challenge_wait
         try:
             await asyncio.wait_for(self._resume.wait(), timeout=self._timeout_s)
         except TimeoutError:

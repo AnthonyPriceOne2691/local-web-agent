@@ -244,7 +244,8 @@ class CrawlOrchestrator:
                     current = await act_on_element(
                         self._browser, record, action, current, origin=origin,
                         step_index=step_index, snapshots=snapshots, visited=visited,
-                        rate_ms=rate_ms, gate=attended_gate)
+                        rate_ms=rate_ms, gate=attended_gate,
+                        destructive_signals=self._enforcer.destructive_signals)  # I-H12
                     if current is None:  # Tier 2 submit не подтверждён человеком
                         break
                     homepage = homepage or current

@@ -25,6 +25,7 @@ ACTION_CHECKS = {
     "action_not_in": navigation.action_not_in,
     "url_not_visited": navigation.url_not_visited,
     "intent_conditional_paths": navigation.intent_conditional_paths,
+    "click_not_destructive": navigation.click_not_destructive,  # I-H12 (doc 25 Tier 3)
     "click_target_safe": navigation.click_target_safe,  # I-H10 (doc 25 Tier 1)
     "fill_target_safe": navigation.fill_target_safe,  # I-H11 (doc 25 Tier 2)
     "pages_budget": budget.pages_budget,

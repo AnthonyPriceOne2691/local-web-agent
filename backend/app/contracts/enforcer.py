@@ -22,16 +22,17 @@ class ContractEnforcer:
     def __init__(self, spec: ContractSpec, forbidden_paths: tuple[str, ...] = ()):
         self.spec = spec
         self.forbidden_paths = forbidden_paths
-        _routed = ("click_target_safe", "fill_target_safe")  # свои пути, не в navigate-shield
+        # свои пути, не в navigate-shield
+        _routed = ("click_not_destructive", "click_target_safe", "fill_target_safe")
         enforced = [
             r for r in (spec.governance_hard + spec.invariants_hard)
             if r.check in ACTION_CHECKS and r.check not in _routed
         ]
         enforced.sort(key=lambda r: _PRIORITY.get(r.code, 99))
         self._action_hard = enforced
-        self._click_hard = [  # I-H10: отдельный путь — navigate-проверки к click неприменимы
+        self._click_hard = [  # I-H12 → I-H10 (порядок YAML): navigate-проверки к click неприменимы
             r for r in (spec.invariants_hard + spec.governance_hard)
-            if r.check == "click_target_safe"
+            if r.check in ("click_not_destructive", "click_target_safe")
         ]
         self._fill_hard = [  # I-H11: fill-safety (текстовые поля, не password)
             r for r in (spec.invariants_hard + spec.governance_hard)
@@ -128,6 +129,15 @@ class ContractEnforcer:
     @property
     def max_replans_per_step(self) -> int:
         return int(self.spec.recovery.get("max_replan_per_step", 2))
+
+    @property
+    def destructive_signals(self) -> tuple[str, ...]:
+        """I-H12 словарь (Tier 3, doc 25) — для handoff-развилки в ACT."""
+        for rule in self._click_hard:
+            if rule.check == "click_not_destructive":
+                return tuple(str(s).casefold()
+                             for s in rule.params.get("destructive_signals", ()))
+        return ()
 
     def _rule(self, check: str):
         for rule in (self.spec.governance_hard + self.spec.governance_soft

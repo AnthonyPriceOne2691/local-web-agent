@@ -82,6 +82,38 @@ def intent_conditional_paths(
     return None
 
 
+def label_is_destructive(label: str | None, signals: tuple[str, ...]) -> bool:
+    """Tier 3 сигнал (doc 25): label кнопки матчит destructive-словарь (casefold substring)."""
+    lab = (label or "").casefold()
+    return bool(lab) and any(s in lab for s in signals)
+
+
+def click_not_destructive(
+    code: str, params: dict, action: AgentAction, ctx: ActionContext
+) -> Violation | None:
+    """I-H12 (doc 25 Tier 3): click по destructive-элементу агент не исполняет.
+
+    Unattended → reject (некому нажать); attended → пропуск валидации, ACT сворачивает
+    клик в handoff-паузу — финальную кнопку жмёт человек сам в видимом браузере.
+    Словарь сигналов — в crawl.contract.yaml (data/, не в коде — doc 18); false
+    positive = лишняя пауза (безопасная сторона), false negative страхует I-H10.
+    """
+    if action.action != "click":
+        return None
+    idx = action.element_index
+    els = ctx.interactive_elements
+    if idx is None or idx < 0 or idx >= len(els):
+        return None  # out of range отработает I-H10
+    label = getattr(els[idx], "label", "") or ""
+    signals = tuple(str(s).casefold() for s in params.get("destructive_signals", ()))
+    if not label_is_destructive(label, signals):
+        return None
+    if ctx.attended:
+        return None  # → handoff в ACT (человек нажмёт сам)
+    return Violation(constraint_id=code,
+                     message=f"destructive «{label[:40]}» → Tier 3 handoff needs attended mode")
+
+
 _FILLABLE_KINDS = ("text", "email", "search", "tel", "url", "number", "textarea")
 
 

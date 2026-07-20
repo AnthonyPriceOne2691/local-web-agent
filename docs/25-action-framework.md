@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.9** · 2026-07-20
+> Local Web Agent · Design doc · **v1.0** · 2026-07-20
 
 ## Назначение
 
@@ -105,6 +105,74 @@ Tier 3   (необратимо)→ агент НЕ выполняет; гото�
 
 ---
 
+## Tier 3 — handoff: «агент готовит, человек нажимает» (Phase 7)
+
+**Ключевое отличие от Tier 2:** на Tier 2 человек подтверждает в чате — **жмёт агент**.
+На Tier 3 агент не жмёт **никогда**, даже с подтверждением: подтверждение в чате — слишком
+дешёвый клик для необратимого действия (купить / удалить / опубликовать / оплатить).
+Финальную кнопку человек нажимает **сам, в видимом браузере** — физическое действие
+на самой странице, где видно *что именно* произойдёт.
+
+### Механика handoff (переиспользует attended-субстрат Phase 5)
+
+```
+nav выбирает click по destructive-элементу (task этого требует)
+  ├─ unattended → I-H12 hard reject (нет человека — некому нажать)
+  └─ attended   → агент НЕ кликает → gate.handoff_action(описание)
+                  → run waiting_user, challenge {kind: "handoff", action: "..."}
+                  → SSE challenge_wait → ChallengeCard: «Я подготовил <X>.
+                    Нажми кнопку сам в открытом браузере, затем “Готово”»
+                  → человек жмёт кнопку НА СТРАНИЦЕ (или решает не жать)
+                  → resume → reobserve_in_place (страница уже с результатом)
+                  → агент продолжает (extract → synthesize фиксирует исход)
+```
+
+«Подготовка» = всё обратимое до финальной кнопки: navigate + Tier 1 click
+(раскрытия) + Tier 2 fill (поля формы — автономно, I-H11). Handoff — единственная
+новая примитива; пауза/resume/re-observe — те же, что challenge/login/confirm.
+
+### Детект destructive (I-H12)
+
+Сигнал — **словарь стемов/фраз в label элемента** (`data/contracts/crawl.contract.yaml`,
+правило `click_destructive_handoff`, params `destructive_signals`; словарь в data/, не в
+коде — doc 18): buy / pay / purchase / checkout / place order / delete / remove /
+publish / оплат / купи / заказ / удал / опубликов / …
+
+- **Ошибка в безопасную сторону:** false positive (кнопка «PayPal» словила `pay`) — это
+  лишняя пауза с человеком, приемлемо; false negative страхуется Tier 2 — *любой* submit
+  и так не выполняется без человека (I-H10 → confirm).
+- **`send` / «отправить» без контекста заказа — НЕ Tier 3** (решение T-1): отправка
+  формы = Tier 2 confirm_submit, иначе каждая контакт-форма превращалась бы в handoff.
+  Фразы «place order / submit order / отправить заказ» — в словаре.
+- I-H12 проверяется **до** attended-пропуска I-H10 и закрывает его дыру: submit-кнопка
+  с destructive-сигналом («Оплатить заказ») больше не может пройти путём
+  Tier 2 confirm (где нажал бы агент) — только handoff.
+
+### Requirements / контракты
+
+- **I-H12 (doc 13):** click по destructive-элементу агент не исполняет: unattended →
+  reject; attended → handoff (человек жмёт сам). Enforcement — та же санитарная
+  логика, что I-H10/I-H11 (enforcer до ACT + развилка в `interaction.act_on_element`).
+- **A-H3 enforcement:** Layer 1 — I-H12; Layer 2 — runner-гейт `tier ≥ 2` (реестр, v0.9)
+  уже не исполняет tier-3 действия.
+- **SSE:** payload `challenge_wait` расширяется опциональным `action` (описание
+  подготовленного шага для карточки) — doc 15.
+- **Nav-промпт:** click по submit/pay/destructive разрешён **только когда task прямо
+  требует действия** — система сама возьмёт подтверждение (Tier 2) или передаст
+  финальный клик человеку (Tier 3). Правило «NEVER click submit/pay» смягчается до
+  task-условия (иначе Tier 2/3 недостижимы для планировщика).
+
+### Референс-сценарий (exit Phase 7, фикстура `store_checkout`)
+
+Задача: «оформи заказ: имя X, email Y, адрес Z — доведи до оплаты» (attended).
+Агент: страница товара → форма → fill имя/email/адрес (автономно) → click
+«Оплатить заказ» → I-H12 → handoff-пауза → **человек нажимает кнопку сам** →
+страница «Заказ принят» → resume → re-observe → результат зафиксирован в extract.
+Negative: «Удалить корзину» (bare button, не submit) — unattended reject I-H12;
+такой элемент Tier 1 больше не считает безопасным.
+
+---
+
 ## Browser Protocol + State machine
 
 - **Browser Protocol** ([browser/base.py](../backend/app/browser/base.py)) — read-only
@@ -164,8 +232,8 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | Tier 2 login — attended-пауза (человек логинится сам, паролей не храним) | **6 ✅** |
 | Tier 2 fill — заполнение текстовых полей (I-H11, не password) | **6 ✅** |
 | Tier 2 submit — click submit под attended-подтверждением (confirm_action) | **6 ✅** |
-| Credentials secure storage | 7 |
-| Tier 3 — «агент готовит, человек нажимает» | 7+ |
+| Credentials secure storage | 7 (не нужен, пока unattended-логин вне scope — A-3) |
+| Tier 3 — «агент готовит, человек нажимает» (§ Tier 3 handoff: I-H12 + `handoff_action`) | **7 🛠** (эта итерация) |
 
 ---
 
@@ -200,6 +268,9 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | A-1 | Селекторы для click/fill: CSS/текст vs нумерация элементов | ✅ **нумерация** (element referencing, спайк A-1 2026-07-20): агент ссылается по `index` ∈ `interactive_elements`; click-time — тот же селектор + visibility + document order |
 | A-2 | Форма: агент заполняет по одному полю с подтверждением, или всю целиком → один submit-confirm? | ✅ **вся форма + один confirm** (Tier 2 submit, v0.6): fill автономен (I-H11), пауза-подтверждение — одна, перед submit |
 | A-3 | Credentials storage | ✅ **не нужно**: attended-логин — человек вводит пароль в видимом браузере, агент не хранит/не видит; unattended-логин вне scope |
+| T-1 | Граница destructive-словаря: где Tier 2 submit, где Tier 3 handoff? | ✅ **словарь узкий, ошибка в безопасную сторону** (v1.0): `send`/«отправить» без контекста заказа — Tier 2 confirm; «place order / отправить заказ / pay / buy / delete / publish …» — Tier 3. False positive = лишняя пауза (ок), false negative страхуется I-H10 confirm |
+| T-2 | Как агент входит в handoff: отдельное действие LLM или enforcement? | ✅ **enforcement, не доверие LLM** (v1.0): nav может выбрать click по destructive (когда task требует) — I-H12 гейтит: unattended reject, attended → interaction сворачивает клик в handoff-паузу |
+| T-3 | Референс-сценарий exit Phase 7 | ✅ фикстура `store_checkout` (v1.0): fill имя/email/адрес → click «Оплатить заказ» → handoff → человек жмёт → «Заказ принят» зафиксирован; negative — «Удалить корзину» unattended reject |
 
 ---
 
@@ -216,3 +287,4 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | 2026-07-20 | **v0.7 (Tier 0 sink — Google Docs):** `app/sinks/gdocs.py` — экспорт в Google Doc (create + insertText), переиспользует логику и OAuth Node-решения `run.js` из референс-папки `Gdocs-tabs editor` (gitignored) через `refresh_token`, без повторного логина. Optional extra `gdocs` (ленивый импорт). `Settings.gdocs_dir`/`gdocs_credentials`/`gdocs_token`. Старые пресеты не используются. Проверено вживую (doc создан + read-back). Осталось: registry-обёртка Tier 0 + consent-гейт + вызов из research-флоу |
 | 2026-07-20 | **v0.8 (Tier 0 registry-обёртка):** `export_gdocs` — action LLM-планнера (`PLANNER_TOOLS` + meta-промпт + M-H3: run_id только из сессии); `runner._export_gdocs` собирает контент из результата run'а (article/facts) и зовёт `sinks/gdocs`. **Consent (A-H4) = явный запрос пользователя** («скопируй в Google Docs»); облачное действие помечается tool-нотой (M-S1). `GdocsUnavailable`/сеть → сообщение в чат, сессия не падает. Проверено вживую E2E: runner→sink→реальный Google Doc. Замыкает исходный сценарий «найди статью и скопируй в Google Docs» |
 | 2026-07-20 | **v0.9 (Action registry + file-sink — Phase 6 закрыта):** § Registry реализован — пакет `research/actions/` (`ActionSpec` frozen dataclass + `registry`), `KNOWN_TOOLS`/`PLANNER_TOOLS` удалены; membership (M-H1/**A-H1**) и пер-action enforce (M-H3) — через реестр в обоих путях (runner + llm_planner); **A-H2/A-H3 гейт в runner** (tier ≥ 2 без подтверждения не исполняется); блок tools meta-промпта собирается из `data/prompts/tools/<name>.txt` (`{TOOLS_BLOCK}`). **File-sink** — `sinks/file.py` + действие `export_file` (Tier 0 локальный, без consent; basename-санитайз, файл в artifacts сессии) — первый плагин реестра: runner/planner не менялись. Общая сборка контента экспорта → `sinks/content.py` (DRY gdocs/file). Phase mapping: registry ✅, file-sink ✅, browser-примитивы ✅; A-2 закрыт (вся форма + один confirm, v0.6). 180 тестов |
+| 2026-07-20 | **v1.0 (Tier 3 handoff — дизайн, Phase 7):** § Tier 3 — «агент готовит, человек нажимает»: handoff-механика на attended-субстрате (`gate.handoff_action` по образцу `confirm_action`, kind=`handoff`, resume → re-observe; агент финальную кнопку не жмёт никогда — жмёт человек в видимом браузере). **I-H12** destructive-click: словарь стемов в `crawl.contract.yaml` (`destructive_signals`), unattended → reject, attended → handoff; закрывает дыру Tier 2 (submit «Оплатить» больше не проходит через confirm, где нажал бы агент). SSE `challenge_wait` +`action`; nav-промпт: click submit/pay только когда task прямо требует. Решения T-1 (узкий словарь, send=Tier 2), T-2 (enforcement, не доверие LLM), T-3 (референс — фикстура `store_checkout`) |

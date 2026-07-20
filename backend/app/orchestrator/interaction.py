@@ -1,13 +1,14 @@
-"""Tier 1 действия на сайте (doc 25): автономный click по не-submit элементу.
+"""Tier 1/2/3 действия на сайте (doc 25): click/fill/handoff по element_index.
 
 Вынесено из loop.py ради ≤500 LOC (doc 18), как attended.py. Держит orchestrator
-тонким: одна развилка в ACT. **I-H10 (click-safety) проверяется enforcer'ом ДО
-вызова** — здесь только исполнение клика + re-observe той же страницы.
+тонким: одна развилка в ACT. **I-H10/I-H11/I-H12 проверяются enforcer'ом ДО
+вызова** — здесь исполнение (или handoff человеку) + re-observe той же страницы.
 """
 
 from __future__ import annotations
 
 from app.browser.base import BrowserSession
+from app.contracts.rules.navigation import label_is_destructive
 from app.orchestrator.attended import reobserve_in_place
 from app.schemas.run import RunRecord
 from app.schemas.snapshot import AgentAction, PageSnapshot
@@ -30,15 +31,30 @@ async def act_on_element(
     visited: set[str],
     rate_ms: int,
     gate=None,
+    destructive_signals: tuple[str, ...] = (),
 ) -> PageSnapshot | None:
-    """Tier 1/2 (doc 25): click/fill по element_index, затем re-observe без goto.
+    """Tier 1/2/3 (doc 25): click/fill по element_index, затем re-observe без goto.
 
-    Submit-элемент (Tier 2) требует attended-подтверждения человека: `None` →
-    не подтверждено (сигнал остановки). Enforcer уже проверил I-H10/I-H11 до вызова.
+    Tier 3 (destructive-элемент, I-H12): агент НЕ кликает — handoff-пауза, кнопку
+    жмёт человек сам в видимом браузере, после resume читаем исход. Tier 2
+    (submit): attended-подтверждение в чате → кликает агент. `None` → человек
+    не подтвердил/не завершил (сигнал остановки). Enforcer отработал до вызова.
     """
     idx = action.element_index
     els = current.interactive_elements
     el = els[idx] if idx is not None and 0 <= idx < len(els) else None
+    if (action.action == "click" and el is not None
+            and label_is_destructive(el.label, destructive_signals)):  # Tier 3 (I-H12)
+        desc = f"«{el.label}» на {current.url}"
+        if gate is None or not await gate.handoff_action(record, desc):
+            return None  # человек не завершил handoff → стоп
+        # человек нажал (или отказался) САМ — агент не кликает, только читает исход
+        await browser.wait(rate_ms)
+        return await reobserve_in_place(
+            browser, record, origin=origin, step_index=step_index,
+            snapshots=snapshots, visited=visited,
+            note=f"Tier 3 handoff: re-observe after human action #{idx}",
+        )
     if action.action == "click" and el is not None and _is_submit(el):
         desc = f"submit «{el.label or 'форма'}» на {current.url}"
         if gate is None or not await gate.confirm_action(record, desc):

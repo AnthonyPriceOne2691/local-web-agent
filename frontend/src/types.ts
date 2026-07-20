@@ -139,4 +139,5 @@ export interface ChallengeWait {
   start_url: string
   url: string
   kind: string
+  action?: string | null // confirm_submit / handoff (Tier 2/3): что подготовлено
 }

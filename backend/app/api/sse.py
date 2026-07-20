@@ -50,7 +50,8 @@ def _active_challenge(session_id: str, runs: RunStore) -> dict | None:
     challenge = record.metadata.get("challenge") or {}
     return {"run_id": record.id, "start_url": record.config.start_url,
             "url": challenge.get("url", record.current_url),
-            "kind": challenge.get("kind", "captcha")}
+            "kind": challenge.get("kind", "captcha"),
+            "action": challenge.get("action")}  # confirm_submit/handoff: что подготовлено
 
 
 async def session_event_stream(

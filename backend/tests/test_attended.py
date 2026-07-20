@@ -203,7 +203,8 @@ async def test_sse_emits_challenge_wait(api_client):  # noqa: F811
     sessions.save(SessionRecord(id="chsse", status="running_tools", created_at="t"))
     run = RunRecord(id="runwait", status="waiting_user", session_id="chsse", started_at="t",
                     config=RunConfig(start_url="http://site.test/x", task="t", attended=True),
-                    metadata={"challenge": {"url": "http://site.test/x", "kind": "captcha"}})
+                    metadata={"challenge": {"url": "http://site.test/x", "kind": "captcha",
+                                            "action": "оплата заказа"}})
     runs.save(run)
 
     async def _advance() -> None:
@@ -221,6 +222,7 @@ async def test_sse_emits_challenge_wait(api_client):  # noqa: F811
     assert challenge[0]["kind"] == "captcha"
     assert challenge[0]["url"] == "http://site.test/x"
     assert challenge[0]["run_id"] == "runwait"
+    assert challenge[0]["action"] == "оплата заказа"  # Tier 2/3: что подготовлено (doc 15 v0.8)
 
 
 async def test_resume_run_endpoint_guards(api_client):  # noqa: F811
