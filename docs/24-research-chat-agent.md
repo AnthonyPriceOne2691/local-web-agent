@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.9** · 2026-07-20
+> Local Web Agent · Design doc · **v0.10** · 2026-07-20
 
 ## Назначение
 
@@ -431,4 +431,5 @@ Separate from crawl ABC — enforced in `research/tool_executor.py`.
 | 2026-07-19 | **v0.7 (Phase 5 attended):** § Attended-режим — human-in-the-loop прохождение anti-bot challenge (не обход детекта). `orchestrator/attended.py` (AttendedGate + EventAttendedGate), статус `waiting_user`, видимый браузер (`headless=False`), resume-эндпоинты, SSE `challenge_wait`, карточка-пауза + тумблер в Chat UI, CLI `--attended`. D-12: `waiting_user` держит лок. Границы: fingerprint-спуфинг/автопрохождение — вне scope навсегда |
 | 2026-07-20 | **v0.8 (Phase 6 Tier 2 login + persist):** attended расширен на `login_wall` (человек логинится сам в видимом браузере, паролей не храним — doc 13 v0.8.1); **persist_session** — cookie сессии (cf_clearance + login) по хостам в профиль (`runs/profiles/`, gitignored), повторный заход без новой проверки/логина — закрывает backlog «cookie сессии по доменам». Детали Action Framework — doc 25 v0.4 |
 | 2026-07-20 | **v0.9 (Phase 6 Tier 2 submit):** attended-пауза переиспользована для подтверждения действия — `EventAttendedGate.confirm_action` (kind=`confirm_submit`), тот же `waiting_user`/resume/SSE `challenge_wait`/`ChallengeCard` (kind-aware), что и challenge/login. Агент паузит перед submit → человек подтверждает в чате. Submit-формы Tier 2 завершены (doc 25 v0.6) |
+| 2026-07-20 | **v0.10 (Tier 0 sink в планнере):** новый tool LLM-планнера `export_gdocs` (run_id из сессии, M-H3) → `runner._export_gdocs` экспортирует результат run'а в Google Doc (`sinks/gdocs`, doc 25 v0.8). Consent = явный запрос пользователя; облако помечается M-S1 tool-нотой. Пользователь: «скопируй статью в Google Docs» → агент экспортирует |
 | 2026-07-19 | **v0.6 (Phase 4 ✅ DONE):** § Planner — `planner: llm` реализован (`research/llm_planner.py` + `data/prompts/meta_planner_*`): rules fast-path при URL в сообщении, LLM для диалога без URL; пост-валидация M-H1..M-H3 (URL только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply); `get_run_result`/`list_session_runs` возвращены для LLM-пути, `compare_results` принимает run_ids прошлых runs (re-compare/re-crawl без потери сессии). Проверено на реальной модели из Chat UI: follow-up ответ из comparison-контекста; re-crawl упавшего сайта по фразе без URL + re-compare 4/4. Excluded-семантика уточнена: перекраленный успешно URL не остаётся в excluded[] |

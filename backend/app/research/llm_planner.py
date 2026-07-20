@@ -18,7 +18,8 @@ from app.research.meta_agent import RUBRIC_BY_INTENT, ToolCall, parse_urls
 from app.schemas.research import SessionRecord
 from app.storage.run_store import RunStore
 
-PLANNER_TOOLS = ("crawl_site", "get_run_result", "compare_results", "list_session_runs")
+PLANNER_TOOLS = ("crawl_site", "get_run_result", "compare_results", "list_session_runs",
+                 "export_gdocs")  # Tier 0 sink (doc 25) — только по явному запросу пользователя
 KNOWN_RUBRICS = tuple(RUBRIC_BY_INTENT.values())
 MAX_HISTORY_MESSAGES = 8
 FALLBACK_REPLY = ("Не понял задачу. Пришли URL сайтов и что по ним исследовать — "
@@ -97,6 +98,9 @@ class LlmPlanner:
                 call.args["max_pages"] = min(int(call.args.get("max_pages") or
                                                  self._s.max_pages), 12)
             elif call.name == "get_run_result":
+                if call.args.get("run_id") not in run_ids:  # M-H3
+                    continue
+            elif call.name == "export_gdocs":  # Tier 0 sink (doc 25 A-H4): run_id из сессии
                 if call.args.get("run_id") not in run_ids:  # M-H3
                     continue
             elif call.name == "compare_results":

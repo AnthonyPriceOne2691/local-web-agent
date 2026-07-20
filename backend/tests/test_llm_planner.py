@@ -82,6 +82,21 @@ async def test_planner_enforces_m_contracts(tmp_path):
     assert "http://a.example: 90" in prompt
 
 
+async def test_planner_enforces_export_gdocs_run_id(tmp_path):
+    """export_gdocs (Tier 0 sink): run_id только из сессии (M-H3), чужой — отброшен."""
+    settings = _settings(tmp_path)
+    run_store, session_store = _stores(settings)
+    session = _session_with_runs(run_store, session_store)
+    llm = FakeOllama([{"plan": [
+        {"name": "export_gdocs", "args": {"run_id": "fake-run"}},   # M-H3: чужой id
+        {"name": "export_gdocs", "args": {"run_id": "run-a"}},
+    ], "reply": ""}])
+    planner = LlmPlanner(llm, settings)  # type: ignore[arg-type]
+
+    decision = await planner.plan(session, "сохрани в гугл докс", run_store=run_store)
+    assert [(c.name, c.args.get("run_id")) for c in decision.plan] == [("export_gdocs", "run-a")]
+
+
 async def test_planner_invalid_json_falls_back(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
@@ -201,6 +216,31 @@ async def test_runner_llm_list_runs_block(tmp_path):
     assert reply.startswith("Вот что уже сделано:")
     assert "run-a: http://a.example — completed" in reply
     assert session.messages[-2].role == "tool"  # M-S1 note
+
+
+async def test_runner_llm_export_gdocs(tmp_path, monkeypatch):
+    """Tier 0 sink: export_gdocs → результат run'а в Google Doc (мок), URL в reply."""
+    settings = _settings(tmp_path)
+    run_store, session_store = _stores(settings)
+    session = _session_with_runs(run_store, session_store)
+    import app.sinks.gdocs as gd
+    captured: dict = {}
+
+    def fake_export(title, text, *, credentials_path, token_path):
+        captured["title"], captured["text"] = title, text
+        return "https://docs.google.com/document/d/ABC/edit"
+
+    monkeypatch.setattr(gd, "export_to_doc", fake_export)
+    llm = FakeOllama([{"plan": [{"name": "export_gdocs", "args": {"run_id": "run-a"}}],
+                       "reply": "Готово."}])
+    runner = _runner(settings, run_store, session_store, llm)
+
+    session = await runner.run_message(session, "скопируй результат run-a в Google Docs")
+    reply = session.messages[-1].content
+    assert "docs.google.com/document/d/ABC" in reply
+    assert "A is blue" in captured["text"]  # контент из результата run'а
+    # M-S1 + прозрачность consent: облачное действие помечено tool-нотой
+    assert any(m.role == "tool" and "Google Docs (облако)" in m.content for m in session.messages)
 
 
 async def test_runner_rules_fast_path_skips_llm(tmp_path):

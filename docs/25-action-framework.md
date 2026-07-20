@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.7** · 2026-07-20
+> Local Web Agent · Design doc · **v0.8** · 2026-07-20
 
 ## Назначение
 
@@ -143,7 +143,7 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | Item | Phase |
 |------|-------|
 | Action registry + Protocol (рефактор `KNOWN_TOOLS`) | 6 |
-| Tier 0 sink — Google Docs export ✅ (`sinks/gdocs.py`, переиспользует референс-решение); файл + registry-обёртка — след. | 6 🛠 |
+| Tier 0 sink — Google Docs export ✅ (`sinks/gdocs.py`) + `export_gdocs` action в LLM-планнере (consent = явный запрос); файл — опц. | 6 ✅ |
 | Tier 1 — safe interaction (click/expand/paginate), автономно | **6 ✅** (I-H10) |
 | Browser interaction-примитивы + ACT-типы | 6 |
 | Tier 2 login — attended-пауза (человек логинится сам, паролей не храним) | **6 ✅** |
@@ -199,3 +199,4 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | 2026-07-20 | **v0.5 (Tier 2 fill):** `fill`-действие — агент вписывает текст в поля (`AgentAction.fill`+value, `Browser.fill_element`, `interaction.act_on_element` для click+fill). **I-H11** fill-safety (только текстовые поля, никогда password — doc 13 v0.8.2). Навигатор учит fill. Живой смоук: text/textarea заполнены на реальном DOM, password не тронут. **Next: submit** — click submit под attended-подтверждением (reuse `waiting_user`/resume; A-2 = вся форма + один confirm) |
 | 2026-07-20 | **v0.6 (Tier 2 submit — submit-формы завершены):** submit под attended-подтверждением. `EventAttendedGate.confirm_action` (пауза `waiting_user`, kind=`confirm_submit`, reuse resume + SSE `challenge_wait` + `ChallengeCard`); `ctx.attended` + `click_target_safe` пропускает submit при attended (иначе reject); `act_on_element` паузит на submit → confirmed=execute / declined(timeout)=None→stop. `build_action_context` вынесен из loop.py (headroom). doc 13 v0.8.3 (I-H10), doc 24 v0.9. Живой смоук: fill+submit onsubmit на реальной форме |
 | 2026-07-20 | **v0.7 (Tier 0 sink — Google Docs):** `app/sinks/gdocs.py` — экспорт в Google Doc (create + insertText), переиспользует логику и OAuth Node-решения `run.js` из референс-папки `Gdocs-tabs editor` (gitignored) через `refresh_token`, без повторного логина. Optional extra `gdocs` (ленивый импорт). `Settings.gdocs_dir`/`gdocs_credentials`/`gdocs_token`. Старые пресеты не используются. Проверено вживую (doc создан + read-back). Осталось: registry-обёртка Tier 0 + consent-гейт + вызов из research-флоу |
+| 2026-07-20 | **v0.8 (Tier 0 registry-обёртка):** `export_gdocs` — action LLM-планнера (`PLANNER_TOOLS` + meta-промпт + M-H3: run_id только из сессии); `runner._export_gdocs` собирает контент из результата run'а (article/facts) и зовёт `sinks/gdocs`. **Consent (A-H4) = явный запрос пользователя** («скопируй в Google Docs»); облачное действие помечается tool-нотой (M-S1). `GdocsUnavailable`/сеть → сообщение в чат, сессия не падает. Проверено вживую E2E: runner→sink→реальный Google Doc. Замыкает исходный сценарий «найди статью и скопируй в Google Docs» |

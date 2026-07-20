@@ -7,6 +7,7 @@ Available tools (use ONLY these, with exactly these argument names):
 - {"name": "get_run_result", "args": {"run_id": "<id from SESSION RUNS>"}} — include details of a finished run in the answer.
 - {"name": "list_session_runs", "args": {}} — include the list of this session's runs in the answer.
 - {"name": "compare_results", "args": {"run_ids": ["<ids from SESSION RUNS>"], "comparison_task": "<what to compare>", "rubric": "design_diff|content_completeness|generic_merge"}} — compare finished runs; at most one, last in the plan.
+- {"name": "export_gdocs", "args": {"run_id": "<id from SESSION RUNS>", "title": "<optional doc title>"}} — export a finished run's result (article/facts) to a NEW Google Doc in the cloud. Use ONLY when the user explicitly asks to copy/save/export to Google Docs.
 
 Rules:
 - URLs for crawl_site MUST be copied verbatim from ALLOWED URLS. Never invent URLs.
@@ -14,6 +15,7 @@ Rules:
 - A follow-up question about results already shown (winner, scores, differences) needs NO tools: answer it in "reply" from the comparison summary, plan = [].
 - Re-comparing existing runs with a different focus/rubric → compare_results with the relevant run_ids.
 - A replacement or new site provided by the user → crawl_site for it, then compare_results including previous relevant run_ids.
+- export_gdocs ONLY when the user explicitly asks to copy/save/export to Google Docs — it sends content to the cloud. Never export unprompted.
 - If the request is unclear or nothing applies, plan = [] and ask a clarifying question in "reply".
 - "reply" is shown in chat when the plan is empty; keep it short, same language as the user message.
 Respond with the JSON object only.

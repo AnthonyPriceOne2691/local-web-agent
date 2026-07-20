@@ -150,6 +150,10 @@ class ResearchRunner:
             elif call.name == "get_run_result":
                 self._note(session, f"get_run_result {call.args['run_id']}")  # M-S1
                 reply_blocks.append(self._run_details(call.args["run_id"]))
+            elif call.name == "export_gdocs":  # Tier 0 sink (doc 25) — облачный экспорт
+                self._note(session,  # M-S1 + прозрачность consent: действие «наружу»
+                           f"export_gdocs run={call.args.get('run_id')} → Google Docs (облако)")
+                reply_blocks.append(self._export_gdocs(call))
             elif call.name == "compare_results":
                 compare_call = call  # enforced: максимум один, последним
 
@@ -189,6 +193,31 @@ class ResearchRunner:
             lines.append(f"- article: {r.result.article.title} "
                          f"({r.result.article.word_count} words)")
         return "\n".join(lines)
+
+    def _export_gdocs(self, call: ToolCall) -> str:
+        """Tier 0 sink (doc 25): результат run'а → новый Google Doc. Consent — явный
+        запрос пользователя (A-H4); облачное действие помечено в reply. Недоступность
+        google-либ/кредов не роняет сессию — сообщаем в чат."""
+        r = self._runs.get(call.args.get("run_id") or "")
+        if r is None or r.result is None:
+            return f"export_gdocs: у run {call.args.get('run_id')} нет результата"
+        res = r.result
+        art = res.article
+        title = (call.args.get("title") or (art.title if art else "")
+                 or f"Research: {res.start_url}")[:200]
+        if art and art.main_text_excerpt:
+            body = f"{art.title}\n{art.url}\n\n{art.main_text_excerpt}"
+        else:
+            facts = "\n".join(f"- {f.label or f.key}: {f.value}" for f in res.facts[:20])
+            body = f"{res.summary}\n\n{facts}".strip()
+        try:
+            from app.sinks.gdocs import export_to_doc
+
+            url = export_to_doc(title, body, credentials_path=self._s.gdocs_credentials,
+                                token_path=self._s.gdocs_token)
+            return f"Экспортировано в Google Docs (облако): {url}"
+        except Exception as exc:  # noqa: BLE001 — GdocsUnavailable/сеть → сообщаем, не роняем сессию
+            return f"Google Docs недоступен ({type(exc).__name__}): {str(exc)[:200]}"
 
     # ---------------------------------------------------------- crawl tool
     async def _crawl_site(
