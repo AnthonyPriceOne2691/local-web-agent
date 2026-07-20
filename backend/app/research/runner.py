@@ -1,7 +1,8 @@
 """ResearchRunner — исполнение одного user message (doc 24).
 
 Sequential crawl queue (D-7) → partial failure → compare (M-H4) → chat reply +
-comparison_report.md. Контракты M-H1..M-H4 enforced здесь (`Layer 2 ≠ ABC crawl`).
+comparison_report.md. Контракты M-H1..M-H4 enforced здесь (`Layer 2 ≠ ABC crawl`);
+membership и исполнение действий — через Action registry (doc 25, A-H1/A-H2).
 Session-level cancel_event пробрасывается в текущий crawl (FR-3.8 семантика).
 Phase 4: URLs в сообщении → rules fast-path (без LLM); иначе LLM-планнер
 (follow-up диалог, re-compare, доступ к прошлым runs — doc 24 § Planner).
@@ -15,6 +16,7 @@ import uuid
 from datetime import UTC, datetime
 
 from app.config import Settings
+from app.research import actions
 from app.research.compare_synthesizer import CompareSynthesizer
 from app.research.llm_planner import LlmPlanner
 from app.research.meta_agent import (
@@ -35,7 +37,6 @@ from app.schemas.run import RunConfig, RunRecord
 from app.storage.run_store import RunStore
 from app.storage.session_store import SessionStore
 
-KNOWN_TOOLS = ("crawl_site", "get_run_result", "compare_results", "list_session_runs")  # M-H1
 COMPARABLE_STATUSES = ("completed", "partial", "not_found")  # есть result → участвует
 HOT_QUEUE_SITES = 4  # N ≥ 4 → длинный cooldown (thermal, doc 24)
 
@@ -96,7 +97,7 @@ class ResearchRunner:
 
         crawled: list[RunRecord] = []
         for i, call in enumerate(plan):
-            if call.name not in KNOWN_TOOLS:  # M-H1
+            if actions.get(call.name) is None:  # M-H1/A-H1
                 return self._finish(session, "failed", f"unknown tool '{call.name}'")
             if call.name == "crawl_site":
                 if self._session_expired(started):
@@ -133,6 +134,9 @@ class ResearchRunner:
         for call in decision.plan:
             if cancel_event is not None and cancel_event.is_set():
                 return self._finish(session, "failed", "canceled by user")
+            spec = actions.get(call.name)
+            if spec is None:  # A-H1: планнер такое уже отбросил — двойная защита
+                continue
             if call.name == "crawl_site":
                 if self._session_expired(started):
                     self._note(session, "session time budget exhausted")
@@ -144,18 +148,14 @@ class ResearchRunner:
                 self._sessions.save(session)
                 if len(crawled) < n_crawls:
                     await asyncio.sleep(self._cooldown_s(n_crawls))
-            elif call.name == "list_session_runs":
-                self._note(session, "list_session_runs")  # M-S1
-                reply_blocks.append(self._runs_listing(session))
-            elif call.name == "get_run_result":
-                self._note(session, f"get_run_result {call.args['run_id']}")  # M-S1
-                reply_blocks.append(self._run_details(call.args["run_id"]))
-            elif call.name == "export_gdocs":  # Tier 0 sink (doc 25) — облачный экспорт
-                self._note(session,  # M-S1 + прозрачность consent: действие «наружу»
-                           f"export_gdocs run={call.args.get('run_id')} → Google Docs (облако)")
-                reply_blocks.append(self._export_gdocs(call))
             elif call.name == "compare_results":
                 compare_call = call  # enforced: максимум один, последним
+            elif spec.tier >= 2:  # A-H2/A-H3: без подтверждения не исполняем
+                self._note(session, f"{call.name}: Tier {spec.tier} требует "
+                                    f"подтверждения — пропущено")
+            elif spec.execute is not None:  # reply-block действия — через реестр
+                self._note(session, spec.note(call) if spec.note else call.name)  # M-S1
+                reply_blocks.append(spec.execute(call, self._action_ctx(session)))
 
         if compare_call is not None:
             records = self._records_for_compare(session, compare_call, crawled)
@@ -174,50 +174,10 @@ class ResearchRunner:
         stored = [self._runs.get(i) for i in ids if i not in fresh]
         return crawled + [r for r in stored if r is not None]
 
-    def _runs_listing(self, session: SessionRecord) -> str:
-        lines = []
-        for run_id in session.run_ids:
-            r = self._runs.get(run_id)
-            if r is not None:
-                lines.append(f"- {r.id}: {r.config.start_url} — {r.status} "
-                             f"({r.pages_visited} pages, {r.intent})")
-        return "Runs:\n" + "\n".join(lines) if lines else "No runs in this session yet."
-
-    def _run_details(self, run_id: str) -> str:
-        r = self._runs.get(run_id)
-        if r is None or r.result is None:
-            return f"{run_id}: no result available"
-        lines = [f"{r.config.start_url} ({r.status}): {r.result.summary}"]
-        lines += [f"- {f.label or f.key}: {f.value}" for f in r.result.facts[:5]]
-        if r.result.article:
-            lines.append(f"- article: {r.result.article.title} "
-                         f"({r.result.article.word_count} words)")
-        return "\n".join(lines)
-
-    def _export_gdocs(self, call: ToolCall) -> str:
-        """Tier 0 sink (doc 25): результат run'а → новый Google Doc. Consent — явный
-        запрос пользователя (A-H4); облачное действие помечено в reply. Недоступность
-        google-либ/кредов не роняет сессию — сообщаем в чат."""
-        r = self._runs.get(call.args.get("run_id") or "")
-        if r is None or r.result is None:
-            return f"export_gdocs: у run {call.args.get('run_id')} нет результата"
-        res = r.result
-        art = res.article
-        title = (call.args.get("title") or (art.title if art else "")
-                 or f"Research: {res.start_url}")[:200]
-        if art and art.main_text_excerpt:
-            body = f"{art.title}\n{art.url}\n\n{art.main_text_excerpt}"
-        else:
-            facts = "\n".join(f"- {f.label or f.key}: {f.value}" for f in res.facts[:20])
-            body = f"{res.summary}\n\n{facts}".strip()
-        try:
-            from app.sinks.gdocs import export_to_doc
-
-            url = export_to_doc(title, body, credentials_path=self._s.gdocs_credentials,
-                                token_path=self._s.gdocs_token)
-            return f"Экспортировано в Google Docs (облако): {url}"
-        except Exception as exc:  # noqa: BLE001 — GdocsUnavailable/сеть → сообщаем, не роняем сессию
-            return f"Google Docs недоступен ({type(exc).__name__}): {str(exc)[:200]}"
+    def _action_ctx(self, session: SessionRecord) -> actions.ActionContext:
+        """Контекст исполнения reply-block действий (registry, doc 25)."""
+        return actions.ActionContext(session=session, run_store=self._runs,
+                                     settings=self._s, session_store=self._sessions)
 
     # ---------------------------------------------------------- crawl tool
     async def _crawl_site(

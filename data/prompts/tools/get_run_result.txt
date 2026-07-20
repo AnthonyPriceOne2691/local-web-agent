@@ -1,0 +1,1 @@
+- {"name": "get_run_result", "args": {"run_id": "<id from SESSION RUNS>"}} — include details of a finished run in the answer.

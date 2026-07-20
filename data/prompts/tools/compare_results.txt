@@ -1,0 +1,1 @@
+- {"name": "compare_results", "args": {"run_ids": ["<ids from SESSION RUNS>"], "comparison_task": "<what to compare>", "rubric": "design_diff|content_completeness|generic_merge"}} — compare finished runs; at most one, last in the plan.

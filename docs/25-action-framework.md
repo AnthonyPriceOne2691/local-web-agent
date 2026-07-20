@@ -1,6 +1,6 @@
 # 25 — Action Framework (агент действует на сайте)
 
-> Local Web Agent · Design doc · **v0.8** · 2026-07-20
+> Local Web Agent · Design doc · **v0.9** · 2026-07-20
 
 ## Назначение
 
@@ -48,28 +48,42 @@ Tier 1/Tier 2** (submit/login по-прежнему hard, но теперь ка
 
 ---
 
-## Action Protocol + Registry
+## Action Protocol + Registry ✅ (реализовано 2026-07-20)
 
-Сейчас инструменты Layer 2 — захардкоженный кортеж `KNOWN_TOOLS`
-([research/runner.py](../backend/app/research/runner.py)). Заменяем на **реестр**:
+Захардкоженные кортежи Layer 2 (`KNOWN_TOOLS` в runner + `PLANNER_TOOLS` в
+llm_planner — успели разойтись) заменены **реестром** — пакет
+[research/actions/](../backend/app/research/actions/):
 
 ```python
-class Action(Protocol):
+@dataclass(frozen=True)
+class ActionSpec:
     name: str
-    tier: int                       # 0..3 → политика подтверждения
+    tier: int              # 0..3 → политика подтверждения (A-H2/A-H3)
     reversible: bool
-    args_schema: type[BaseModel]    # типизация + валидация
-    contract: ActionContract        # per-action проверка (расширяет doc 13)
-    async def execute(self, ctx: ActionContext) -> ActionResult: ...
+    cloud: bool            # A-H4: результат покидает машину → явный запрос
+    structural: bool       # поток (очередь/cooldown/финал) ведёт runner
+    enforce: EnforceHook   # пер-action контракт плана (M-H3 и родня)
+    execute: ExecuteHook   # reply-block действия; None у structural
+    note: NoteHook         # M-S1 tool-нота
 ```
 
-- **M-H1** («только зарегистрированные tools») из ограничения превращается в **точку
-  расширения**: новое действие = новый плагин в `research/actions/`, раннер не трогаем.
-- LLM-планнер ([llm_planner.py](../backend/app/research/llm_planner.py)) видит реестр;
-  пост-валидация M-H1..M-H3 распространяется на новые действия.
-
-**Пакет:** `app/research/actions/{base,registry}.py` + по модулю на действие
-(`export_gdocs.py`, `click.py`, `fill.py`, …).
+- **M-H1/A-H1** («только зарегистрированные tools») — **точка расширения**: новое
+  действие = модуль в `research/actions/` (`register(ActionSpec(...))`) + описание
+  для meta-промпта в `data/prompts/tools/<name>.txt` (промпты в data/, doc 18);
+  runner и llm_planner не трогаем.
+- Пост-валидация плана: membership + пер-action `enforce` — через реестр; в
+  планнере остаются только кросс-плановые правила (M-H2 счётчик crawl'ов,
+  «compare один и последним»). Блок «Available tools» meta-промпта собирается
+  из реестра (`prompt_block` → `{TOOLS_BLOCK}` в meta_planner_system.txt).
+- Runner: `structural` действия (crawl_site, compare_results) ведёт сам (очередь,
+  cooldown, терминальная compare-стадия); reply-block действия исполняет через
+  `spec.execute`; **tier ≥ 2 без подтверждения не исполняется** (A-H2/A-H3 гейт).
+- Зарегистрировано: `crawl_site` (tier 1, structural) · `get_run_result` ·
+  `list_session_runs` · `compare_results` (structural) · `export_gdocs`
+  (tier 0, cloud) · `export_file` (tier 0, локальный sink — первый плагин).
+- Отличие от эскиза v0.1: вместо class-Protocol с `args_schema`/`ActionContract` —
+  frozen dataclass с enforce-хуком (контекстные проверки вида «run_id из сессии»
+  дают больше, чем схема аргументов; отдельный ActionContract не понадобился).
 
 ---
 
@@ -142,10 +156,11 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 
 | Item | Phase |
 |------|-------|
-| Action registry + Protocol (рефактор `KNOWN_TOOLS`) | 6 |
-| Tier 0 sink — Google Docs export ✅ (`sinks/gdocs.py`) + `export_gdocs` action в LLM-планнере (consent = явный запрос); файл — опц. | 6 ✅ |
+| Action registry + Protocol (рефактор `KNOWN_TOOLS`/`PLANNER_TOOLS`) | **6 ✅** (A-H1/A-H2 enforced) |
+| Tier 0 sink — Google Docs export ✅ (`sinks/gdocs.py`) + `export_gdocs` action в LLM-планнере (consent = явный запрос) | 6 ✅ |
+| Tier 0 sink — файл (`sinks/file.py` + `export_file`, локальный, без consent; первый плагин реестра) | **6 ✅** |
 | Tier 1 — safe interaction (click/expand/paginate), автономно | **6 ✅** (I-H10) |
-| Browser interaction-примитивы + ACT-типы | 6 |
+| Browser interaction-примитивы + ACT-типы | **6 ✅** (click/fill + ACT-типы в Tier 1/2) |
 | Tier 2 login — attended-пауза (человек логинится сам, паролей не храним) | **6 ✅** |
 | Tier 2 fill — заполнение текстовых полей (I-H11, не password) | **6 ✅** |
 | Tier 2 submit — click submit под attended-подтверждением (confirm_action) | **6 ✅** |
@@ -183,7 +198,7 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | ID | Вопрос | Статус |
 |----|--------|--------|
 | A-1 | Селекторы для click/fill: CSS/текст vs нумерация элементов | ✅ **нумерация** (element referencing, спайк A-1 2026-07-20): агент ссылается по `index` ∈ `interactive_elements`; click-time — тот же селектор + visibility + document order |
-| A-2 | Форма: агент заполняет по одному полю с подтверждением, или всю целиком → один submit-confirm? | 🔲 TBD |
+| A-2 | Форма: агент заполняет по одному полю с подтверждением, или всю целиком → один submit-confirm? | ✅ **вся форма + один confirm** (Tier 2 submit, v0.6): fill автономен (I-H11), пауза-подтверждение — одна, перед submit |
 | A-3 | Credentials storage | ✅ **не нужно**: attended-логин — человек вводит пароль в видимом браузере, агент не хранит/не видит; unattended-логин вне scope |
 
 ---
@@ -200,3 +215,4 @@ login) сохраняется в профиль по хосту (`runs/profiles/
 | 2026-07-20 | **v0.6 (Tier 2 submit — submit-формы завершены):** submit под attended-подтверждением. `EventAttendedGate.confirm_action` (пауза `waiting_user`, kind=`confirm_submit`, reuse resume + SSE `challenge_wait` + `ChallengeCard`); `ctx.attended` + `click_target_safe` пропускает submit при attended (иначе reject); `act_on_element` паузит на submit → confirmed=execute / declined(timeout)=None→stop. `build_action_context` вынесен из loop.py (headroom). doc 13 v0.8.3 (I-H10), doc 24 v0.9. Живой смоук: fill+submit onsubmit на реальной форме |
 | 2026-07-20 | **v0.7 (Tier 0 sink — Google Docs):** `app/sinks/gdocs.py` — экспорт в Google Doc (create + insertText), переиспользует логику и OAuth Node-решения `run.js` из референс-папки `Gdocs-tabs editor` (gitignored) через `refresh_token`, без повторного логина. Optional extra `gdocs` (ленивый импорт). `Settings.gdocs_dir`/`gdocs_credentials`/`gdocs_token`. Старые пресеты не используются. Проверено вживую (doc создан + read-back). Осталось: registry-обёртка Tier 0 + consent-гейт + вызов из research-флоу |
 | 2026-07-20 | **v0.8 (Tier 0 registry-обёртка):** `export_gdocs` — action LLM-планнера (`PLANNER_TOOLS` + meta-промпт + M-H3: run_id только из сессии); `runner._export_gdocs` собирает контент из результата run'а (article/facts) и зовёт `sinks/gdocs`. **Consent (A-H4) = явный запрос пользователя** («скопируй в Google Docs»); облачное действие помечается tool-нотой (M-S1). `GdocsUnavailable`/сеть → сообщение в чат, сессия не падает. Проверено вживую E2E: runner→sink→реальный Google Doc. Замыкает исходный сценарий «найди статью и скопируй в Google Docs» |
+| 2026-07-20 | **v0.9 (Action registry + file-sink — Phase 6 закрыта):** § Registry реализован — пакет `research/actions/` (`ActionSpec` frozen dataclass + `registry`), `KNOWN_TOOLS`/`PLANNER_TOOLS` удалены; membership (M-H1/**A-H1**) и пер-action enforce (M-H3) — через реестр в обоих путях (runner + llm_planner); **A-H2/A-H3 гейт в runner** (tier ≥ 2 без подтверждения не исполняется); блок tools meta-промпта собирается из `data/prompts/tools/<name>.txt` (`{TOOLS_BLOCK}`). **File-sink** — `sinks/file.py` + действие `export_file` (Tier 0 локальный, без consent; basename-санитайз, файл в artifacts сессии) — первый плагин реестра: runner/planner не менялись. Общая сборка контента экспорта → `sinks/content.py` (DRY gdocs/file). Phase mapping: registry ✅, file-sink ✅, browser-примитивы ✅; A-2 закрыт (вся форма + один confirm, v0.6). 180 тестов |

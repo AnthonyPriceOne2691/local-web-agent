@@ -1,0 +1,1 @@
+- {"name": "export_file", "args": {"run_id": "<id from SESSION RUNS>", "filename": "<optional file name>"}} — save a finished run's result (article/facts) as a local markdown file in the session artifacts folder (stays on this machine). Use when the user asks to save/export the result to a file.

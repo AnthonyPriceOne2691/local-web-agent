@@ -2,9 +2,9 @@
 
 Rules-планнер остаётся fast-path (URLs в сообщении → детерминированный план);
 LLM подключается для свободного диалога: follow-up вопросы, re-compare,
-замена сайта. Пост-валидация — контракты M-H1..M-H3: только известные tools,
-crawl_site ≤ max_sites и только по ALLOWED URLS (сообщение + прошлые start_url
-сессии), run_id только из runs сессии — выдуманное отбрасывается.
+замена сайта. Пост-валидация — контракты M-H1..M-H3 через Action registry
+(doc 25, A-H1): только зарегистрированные действия, пер-action enforce
+(URL из ALLOWED URLS, run_id из runs сессии), crawl_site ≤ max_sites.
 """
 
 from __future__ import annotations
@@ -14,13 +14,11 @@ from pydantic import BaseModel, Field, ValidationError
 from app.config import Settings
 from app.llm.ollama_client import OllamaClient, supports_think
 from app.llm.parsing import extract_json
-from app.research.meta_agent import RUBRIC_BY_INTENT, ToolCall, parse_urls
+from app.research import actions
+from app.research.meta_agent import ToolCall, parse_urls
 from app.schemas.research import SessionRecord
 from app.storage.run_store import RunStore
 
-PLANNER_TOOLS = ("crawl_site", "get_run_result", "compare_results", "list_session_runs",
-                 "export_gdocs")  # Tier 0 sink (doc 25) — только по явному запросу пользователя
-KNOWN_RUBRICS = tuple(RUBRIC_BY_INTENT.values())
 MAX_HISTORY_MESSAGES = 8
 FALLBACK_REPLY = ("Не понял задачу. Пришли URL сайтов и что по ним исследовать — "
                   "или задай вопрос по уже готовым результатам этой сессии.")
@@ -36,7 +34,9 @@ class LlmPlanner:
         self._client = client
         self._s = settings
         prompts = settings.prompts_dir
-        self._system = (prompts / "meta_planner_system.txt").read_text(encoding="utf-8")
+        self._system = ((prompts / "meta_planner_system.txt")
+                        .read_text(encoding="utf-8")
+                        .replace("{TOOLS_BLOCK}", actions.prompt_block(prompts)))
         from jinja2 import Template
 
         self._user_tpl = Template(
@@ -73,42 +73,34 @@ class LlmPlanner:
             decision = PlannerDecision.model_validate(raw)
         except ValidationError:
             return PlannerDecision(reply=FALLBACK_REPLY)
-        decision.plan = self._enforce(decision.plan, session, set(allowed_urls))
+        decision.plan = self._enforce(decision.plan, session, allowed_urls, run_store)
         if not decision.plan and not decision.reply.strip():
             decision.reply = FALLBACK_REPLY
         return decision
 
-    # ------------------------------------------------- контракты M-H1..M-H3
+    # ------------------------------------------- контракты M-H1..M-H3 / A-H1
     def _enforce(
-        self, plan: list[ToolCall], session: SessionRecord, allowed_urls: set[str],
+        self, plan: list[ToolCall], session: SessionRecord,
+        allowed_urls: list[str], run_store: RunStore,
     ) -> list[ToolCall]:
-        run_ids = set(session.run_ids)
+        """Membership + пер-action enforce — реестр (doc 25); здесь остаются
+        только кросс-плановые правила: M-H2 и «compare один, последним»."""
+        ctx = actions.ActionContext(session=session, run_store=run_store,
+                                    settings=self._s, allowed_urls=frozenset(allowed_urls))
         kept: list[ToolCall] = []
         crawls = 0
         for call in plan:
-            if call.name not in PLANNER_TOOLS:  # M-H1
+            spec = actions.get(call.name)
+            if spec is None:  # M-H1/A-H1: не зарегистрировано → отброшено
                 continue
-            if call.name == "crawl_site":
-                url = call.args.get("url")
-                if url not in allowed_urls:  # M-H3: только пользовательские URL
-                    continue
+            checked = spec.enforce(call, ctx) if spec.enforce else call
+            if checked is None:
+                continue
+            if checked.name == "crawl_site":
                 crawls += 1
                 if crawls > session.config.max_sites:  # M-H2
                     continue
-                call.args["max_pages"] = min(int(call.args.get("max_pages") or
-                                                 self._s.max_pages), 12)
-            elif call.name == "get_run_result":
-                if call.args.get("run_id") not in run_ids:  # M-H3
-                    continue
-            elif call.name == "export_gdocs":  # Tier 0 sink (doc 25 A-H4): run_id из сессии
-                if call.args.get("run_id") not in run_ids:  # M-H3
-                    continue
-            elif call.name == "compare_results":
-                ids = [r for r in call.args.get("run_ids") or [] if r in run_ids]
-                call.args["run_ids"] = ids
-                if call.args.get("rubric") not in KNOWN_RUBRICS:
-                    call.args["rubric"] = "generic_merge"
-            kept.append(call)
+            kept.append(checked)
         # compare — максимум один и последним (после его crawl-зависимостей)
         compares = [c for c in kept if c.name == "compare_results"]
         if compares:

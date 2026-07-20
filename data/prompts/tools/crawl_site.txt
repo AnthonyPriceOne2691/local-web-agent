@@ -1,0 +1,1 @@
+- {"name": "crawl_site", "args": {"url": "<http(s) URL from ALLOWED URLS>", "task": "<sub-task>", "intent": "design_audit|content_search", "max_pages": <int 1-12>}} — crawl one site. Sites are crawled sequentially.

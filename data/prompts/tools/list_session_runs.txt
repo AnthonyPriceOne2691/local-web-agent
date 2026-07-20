@@ -1,0 +1,1 @@
+- {"name": "list_session_runs", "args": {}} — include the list of this session's runs in the answer.

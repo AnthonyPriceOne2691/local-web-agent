@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.10** · 2026-07-20
+> Local Web Agent · Design doc · **v0.11** · 2026-07-20
 
 ## Назначение
 
@@ -106,7 +106,7 @@
 | rules fast-path (**всегда**, если в сообщении есть URL) | intent распознан по keywords + URLs распарсены regex'ом | План строится кодом по таблице research intents; LLM не вызывается до compare |
 | `planner: llm` (**default**, Phase 4; `LWA_PLANNER=rules` отключает) | сообщение **без URL**: follow-up вопросы, re-compare по другой рубрике, «что уже сделано», замена/повтор сайта | `research/llm_planner.py`: meta-промпт (`data/prompts/meta_planner_*`) поверх nav-модели (qwen3 `think:false`, structured output) → `{"plan": [...], "reply": "..."}`; пустой план → reply прямо в чат |
 
-**Пост-валидация LLM-плана (M-H1..M-H3, в `llm_planner._enforce`):** только известные tools; `crawl_site.url` — строго из ALLOWED URLS (текущее сообщение + прошлые user-сообщения сессии), выдуманный URL отбрасывается; `run_id` — только из runs сессии; рубрика вне списка → `generic_merge`; crawl'ов ≤ `max_sites` (M-H2), `max_pages` clamp ≤ 12; `compare_results` — максимум один и последним. Невалидный JSON от LLM → фоллбек-reply с просьбой уточнить (сессия не падает). В llm-пути runner'а действуют те же session-контракты, что и в rules: cooldown между crawl'ами, session time budget, M-S1 tool-notes, M-H4 в compare.
+**Пост-валидация LLM-плана (M-H1..M-H3 через Action registry — doc 25, A-H1):** membership и пер-action enforce — реестр `research/actions/`: `crawl_site.url` — строго из ALLOWED URLS (текущее сообщение + прошлые user-сообщения сессии), выдуманный URL отбрасывается; `run_id` — только из runs сессии; рубрика вне списка → `generic_merge`; `max_pages` clamp ≤ 12. В `llm_planner._enforce` остаются кросс-плановые правила: crawl'ов ≤ `max_sites` (M-H2), `compare_results` — максимум один и последним. Блок «Available tools» meta-промпта собирается из реестра (`data/prompts/tools/<name>.txt` → `{TOOLS_BLOCK}`). Невалидный JSON от LLM → фоллбек-reply с просьбой уточнить (сессия не падает). В llm-пути runner'а действуют те же session-контракты, что и в rules: cooldown между crawl'ами, session time budget, M-S1 tool-notes, M-H4 в compare.
 
 `agent research` CLI работает **целиком на rules** (URL передаются флагом — fast-path); LLM-планнер включается только в свободном диалоге Chat UI.
 
@@ -134,7 +134,7 @@ If one URL only → **skip meta compare**; answer from single `ExtractionResult`
 
 ## Tool registry
 
-Meta-agent вызывает **только** эти tools (typed, validated):
+**Реализация — Action registry (doc 25 § Action Protocol + Registry):** пакет `research/actions/`, по модулю на действие; новое действие = модуль + `data/prompts/tools/<name>.txt`, runner/планнер не меняются. Помимо перечисленных ниже, зарегистрированы sink-действия `export_gdocs` (Tier 0, облако — consent A-H4) и `export_file` (Tier 0, локальный markdown в artifacts сессии). Meta-agent вызывает **только** зарегистрированные tools (A-H1):
 
 ### `crawl_site`
 
@@ -181,7 +181,7 @@ Implementation: enqueue existing `POST /runs` pipeline; block until done (sequen
 
 Returns run_ids + status for current session (recovery / user ask «что уже сделано»).
 
-> Phase 4: `get_run_result` / `list_session_runs` доступны **LLM-планнеру** (ответ собирается кодом из store — `runner._run_details` / `_runs_listing`); rules-путь их по-прежнему не использует. `compare_results` в LLM-плане принимает `run_ids` прошлых runs сессии (re-compare без нового crawl).
+> Phase 4: `get_run_result` / `list_session_runs` доступны **LLM-планнеру** (ответ собирается кодом из store — execute-хуки `actions/run_details.py` / `actions/list_runs.py`); rules-путь их по-прежнему не использует. `compare_results` в LLM-плане принимает `run_ids` прошлых runs сессии (re-compare без нового crawl).
 
 **Hard rule:** meta-agent **cannot** call Playwright or load arbitrary paths — only tools.
 
@@ -381,13 +381,13 @@ Tech: React + Vite; SSE from `/sessions/{id}/events`; pattern ref Voice Intervie
 
 | ID | Rule |
 |----|------|
-| M-H1 | Meta-agent only calls registered tools |
+| M-H1 | Meta-agent only calls registered tools (= A-H1, Action registry doc 25) |
 | M-H2 | `crawl_site` count ≤ `max_sites_per_session` |
 | M-H3 | No tool args with filesystem paths / shell |
 | M-H4 | Compare requires ≥2 completed runs OR explicit single-site answer |
 | M-S1 | Progress events sent before each tool (transparency) |
 
-Separate from crawl ABC — enforced in `research/tool_executor.py`.
+Separate from crawl ABC — membership + пер-action enforce в Action registry (`research/actions/`, doc 25); кросс-плановые правила и исполнение — в `llm_planner._enforce` / `ResearchRunner`.
 
 ---
 
@@ -432,4 +432,5 @@ Separate from crawl ABC — enforced in `research/tool_executor.py`.
 | 2026-07-20 | **v0.8 (Phase 6 Tier 2 login + persist):** attended расширен на `login_wall` (человек логинится сам в видимом браузере, паролей не храним — doc 13 v0.8.1); **persist_session** — cookie сессии (cf_clearance + login) по хостам в профиль (`runs/profiles/`, gitignored), повторный заход без новой проверки/логина — закрывает backlog «cookie сессии по доменам». Детали Action Framework — doc 25 v0.4 |
 | 2026-07-20 | **v0.9 (Phase 6 Tier 2 submit):** attended-пауза переиспользована для подтверждения действия — `EventAttendedGate.confirm_action` (kind=`confirm_submit`), тот же `waiting_user`/resume/SSE `challenge_wait`/`ChallengeCard` (kind-aware), что и challenge/login. Агент паузит перед submit → человек подтверждает в чате. Submit-формы Tier 2 завершены (doc 25 v0.6) |
 | 2026-07-20 | **v0.10 (Tier 0 sink в планнере):** новый tool LLM-планнера `export_gdocs` (run_id из сессии, M-H3) → `runner._export_gdocs` экспортирует результат run'а в Google Doc (`sinks/gdocs`, doc 25 v0.8). Consent = явный запрос пользователя; облако помечается M-S1 tool-нотой. Пользователь: «скопируй статью в Google Docs» → агент экспортирует |
+| 2026-07-20 | **v0.11 (Action registry):** § Tool registry / § Planner / § Contracts — `KNOWN_TOOLS`/`PLANNER_TOOLS` заменены реестром `research/actions/` (doc 25 v0.9, A-H1/A-H2): membership + пер-action enforce через реестр в обоих путях; блок tools meta-промпта из `data/prompts/tools/` (`{TOOLS_BLOCK}`); reply-block действия исполняются execute-хуками (`run_details`/`list_runs`/`gdocs_export`/`file_export`). Новый tool `export_file` — локальный markdown-экспорт в artifacts сессии (без consent) |
 | 2026-07-19 | **v0.6 (Phase 4 ✅ DONE):** § Planner — `planner: llm` реализован (`research/llm_planner.py` + `data/prompts/meta_planner_*`): rules fast-path при URL в сообщении, LLM для диалога без URL; пост-валидация M-H1..M-H3 (URL только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply); `get_run_result`/`list_session_runs` возвращены для LLM-пути, `compare_results` принимает run_ids прошлых runs (re-compare/re-crawl без потери сессии). Проверено на реальной модели из Chat UI: follow-up ответ из comparison-контекста; re-crawl упавшего сайта по фразе без URL + re-compare 4/4. Excluded-семантика уточнена: перекраленный успешно URL не остаётся в excluded[] |

@@ -1,0 +1,1 @@
+- {"name": "export_gdocs", "args": {"run_id": "<id from SESSION RUNS>", "title": "<optional doc title>"}} — export a finished run's result (article/facts) to a NEW Google Doc in the cloud. Use ONLY when the user explicitly asks to copy/save/export to Google Docs.
