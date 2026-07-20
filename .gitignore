@@ -34,3 +34,7 @@ coverage.xml
 # Локальный контекст Claude Code (не часть кодовой базы)
 CLAUDE.md
 MEMORY.md
+
+# Референс-решение по Google Docs (OAuth креды/токены + Node-код; логику переиспользуем,
+# саму папку не коммитим — там credentials.json/token.json = секреты)
+Gdocs-tabs editor/

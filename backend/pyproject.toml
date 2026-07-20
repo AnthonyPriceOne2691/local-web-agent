@@ -27,6 +27,10 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+gdocs = [  # Tier 0 sink (doc 25): экспорт в Google Docs — optional, cloud carve-out
+  "google-api-python-client>=2.100",
+  "google-auth>=2.30",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

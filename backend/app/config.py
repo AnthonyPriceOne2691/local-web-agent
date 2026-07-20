@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     # Паролей НЕ храним — только cookie сессии, которую человек честно создал.
     persist_session: bool = False
 
+    # Google Docs sink (Tier 0, doc 25): OAuth-креды из референс-папки (gitignored). Облако —
+    # только по явному действию с consent (cloud carve-out); google-либы — optional extra `gdocs`.
+    gdocs_dir: Path = REPO_ROOT / "Gdocs-tabs editor"
+
     # Data layout
     data_dir: Path = REPO_ROOT / "data"
     runs_dir_override: Path | None = None  # тесты/сторонний размещение БД
@@ -85,6 +89,14 @@ class Settings(BaseSettings):
         """storage_state-файл сессии по хосту (persist_session, doc 24)."""
         key = (origin.split("://")[-1] or "profile").replace(":", "_")
         return str(self.profiles_dir / f"{key}.json")
+
+    @property
+    def gdocs_credentials(self) -> Path:
+        return self.gdocs_dir / "credentials.json"
+
+    @property
+    def gdocs_token(self) -> Path:
+        return self.gdocs_dir / "token.json"
 
     @property
     def prompts_dir(self) -> Path:
