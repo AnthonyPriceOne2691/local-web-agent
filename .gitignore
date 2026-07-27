@@ -30,7 +30,9 @@ playwright/.cache/
 # Coverage artifacts
 .coverage
 coverage.xml
-coverage.json      # артефакт check_diff_coverage.sh (--cov-report=json)
+# артефакт check_diff_coverage.sh (--cov-report=json); inline-комментарий
+# в .gitignore не поддерживается — паттерн должен стоять на своей строке
+coverage.json
 
 # Локальный контекст Claude Code (не часть кодовой базы)
 CLAUDE.md
