@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.llm.ollama_client import OllamaClient
 from app.llm.parsing import extract_json
+from app.schemas.snapshot import ViewportProfile
 from app.vision.schemas import VisionInsight
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class VisionAnalyzer:
         image_base64: str,
         task: str,
         url: str,
-        profile: str,
+        profile: ViewportProfile,
         dom_excerpt: str | None = None,
     ) -> VisionInsight:
         user = self._user_tpl.render(

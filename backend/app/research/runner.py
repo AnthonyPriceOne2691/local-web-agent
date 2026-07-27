@@ -124,6 +124,8 @@ class ResearchRunner:
         cancel_event: asyncio.Event | None, started: float,
     ) -> SessionRecord:
         """План от LLM-планнера (M-* уже enforced в нём); пустой план → reply."""
+        if self._planner is None:  # вызывается только когда планнер сконфигурирован
+            return self._finish(session, "failed", "no planner configured")
         decision = await self._planner.plan(session, message, run_store=self._runs)
         if not decision.plan:
             return self._finish(session, "completed", decision.reply)
@@ -242,7 +244,8 @@ class ResearchRunner:
             return self._finish(session, "failed",
                                 "all sites failed: " + "; ".join(e.reason for e in excluded))
         if compare_call is None or len(survivors) < 2:  # M-H4: single-site ответ
-            reply = survivors[0].result.summary or "done"
+            first_result = survivors[0].result
+            reply = (first_result.summary if first_result else "") or "done"
             if excluded:
                 reply += "\n\nExcluded: " + "; ".join(f"{e.start_url} ({e.reason})" for e in excluded)
             return self._finish(session, "completed", reply)
@@ -253,7 +256,7 @@ class ResearchRunner:
             return self._finish(session, "failed", "canceled before compare")
         comparison, _ = await self._compare.compare(
             task=task, rubric_id=compare_call.args.get("rubric", "generic_merge"),
-            inputs=[(r.id, r.result) for r in survivors],
+            inputs=[(r.id, r.result) for r in survivors if r.result is not None],
         )
         comparison.session_id = session.id
         comparison.excluded = excluded

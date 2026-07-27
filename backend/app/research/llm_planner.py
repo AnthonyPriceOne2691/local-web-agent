@@ -115,7 +115,12 @@ class LlmPlanner:
             if m.role == "user":
                 urls.extend(parse_urls(m.content, max_sites=session.config.max_sites))
         seen: set[str] = set()
-        return [u for u in urls if not (u in seen or seen.add(u))]
+        unique: list[str] = []
+        for url in urls:  # dedupe с сохранением порядка (без side-effect в условии)
+            if url not in seen:
+                seen.add(url)
+                unique.append(url)
+        return unique
 
     @staticmethod
     def _runs_block(session: SessionRecord, run_store: RunStore) -> str:

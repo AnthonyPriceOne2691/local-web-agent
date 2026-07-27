@@ -125,9 +125,11 @@ class CompareSynthesizer:
             return ComparisonResult(status="partial", comparison_task=task, rubric=rubric_id,
                                     narrative=str(raw.get("narrative", ""))[:2000])
         # run_id — только детерминированно, по нашим inputs; чужие сайты отбрасываем
-        result.rankings = [r for r in result.rankings if resolve(r.url)]
-        for ranking in result.rankings:
-            run_id, res = resolve(ranking.url)
+        # resolve() зовём один раз на ranking: раньше он вызывался дважды (в фильтре
+        # и в цикле), и второй вызов формально мог вернуть None.
+        resolved = [(r, hit) for r in result.rankings if (hit := resolve(r.url)) is not None]
+        result.rankings = [r for r, _ in resolved]
+        for ranking, (run_id, res) in resolved:
             ranking.run_id, ranking.url = run_id, res.start_url
         if result.winner is not None:
             hit = resolve(result.winner.start_url or result.winner.label)

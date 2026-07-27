@@ -38,10 +38,10 @@ gdocs = [  # Tier 0 sink (doc 25): экспорт в Google Docs — optional, c
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-# --- mypy (CQG §2.2). Канон предлагает strict; здесь включён базовый режим:
-# strict дал 146 ошибок в 40 из 82 модулей — заморозить половину кодовой базы в
-# overrides было бы профанацией гейта. Путь к strict — тающий список ниже плюс
-# пункт backlog в delivery/active/STATUS.md, а не разовое ужесточение флага.
+# --- mypy (CQG §2.2). Базовый режим, но БЕЗ единой заморозки: 39 ошибок в 8 модулях
+# разобраны поставкой legacy-debt (2026-07-27), `[[tool.mypy.overrides]]` удалён.
+# Следующий шаг — strict (146 ошибок в 40 модулях, отдельная поставка): включать
+# флаг, заморозив половину базы в overrides, было бы профанацией гейта.
 [tool.mypy]
 python_version = "3.12"
 explicit_package_bases = true
@@ -53,26 +53,6 @@ warn_redundant_casts = true
 warn_unused_ignores = false            # noqa/type: ignore чистим вместе с strict
 exclude = ["tests/", ".venv/", "scripts/"]
 plugins = ["pydantic.mypy"]
-
-# TODO(legacy, тающий список — CQG §1): 12 модулей с ошибками типов на момент
-# развёртывания стека (2026-07-27). Правишь модуль → чинишь типы → убираешь строку.
-# Новый код проверяется без исключений.
-[[tool.mypy.overrides]]
-module = [
-    "app.browser.consent",
-    "app.browser.playwright_session",
-    "app.contracts.loader",
-    "app.navigation.candidate_queue",
-    "app.navigation.path_hints",
-    "app.orchestrator.interaction",
-    "app.orchestrator.loop",
-    "app.research.compare_synthesizer",
-    "app.research.llm_planner",
-    "app.research.runner",
-    "app.sinks.gdocs",
-    "app.vision.analyzer",
-]
-ignore_errors = true
 
 [tool.ruff]
 line-length = 110          # проектный стиль (канон CQG предлагает 100 — не ломаем историю)

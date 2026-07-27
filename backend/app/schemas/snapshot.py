@@ -20,8 +20,11 @@ class Link(BaseModel):
     same_site: bool = True
 
 
+ViewportProfile = Literal["desktop", "tablet", "mobile"]
+
+
 class ScreenshotRef(BaseModel):
-    profile: Literal["desktop", "tablet", "mobile"]
+    profile: ViewportProfile
     relative_path: str
     width: int
     height: int

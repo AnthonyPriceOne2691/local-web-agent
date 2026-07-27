@@ -45,6 +45,9 @@ async def act_on_element(
     не подтвердил/не завершил (сигнал остановки). Enforcer отработал до вызова.
     """
     idx = action.element_index
+    if idx is None:  # контракт: сюда попадают только действия с element_index
+        logger.warning("%s without element_index at %s — skipped", action.action, current.url)
+        return current
     els = current.interactive_elements
     el = els[idx] if idx is not None and 0 <= idx < len(els) else None
     if (action.action == "click" and el is not None

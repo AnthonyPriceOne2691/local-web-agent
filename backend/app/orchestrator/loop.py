@@ -179,6 +179,8 @@ class CrawlOrchestrator:
                 if _is_canceled(cancel_event):  # FR-3.8: граница state (перед PLAN)
                     canceled = True
                     break
+                if current is None:  # инвариант: к PLAN приходим только со снапшотом
+                    break
                 candidates = build_candidates(
                     snapshot=current, homepage=homepage, intent=record.intent, task=cfg.task,
                     hints=self._hints, origin=origin, visited=visited,
@@ -315,6 +317,8 @@ class CrawlOrchestrator:
                 logger.debug("goto %s failed, retrying (%s)", url, type(exc).__name__)
                 await self._browser.wait(2000)
 
+        if final_url is None:  # оба attempt вернули бы None раньше — страховка для чекера
+            return None
         ok, new_origin = guards.check_redirect(final_url, origin, first_navigation=first)  # I-H9
         if not ok:
             record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=url,
