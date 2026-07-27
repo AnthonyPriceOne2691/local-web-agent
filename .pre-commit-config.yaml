@@ -28,6 +28,11 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
         files: ^(backend|cli)/
+      # Подключён после того, как база отформатирована целиком (поставка
+      # legacy-debt): до этого он переформатировал бы 71 файл на первом коммите.
+      # Стилевой коммит — в .git-blame-ignore-revs.
+      - id: ruff-format
+        files: ^(backend|cli)/
 
   # -------------------------------------------------------------------------
   # Python: mypy на изменённых файлах через проектный venv (local hook,
