@@ -43,11 +43,16 @@ async def test_events_stream_replays_terminal_session(api_client):  # noqa: F811
     client, app = api_client
     _fast_sse(app)
     store = app.state.session_store
-    session = SessionRecord(id="done1", status="completed", created_at="t", messages=[
-        SessionMessage(role="user", content="compare a b", created_at="t"),
-        SessionMessage(role="tool", content="crawl_site http://a (1/2)", created_at="t"),
-        SessionMessage(role="assistant", content="Winner: a", created_at="t"),
-    ])
+    session = SessionRecord(
+        id="done1",
+        status="completed",
+        created_at="t",
+        messages=[
+            SessionMessage(role="user", content="compare a b", created_at="t"),
+            SessionMessage(role="tool", content="crawl_site http://a (1/2)", created_at="t"),
+            SessionMessage(role="assistant", content="Winner: a", created_at="t"),
+        ],
+    )
     store.save(session)
 
     events = await _collect_events(client, "/sessions/done1/events")
@@ -71,9 +76,15 @@ async def test_events_stream_live_session_with_crawl_progress(api_client):  # no
     sessions, runs = app.state.session_store, app.state.run_store
     session = SessionRecord(id="live1", status="running_tools", created_at="t")
     sessions.save(session)
-    run = RunRecord(id="run1", config=RunConfig(start_url="http://a", task="t", max_pages=6),
-                    status="running", session_id="live1", pages_visited=1,
-                    current_url="http://a/", started_at="t")
+    run = RunRecord(
+        id="run1",
+        config=RunConfig(start_url="http://a", task="t", max_pages=6),
+        status="running",
+        session_id="live1",
+        pages_visited=1,
+        current_url="http://a/",
+        started_at="t",
+    )
     runs.save(run)
 
     async def _advance() -> None:
@@ -97,8 +108,7 @@ async def test_events_stream_live_session_with_crawl_progress(api_client):  # no
     assert progress[0]["pages_visited"] == 1 and progress[0]["max_pages"] == 6
     assert progress[-1]["pages_visited"] == 3
     assert progress[-1]["current_url"] == "http://a/pricing"
-    assert ("message", {"index": 0, "role": "assistant", "content": "ok",
-                        "created_at": "t"}) in events
+    assert ("message", {"index": 0, "role": "assistant", "content": "ok", "created_at": "t"}) in events
     assert names[-1] == "done" and events[-1][1]["status"] == "completed"
 
 
@@ -107,9 +117,15 @@ async def test_events_stream_foreign_active_run_not_reported(api_client):  # noq
     client, app = api_client
     _fast_sse(app)
     app.state.session_store.save(SessionRecord(id="mine", status="completed", created_at="t"))
-    app.state.run_store.save(RunRecord(
-        id="foreign", config=RunConfig(start_url="http://x", task="t"),
-        status="running", session_id="other-session", started_at="t"))
+    app.state.run_store.save(
+        RunRecord(
+            id="foreign",
+            config=RunConfig(start_url="http://x", task="t"),
+            status="running",
+            session_id="other-session",
+            started_at="t",
+        )
+    )
 
     events = await _collect_events(client, "/sessions/mine/events")
     assert [n for n, _ in events] == ["status", "done"]
@@ -134,10 +150,19 @@ async def test_step_screenshot_endpoint(api_client):  # noqa: F811
     client, app = api_client
     store = app.state.run_store
     record = RunRecord(
-        id="shot1", config=RunConfig(start_url="http://a", task="t"), status="completed",
+        id="shot1",
+        config=RunConfig(start_url="http://a", task="t"),
+        status="completed",
         started_at="t",
-        steps=[CrawlStep(index=0, state="OBSERVE", url="http://a",
-                         screenshot_paths={"desktop": "screenshots/000_desktop.png"})])
+        steps=[
+            CrawlStep(
+                index=0,
+                state="OBSERVE",
+                url="http://a",
+                screenshot_paths={"desktop": "screenshots/000_desktop.png"},
+            )
+        ],
+    )
     store.save(record)
     shots = store.artifacts_dir("shot1") / "screenshots"
     shots.mkdir(parents=True, exist_ok=True)

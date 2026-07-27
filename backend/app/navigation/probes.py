@@ -14,15 +14,16 @@ import httpx
 
 from app.observer.links import resolve, same_site
 
-BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-              "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+BROWSER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
 F1_TIMEOUT_S = 12.0
 F1_MAX_BYTES = 500 * 1024
 PROBE_LINKS_CAP = 20
 _MIN_TEXT_CHARS = 50
 
-_HREF = re.compile(r"<a\b[^>]*?href=[\"']([^\"'#][^\"']*)[\"'][^>]*>(.*?)</a>",
-                   re.IGNORECASE | re.DOTALL)
+_HREF = re.compile(r"<a\b[^>]*?href=[\"']([^\"'#][^\"']*)[\"'][^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
 _TAG = re.compile(r"<[^>]+>")
 
 
@@ -97,7 +98,10 @@ async def probe_slugs_f1(
 async def _bounded_get(client: httpx.AsyncClient, url: str) -> tuple[str, int]:
     """GET с cap 500 KB — не выкачиваем больше (doc 03)."""
     async with client.stream(
-        "GET", url, timeout=F1_TIMEOUT_S, follow_redirects=True,
+        "GET",
+        url,
+        timeout=F1_TIMEOUT_S,
+        follow_redirects=True,
         headers={"User-Agent": BROWSER_UA},
     ) as r:
         if r.status_code >= 400:
@@ -114,7 +118,7 @@ async def _bounded_get(client: httpx.AsyncClient, url: str) -> tuple[str, int]:
 
 def _https_http_variants(url: str) -> list[str]:
     if url.startswith("https://"):
-        return [url, "http://" + url[len("https://"):]]
+        return [url, "http://" + url[len("https://") :]]
     return [url]
 
 

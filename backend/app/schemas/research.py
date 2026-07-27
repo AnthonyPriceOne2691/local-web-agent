@@ -7,9 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SessionStatus = Literal["active", "running_tools", "comparing", "completed", "failed"]
-ResearchIntent = Literal[
-    "comparative_design", "comparative_content", "multi_site_research", "single_site"
-]
+ResearchIntent = Literal["comparative_design", "comparative_content", "multi_site_research", "single_site"]
 
 
 class ExcludedSite(BaseModel):

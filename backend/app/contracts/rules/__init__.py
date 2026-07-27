@@ -36,17 +36,26 @@ ACTION_CHECKS = {
 ORCHESTRATOR_CHECKS = {"browser_session_active", "post_navigation_domain", "orchestrator_state"}
 
 SYNTHESIS_CHECKS = {
-    "min_snapshots", "pydantic_model", "confidence_evidence", "evidence_substring",
-    "strip_thinking_nonempty", "prefer_not_found_over_empty", "facts_budget",
+    "min_snapshots",
+    "pydantic_model",
+    "confidence_evidence",
+    "evidence_substring",
+    "strip_thinking_nonempty",
+    "prefer_not_found_over_empty",
+    "facts_budget",
 }
 
 VISION_CHECKS = {
-    "min_screenshots_or_never", "screenshot_path_allowlist", "path_normalize_safe",
-    "file_size_ceiling", "profile_allowed", "vision_pages_budget", "vision_calls_budget",
+    "min_screenshots_or_never",
+    "screenshot_path_allowlist",
+    "path_normalize_safe",
+    "file_size_ceiling",
+    "profile_allowed",
+    "vision_pages_budget",
+    "vision_calls_budget",
     "vlm_timeout_ceiling",
 }
 
 KNOWN_CHECKS = (
-    set(CONFIG_CHECKS) | set(ACTION_CHECKS) | ORCHESTRATOR_CHECKS
-    | SYNTHESIS_CHECKS | VISION_CHECKS
+    set(CONFIG_CHECKS) | set(ACTION_CHECKS) | ORCHESTRATOR_CHECKS | SYNTHESIS_CHECKS | VISION_CHECKS
 )

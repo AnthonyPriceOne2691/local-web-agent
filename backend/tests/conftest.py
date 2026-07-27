@@ -44,9 +44,15 @@ def hints() -> PathHints:
     return PathHints.load(REPO_ROOT / "data" / "navigation")
 
 
-def page_raw(*, title: str = "", text: str = "", links: list[tuple[str, str]] | None = None,
-             password: bool = False, meta: str = "",
-             interactive: list[dict] | None = None) -> dict:
+def page_raw(
+    *,
+    title: str = "",
+    text: str = "",
+    links: list[tuple[str, str]] | None = None,
+    password: bool = False,
+    meta: str = "",
+    interactive: list[dict] | None = None,
+) -> dict:
     """Хелпер: сырой результат OBSERVE_JS."""
     return {
         "title": title,

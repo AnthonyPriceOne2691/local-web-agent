@@ -39,6 +39,5 @@ def prompt_block(prompts_dir: Path) -> str:
     """
     lines = []
     for name in _REGISTRY:
-        lines.append((prompts_dir / "tools" / f"{name}.txt")
-                     .read_text(encoding="utf-8").strip())
+        lines.append((prompts_dir / "tools" / f"{name}.txt").read_text(encoding="utf-8").strip())
     return "\n".join(lines)

@@ -17,10 +17,8 @@ MAX_PAGES_CAP = 12  # планнер не раздувает обход (doc 24 
 def _enforce(call: ToolCall, ctx: ActionContext) -> ToolCall | None:
     if call.args.get("url") not in ctx.allowed_urls:  # M-H3: URL не выдумывается
         return None
-    call.args["max_pages"] = min(
-        int(call.args.get("max_pages") or ctx.settings.max_pages), MAX_PAGES_CAP)
+    call.args["max_pages"] = min(int(call.args.get("max_pages") or ctx.settings.max_pages), MAX_PAGES_CAP)
     return call
 
 
-SPEC = register(ActionSpec(
-    name="crawl_site", tier=1, reversible=True, structural=True, enforce=_enforce))
+SPEC = register(ActionSpec(name="crawl_site", tier=1, reversible=True, structural=True, enforce=_enforce))

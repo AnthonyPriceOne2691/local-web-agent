@@ -17,8 +17,9 @@ def _shot(profile: str = "desktop", rel: str = "screenshots/001_desktop.png") ->
     return ScreenshotRef(profile=profile, relative_path=rel, width=1440, height=900)
 
 
-def _snap(url: str, text: str = "x" * 500, *, shots: list[ScreenshotRef] | None = None,
-          priority: bool = False) -> PageSnapshot:
+def _snap(
+    url: str, text: str = "x" * 500, *, shots: list[ScreenshotRef] | None = None, priority: bool = False
+) -> PageSnapshot:
     return PageSnapshot(url=url, main_text=text, screenshots=shots or [], priority=priority)
 
 
@@ -35,16 +36,13 @@ def test_loader_shield(tmp_path):
     with pytest.raises(VisionLoadError, match="path_not_in_snapshot"):  # V-H1
         loader.read_base64("run1", "screenshots/other.png", allowlist=allow)
     with pytest.raises(VisionLoadError, match="path_traversal"):  # V-H2
-        loader.read_base64("run1", "../../../etc/passwd",
-                           allowlist={"../../../etc/passwd"})
+        loader.read_base64("run1", "../../../etc/passwd", allowlist={"../../../etc/passwd"})
     big = root / "run1" / "screenshots" / "big.png"
     big.write_bytes(b"x" * (5 * 1024 * 1024 + 1))
     with pytest.raises(VisionLoadError, match="file_too_large"):  # V-H3
-        loader.read_base64("run1", "screenshots/big.png",
-                           allowlist={"screenshots/big.png"})
+        loader.read_base64("run1", "screenshots/big.png", allowlist={"screenshots/big.png"})
     with pytest.raises(VisionLoadError, match="file_missing"):
-        loader.read_base64("run1", "screenshots/gone.png",
-                           allowlist={"screenshots/gone.png"})
+        loader.read_base64("run1", "screenshots/gone.png", allowlist={"screenshots/gone.png"})
 
 
 # ---------------------------------------------------------------- selection
@@ -62,28 +60,33 @@ def test_vision_wanted_auto_triggers():
 
 def test_selection_key_pages_and_caps():
     home = _snap(f"{ORIGIN}/", shots=[_shot()], priority=False)
-    spa = _snap(f"{ORIGIN}/spa", text="tiny",
-                shots=[_shot(rel="screenshots/002_desktop.png"),
-                       _shot("mobile", "screenshots/002_mobile.png")])
-    prio = _snap(f"{ORIGIN}/pricing", shots=[_shot(rel="screenshots/003_desktop.png"),
-                                             _shot("mobile", "screenshots/003_mobile.png")],
-                 priority=True)
+    spa = _snap(
+        f"{ORIGIN}/spa",
+        text="tiny",
+        shots=[_shot(rel="screenshots/002_desktop.png"), _shot("mobile", "screenshots/002_mobile.png")],
+    )
+    prio = _snap(
+        f"{ORIGIN}/pricing",
+        shots=[_shot(rel="screenshots/003_desktop.png"), _shot("mobile", "screenshots/003_mobile.png")],
+        priority=True,
+    )
     plain = _snap(f"{ORIGIN}/other", shots=[_shot(rel="screenshots/004_desktop.png")])
 
     jobs, skipped = select_vision_jobs([home, spa, prio, plain], intent="pricing", mode="auto")
     urls = [j.snapshot.url for j in jobs]
-    assert urls[0] == f"{ORIGIN}/"                     # R0 homepage
-    assert f"{ORIGIN}/pricing" in urls                 # R1 priority
-    assert f"{ORIGIN}/spa" in urls                     # R2 empty DOM
-    assert f"{ORIGIN}/other" in skipped                # не key page
+    assert urls[0] == f"{ORIGIN}/"  # R0 homepage
+    assert f"{ORIGIN}/pricing" in urls  # R1 priority
+    assert f"{ORIGIN}/spa" in urls  # R2 empty DOM
+    assert f"{ORIGIN}/other" in skipped  # не key page
     spa_profiles = [j.shot.profile for j in jobs if j.snapshot.url == f"{ORIGIN}/spa"]
-    assert spa_profiles == ["desktop"]                 # R2 → desktop only
+    assert spa_profiles == ["desktop"]  # R2 → desktop only
     prio_profiles = {j.shot.profile for j in jobs if j.snapshot.url == f"{ORIGIN}/pricing"}
-    assert prio_profiles == {"desktop", "mobile"}      # priority → desktop+mobile
+    assert prio_profiles == {"desktop", "mobile"}  # priority → desktop+mobile
 
     # design_audit: все страницы со скриншотами, cap только по calls
-    jobs, skipped = select_vision_jobs([home, spa, prio, plain], intent="design_audit",
-                                       mode="auto", max_calls=3)
+    jobs, skipped = select_vision_jobs(
+        [home, spa, prio, plain], intent="design_audit", mode="auto", max_calls=3
+    )
     assert (len(jobs) == 3 and not skipped) or len(jobs) == 3  # обрезано max_calls
 
 
@@ -92,10 +95,15 @@ async def test_analyzer_parses_and_degrades(tmp_path):
     from app.vision.analyzer import VisionAnalyzer
 
     settings = Settings(data_dir=REPO_ROOT / "data")
-    ok_json = {"profile": "desktop", "url": "x", "screen_status": "ok",
-               "description": "Pricing page, blue theme",
-               "extracted": [{"key": "price", "value": "$49", "confidence": "high"}],
-               "design": {"layout": "3 cards"}, "confidence": "high"}
+    ok_json = {
+        "profile": "desktop",
+        "url": "x",
+        "screen_status": "ok",
+        "description": "Pricing page, blue theme",
+        "extracted": [{"key": "price", "value": "$49", "confidence": "high"}],
+        "design": {"layout": "3 cards"},
+        "confidence": "high",
+    }
     llm = FakeOllama([ok_json, "not json at all", "still not json"])
     analyzer = VisionAnalyzer(llm, settings)  # type: ignore[arg-type]
 
@@ -126,8 +134,15 @@ async def test_vision_batch_missing_png_and_cancel(tmp_path):
         pass
 
     llm = FakeOllama([])
-    await run_vision_batch(record=record, snapshots=[snap], settings=settings, store=store,
-                           llm=llm, analyzer=None, close_browser=close)  # type: ignore[arg-type]
+    await run_vision_batch(
+        record=record,
+        snapshots=[snap],
+        settings=settings,
+        store=store,
+        llm=llm,
+        analyzer=None,
+        close_browser=close,
+    )  # type: ignore[arg-type]
     assert snap.vision_insights[0]["status"] == "skipped"
     assert snap.vision_insights[0]["error"] == "file_missing"
     assert record.metadata["vision_partial"] is True
@@ -137,8 +152,16 @@ async def test_vision_batch_missing_png_and_cancel(tmp_path):
     record2.intent = "pricing"
     ev = asyncio.Event()
     ev.set()
-    await run_vision_batch(record=record2, snapshots=[snap2], settings=settings, store=store,
-                           llm=llm, analyzer=None, close_browser=close, cancel_event=ev)  # type: ignore[arg-type]
+    await run_vision_batch(
+        record=record2,
+        snapshots=[snap2],
+        settings=settings,
+        store=store,
+        llm=llm,
+        analyzer=None,
+        close_browser=close,
+        cancel_event=ev,
+    )  # type: ignore[arg-type]
     assert record2.metadata["vision_calls_total"] == 0
     assert record2.metadata["vision_partial"] is True
 
@@ -149,19 +172,36 @@ async def test_vision_batch_merges_into_synthesis(tmp_path):
     from tests.test_orchestrator import make_orchestrator, record_for
 
     browser = FakeBrowserSession({f"{ORIGIN}/": page_raw(title="SPA", text="tiny")})
-    vision_reply = {"profile": "desktop", "url": f"{ORIGIN}/", "screen_status": "ok",
-                    "description": "Price card shows $49/mo",
-                    "extracted": [{"key": "price", "value": "$49/mo", "confidence": "high"}],
-                    "design": {}, "confidence": "high"}
-    synth_reply = {"summary": "price found visually",
-                   "facts": [{"key": "price", "value": "$49/mo", "confidence": "medium",
-                              "evidence": [{"url": f"{ORIGIN}/", "quote": "", "source": "vision"}]}],
-                   "not_found": []}
-    orch, store, llm = make_orchestrator(tmp_path, browser, [
-        {"action": "stop", "reasoning": "spa, nothing to click"},
-        vision_reply,
-        synth_reply,
-    ])
+    vision_reply = {
+        "profile": "desktop",
+        "url": f"{ORIGIN}/",
+        "screen_status": "ok",
+        "description": "Price card shows $49/mo",
+        "extracted": [{"key": "price", "value": "$49/mo", "confidence": "high"}],
+        "design": {},
+        "confidence": "high",
+    }
+    synth_reply = {
+        "summary": "price found visually",
+        "facts": [
+            {
+                "key": "price",
+                "value": "$49/mo",
+                "confidence": "medium",
+                "evidence": [{"url": f"{ORIGIN}/", "quote": "", "source": "vision"}],
+            }
+        ],
+        "not_found": [],
+    }
+    orch, store, llm = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "stop", "reasoning": "spa, nothing to click"},
+            vision_reply,
+            synth_reply,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/", task="Find the price"))
     assert record.metadata["vision_calls_total"] == 1
     assert record.metadata["vision_failures"] == 0

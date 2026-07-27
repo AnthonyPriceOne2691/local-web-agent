@@ -41,7 +41,8 @@ async def start_run(config: RunConfig, request: Request) -> dict:
         resume_event = asyncio.Event()
         state.resume_events[record.id] = resume_event
         run_kwargs["attended_gate"] = EventAttendedGate(
-            resume_event, state.run_store, timeout_s=state.settings.attended_wait_timeout_s)
+            resume_event, state.run_store, timeout_s=state.settings.attended_wait_timeout_s
+        )
 
     async def _execute() -> None:
         try:
@@ -89,8 +90,7 @@ async def resume_run(run_id: str, request: Request) -> dict:
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
     if record.status != "waiting_user":
-        raise HTTPException(status_code=409, detail={"error": "not_waiting",
-                                                     "status": record.status})
+        raise HTTPException(status_code=409, detail={"error": "not_waiting", "status": record.status})
     event = state.resume_events.get(run_id)
     if event is not None:
         event.set()
@@ -105,10 +105,15 @@ async def list_runs(request: Request, limit: int = 20) -> dict:
     for run_id in ids:
         r = store.get(run_id)
         if r:
-            runs.append({
-                "run_id": r.id, "task": r.config.task, "status": r.status,
-                "pages_visited": r.pages_visited, "started_at": r.started_at,
-            })
+            runs.append(
+                {
+                    "run_id": r.id,
+                    "task": r.config.task,
+                    "status": r.status,
+                    "pages_visited": r.pages_visited,
+                    "started_at": r.started_at,
+                }
+            )
     return {"runs": runs, "total": len(store.list_ids())}
 
 
@@ -133,7 +138,10 @@ async def delete_run(run_id: str, request: Request) -> dict:
 
 @router.get("/runs/{run_id}/steps/{step_index}/screenshot")
 async def get_step_screenshot(
-    run_id: str, step_index: int, request: Request, profile: str = "desktop",
+    run_id: str,
+    step_index: int,
+    request: Request,
+    profile: str = "desktop",
 ) -> FileResponse:
     """PNG шага (doc 15). `step_index` — позиция в steps[] (step.index неуникален:
     OBSERVE и ACT одного шага делят номер — gotcha doc 12)."""

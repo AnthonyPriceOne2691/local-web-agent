@@ -43,14 +43,20 @@ class VisionAnalyzer:
         insight, raw_error = await self._call(user, image_base64, retry_note="")
         if insight is None:  # 1 retry: почини JSON (doc 23 § Error handling)
             insight, raw_error = await self._call(
-                user, image_base64,
+                user,
+                image_base64,
                 retry_note="\nYour previous reply was not valid JSON. "
-                           "Respond with the VisionInsight JSON object only.",
+                "Respond with the VisionInsight JSON object only.",
             )
         if insight is None:
             status = "failed" if raw_error else "degraded"
-            return VisionInsight(profile=profile, url=url, status=status,
-                                 confidence="low", error=raw_error or "invalid JSON after retry")
+            return VisionInsight(
+                profile=profile,
+                url=url,
+                status=status,
+                confidence="low",
+                error=raw_error or "invalid JSON after retry",
+            )
         insight.profile = profile  # поля источника — истина оркестратора
         insight.url = url
         insight.status = "ok"

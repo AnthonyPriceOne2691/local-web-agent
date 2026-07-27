@@ -13,7 +13,6 @@ from app.browser.base import BrowserSession
 from app.browser.consent import ConsentHandler
 from app.config import Settings
 from app.contracts import guards
-from app.contracts.context import build_action_context
 from app.contracts.enforcer import ContractEnforcer
 from app.extraction.synthesis_validator import SynthesisValidator
 from app.llm.navigator import Navigator
@@ -27,6 +26,7 @@ from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.attended import AttendedGate, reobserve_in_place
 from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
+from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.interaction import act_on_element
 from app.orchestrator.robots import RobotsPolicy
@@ -34,17 +34,17 @@ from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
 from app.reporting.markdown import build_report
 from app.schemas.extraction import ExtractionResult
-from app.schemas.run import CrawlStep, RunRecord, Violation
-from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
+from app.schemas.run import CrawlStep, RunRecord
+from app.schemas.snapshot import PageSnapshot
 from app.storage.run_store import RunStore
 from app.vision.analyzer import VisionAnalyzer
 
 logger = logging.getLogger(__name__)
 
 # Drift auto-tighten (doc 13 § Drift detection)
-DRIFT_HARD_FOR_LOW_TEMP = 3   # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
-DRIFT_IH6_FOR_TOP5 = 2        # fabricated URL ≥ 2 → shrink candidate list to top 5
-DRIFT_MIN_RECOVERIES = 2      # recovery success < 50% (при ≥2 попытках) → fallback-only
+DRIFT_HARD_FOR_LOW_TEMP = 3  # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
+DRIFT_IH6_FOR_TOP5 = 2  # fabricated URL ≥ 2 → shrink candidate list to top 5
+DRIFT_MIN_RECOVERIES = 2  # recovery success < 50% (при ≥2 попытках) → fallback-only
 # G-S1 early stop: «релевантный» кандидат = сигнальный тег, не shallow-бонус
 RELEVANT_TAGS = ("slug", "task-kw", "homepage+intent", "probe", "sitemap", "legal-contact")
 EARLY_STOP_STALE_PAGES = 3
@@ -86,7 +86,9 @@ class CrawlOrchestrator:
 
     # ------------------------------------------------------------------ run
     async def run(
-        self, record: RunRecord, cancel_event: asyncio.Event | None = None,
+        self,
+        record: RunRecord,
+        cancel_event: asyncio.Event | None = None,
         attended_gate: AttendedGate | None = None,  # Phase 5: пауза на challenge (doc 24)
     ) -> RunRecord:
         cfg = record.config
@@ -118,12 +120,13 @@ class CrawlOrchestrator:
                 self._enforcer.effective_rate_ms(cfg.rate_limit_ms, cfg.start_url),
                 int(robots.crawl_delay_s * 1000),
             )
-            alive_probes, legal_probes, probe_links = await probe_slugs(
-                self._hints, record.intent, origin)
+            alive_probes, legal_probes, probe_links = await probe_slugs(self._hints, record.intent, origin)
             sitemap_candidates = await sitemap_urls(  # P2.5
-                record, origin, robots.sitemaps(), self._hints)
-            profile = (self._s.profile_path(origin)
-                       if (cfg.persist_session or self._s.persist_session) else None)
+                record, origin, robots.sitemaps(), self._hints
+            )
+            profile = (
+                self._s.profile_path(origin) if (cfg.persist_session or self._s.persist_session) else None
+            )
             await self._browser.start(headless=not cfg.attended, storage_state_path=profile)
 
             current: PageSnapshot | None = None
@@ -143,8 +146,12 @@ class CrawlOrchestrator:
                 # ---------------- NAVIGATE + OBSERVE
                 if next_url is not None:
                     nav = await self._navigate_observe(
-                        record, next_url, origin, robots,
-                        first=not snapshots, step_index=step_index,
+                        record,
+                        next_url,
+                        origin,
+                        robots,
+                        first=not snapshots,
+                        step_index=step_index,
                     )
                     next_url = None
                     if nav is None:  # skipped/failed — PLAN с прежней страницы
@@ -163,12 +170,17 @@ class CrawlOrchestrator:
                     if current.status in ("captcha", "login_wall"):  # blocker (doc 04)
                         # attended: и captcha (человек проходит проверку), и login_wall
                         # (человек логинится в видимом браузере — Tier 2, doc 25; паролей не храним)
-                        if (attended_gate is not None
-                                and await attended_gate.try_clear(
-                                    record, current, snapshots, visited)):
+                        if attended_gate is not None and await attended_gate.try_clear(
+                            record, current, snapshots, visited
+                        ):
                             current = await reobserve_in_place(  # без goto → CF не re-challenge
-                                self._browser, record, origin=origin, step_index=step_index,
-                                snapshots=snapshots, visited=visited)
+                                self._browser,
+                                record,
+                                origin=origin,
+                                step_index=step_index,
+                                snapshots=snapshots,
+                                visited=visited,
+                            )
                             homepage = homepage or current
                             continue  # next_url is None → сразу PLAN c этой страницей
                         record.metadata["blocked_by"] = current.status
@@ -182,16 +194,24 @@ class CrawlOrchestrator:
                 if current is None:  # инвариант: к PLAN приходим только со снапшотом
                     break
                 candidates = build_candidates(
-                    snapshot=current, homepage=homepage, intent=record.intent, task=cfg.task,
-                    hints=self._hints, origin=origin, visited=visited,
-                    alive_probes=alive_probes, legal_probes=legal_probes,
-                    sitemap_urls=sitemap_candidates, probe_links=probe_links,
+                    snapshot=current,
+                    homepage=homepage,
+                    intent=record.intent,
+                    task=cfg.task,
+                    hints=self._hints,
+                    origin=origin,
+                    visited=visited,
+                    alive_probes=alive_probes,
+                    legal_probes=legal_probes,
+                    sitemap_urls=sitemap_candidates,
+                    probe_links=probe_links,
                     top_k=self._s.top_k_candidates,
                 )
                 if just_visited:  # G-S1: 3 страницы без новых релевантных ссылок → SYNTHESIZE
                     just_visited = False
                     fresh = {
-                        normalize_url(c.href) for c in candidates
+                        normalize_url(c.href)
+                        for c in candidates
                         if any(tag in c.reason for tag in RELEVANT_TAGS)
                     } - seen_relevant
                     if fresh:
@@ -203,15 +223,29 @@ class CrawlOrchestrator:
                             record.metadata["early_stop"] = "G-S1: no new relevant links on 3 pages"
                             break
                 pages_left = cfg.max_pages - len(visited)
-                action, step_violations, llm_stats = await self._plan_validated(
-                    record, current, candidates, visited, hops, origin, pages_left, robots,
+                action, step_violations, llm_stats = await plan_validated(
+                    record,
+                    current,
+                    candidates,
+                    visited,
+                    hops,
+                    origin,
+                    pages_left,
+                    robots,
+                    navigator=self._navigator,
+                    enforcer=self._enforcer,
                 )
                 violations_total += len(step_violations)
 
                 step = CrawlStep(
-                    index=step_index, state=State.ACT, url=current.url,
-                    action=action.action, target_url=action.url,
-                    reasoning=action.reasoning[:300], violations=step_violations, llm_stats=llm_stats,
+                    index=step_index,
+                    state=State.ACT,
+                    url=current.url,
+                    action=action.action,
+                    target_url=action.url,
+                    reasoning=action.reasoning[:300],
+                    violations=step_violations,
+                    llm_stats=llm_stats,
                 )
                 record.steps.append(step)
                 self._store.save(record)
@@ -232,10 +266,18 @@ class CrawlOrchestrator:
                     continue
                 if action.action in ("click", "fill") and action.element_index is not None:  # doc 25
                     current = await act_on_element(
-                        self._browser, record, action, current, origin=origin,
-                        step_index=step_index, snapshots=snapshots, visited=visited,
-                        rate_ms=rate_ms, gate=attended_gate,
-                        destructive_signals=self._enforcer.destructive_signals)  # I-H12
+                        self._browser,
+                        record,
+                        action,
+                        current,
+                        origin=origin,
+                        step_index=step_index,
+                        snapshots=snapshots,
+                        visited=visited,
+                        rate_ms=rate_ms,
+                        gate=attended_gate,
+                        destructive_signals=self._enforcer.destructive_signals,
+                    )  # I-H12
                     if current is None:  # Tier 2 submit не подтверждён человеком
                         break
                     homepage = homepage or current
@@ -252,8 +294,13 @@ class CrawlOrchestrator:
                 await self._safe_close()
                 return record
             await run_vision_batch(  # doc 23
-                record=record, snapshots=snapshots, settings=self._s, store=self._store,
-                llm=self._llm, analyzer=self._vision, close_browser=self._safe_close,
+                record=record,
+                snapshots=snapshots,
+                settings=self._s,
+                store=self._store,
+                llm=self._llm,
+                analyzer=self._vision,
+                close_browser=self._safe_close,
                 cancel_event=cancel_event,
             )
             result = await self._synthesize(record, snapshots)
@@ -287,18 +334,24 @@ class CrawlOrchestrator:
         except Exception as exc:
             # Результат в БД уже есть; без лога пропавший report.md выглядел бы
             # как «отчёт не предусмотрен», а не как сбой записи.
-            logger.warning("report.md not written for run %s (%s: %s)",
-                           record.id, type(exc).__name__, exc)
+            logger.warning("report.md not written for run %s (%s: %s)", record.id, type(exc).__name__, exc)
         return record
 
     # ------------------------------------------------------------ internals
     async def _navigate_observe(
-        self, record: RunRecord, url: str, origin: str, robots: RobotsPolicy,
-        *, first: bool, step_index: int,
+        self,
+        record: RunRecord,
+        url: str,
+        origin: str,
+        robots: RobotsPolicy,
+        *,
+        first: bool,
+        step_index: int,
     ) -> tuple[PageSnapshot, str] | None:
         if not robots.allowed(url):  # G-H5
-            record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=url,
-                                          note="robots_disallow — skipped"))
+            record.steps.append(
+                CrawlStep(index=step_index, state=State.OBSERVE, url=url, note="robots_disallow — skipped")
+            )
             return None
         t_nav = time.perf_counter()
         final_url = None
@@ -309,10 +362,15 @@ class CrawlOrchestrator:
                 break
             except Exception as exc:
                 if attempt == 2:
-                    logger.warning("goto %s failed twice (%s: %s)",
-                                   url, type(exc).__name__, str(exc)[:150])
-                    record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=url,
-                                                  note=f"nav_error: {str(exc)[:150]}"))
+                    logger.warning("goto %s failed twice (%s: %s)", url, type(exc).__name__, str(exc)[:150])
+                    record.steps.append(
+                        CrawlStep(
+                            index=step_index,
+                            state=State.OBSERVE,
+                            url=url,
+                            note=f"nav_error: {str(exc)[:150]}",
+                        )
+                    )
                     return None
                 logger.debug("goto %s failed, retrying (%s)", url, type(exc).__name__)
                 await self._browser.wait(2000)
@@ -321,8 +379,9 @@ class CrawlOrchestrator:
             return None
         ok, new_origin = guards.check_redirect(final_url, origin, first_navigation=first)  # I-H9
         if not ok:
-            record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=url,
-                                          note="redirect_offsite — discarded"))
+            record.steps.append(
+                CrawlStep(index=step_index, state=State.OBSERVE, url=url, note="redirect_offsite — discarded")
+            )
             return None
         if new_origin != origin:
             record.metadata["landing_domain_adopted"] = new_origin
@@ -336,16 +395,21 @@ class CrawlOrchestrator:
             except Exception as exc:
                 # Штатный best-effort: у SPA networkidle может не наступить вовсе,
                 # снапшот всё равно снимаем. Уровень debug, а не warning.
-                logger.debug("networkidle wait skipped for %s (%s)",
-                             final_url, type(exc).__name__)
+                logger.debug("networkidle wait skipped for %s (%s)", final_url, type(exc).__name__)
             raw = await self._browser.raw_snapshot()
         snapshot = build_snapshot(raw, page_url=final_url, origin=new_origin)
         await maybe_screenshot(
-            self._browser, self._store, self._dismiss_consent, record, snapshot, step_index)
-        record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=snapshot.url,
-                                      duration_ms=int((time.perf_counter() - t_nav) * 1000),
-                                      screenshot_paths={s.profile: s.relative_path
-                                                        for s in snapshot.screenshots}))
+            self._browser, self._store, self._dismiss_consent, record, snapshot, step_index
+        )
+        record.steps.append(
+            CrawlStep(
+                index=step_index,
+                state=State.OBSERVE,
+                url=snapshot.url,
+                duration_ms=int((time.perf_counter() - t_nav) * 1000),
+                screenshot_paths={s.profile: s.relative_path for s in snapshot.screenshots},
+            )
+        )
         return snapshot, new_origin
 
     async def _dismiss_consent(self, record: RunRecord, url: str) -> None:
@@ -353,107 +417,20 @@ class CrawlOrchestrator:
         cfg = record.config
         try:
             status = await self._consent.dismiss(
-                self._browser, mode=cfg.consent_handling, click_mode=cfg.consent_click,
+                self._browser,
+                mode=cfg.consent_handling,
+                click_mode=cfg.consent_click,
                 site_click_used=self._consent_click_used,
             )
         except Exception as exc:
             # Cookie-баннер не убрали — скриншоты будут с оверлеем (D-11);
             # status="failed" уедет в metadata.consent, но причину знает только лог.
-            logger.warning("consent dismissal failed on %s (%s: %s)",
-                           url, type(exc).__name__, str(exc)[:150])
+            logger.warning("consent dismissal failed on %s (%s: %s)", url, type(exc).__name__, str(exc)[:150])
             status = "failed"
         if status.startswith("clicked"):
             self._consent_click_used = True
         if status != "none":
             record.metadata.setdefault("consent", {})[url] = status
-
-    async def _plan_validated(
-        self,
-        record: RunRecord,
-        current: PageSnapshot,
-        candidates: list[Candidate],
-        visited: set[str],
-        hops: dict[str, int],
-        origin: str,
-        pages_left: int,
-        robots: RobotsPolicy,
-    ) -> tuple[AgentAction, list[Violation], dict]:
-        violations: list[Violation] = []
-        llm_stats: dict = {}
-        retry_note = ""
-        drift = record.metadata.setdefault(
-            "drift", {"hard_total": 0, "ih6": 0, "replan_ok": 0, "replan_fail": 0, "fallbacks": 0}
-        )
-        cands = candidates[: 5 if drift["ih6"] >= DRIFT_IH6_FOR_TOP5 else None]
-        ctx = build_action_context(record, current, cands, visited, hops, origin, robots)
-
-        replans_used = 0
-        if not self._fallback_only(drift):
-            for attempt in range(self._enforcer.max_replans_per_step + 1):
-                temperature = 0.2 if drift["hard_total"] >= DRIFT_HARD_FOR_LOW_TEMP else 0.4
-                action, llm_stats = await self._navigator.propose(
-                    task=record.config.task, intent=record.intent, snapshot=current,
-                    candidates=cands, visited=visited, pages_left=pages_left,
-                    retry_note=retry_note, temperature=temperature,
-                )
-                replans_used = attempt
-                if action is None:  # I-H7 invalid schema
-                    violations.append(Violation(constraint_id="I-H7", message="unparseable action",
-                                                recovered=False))
-                    drift["hard_total"] += 1
-                    retry_note = "response was not valid action JSON"
-                    continue
-                if action.action in ("extract_now", "stop"):
-                    self._mark_recovered(violations, replans_used, drift)
-                    return action, violations, llm_stats
-                # click→I-H10, fill→I-H11, иначе navigate-shield (doc 25)
-                _validate = {"click": self._enforcer.validate_click,
-                             "fill": self._enforcer.validate_fill}
-                hard, softs = _validate.get(
-                    action.action, self._enforcer.validate_navigate)(action, ctx)
-                violations.extend(softs)
-                if hard is None:
-                    self._mark_recovered(violations, replans_used, drift)
-                    return action, violations, llm_stats
-                violations.append(hard)
-                drift["hard_total"] += 1
-                if hard.constraint_id == "I-H6":
-                    drift["ih6"] += 1
-                    if drift["ih6"] >= DRIFT_IH6_FOR_TOP5:  # auto-tighten: top-5 (doc 13)
-                        cands = cands[:5]
-                        ctx.candidates = {normalize_url(c.href) for c in cands}
-                if hard.constraint_id == "G-H1":  # budget → форс stop, не replan
-                    return (AgentAction(action="stop", reasoning="page budget exhausted"),
-                            violations, llm_stats)
-                retry_note = f"{hard.constraint_id}: {hard.message}"
-            drift["replan_fail"] += 1
-
-        # fallback: детерминированный link scorer (recovery R2, doc 13)
-        drift["fallbacks"] += 1
-        for cand in candidates:
-            fallback = AgentAction(action="navigate", url=cand.href,
-                                   reasoning="fallback: top candidate")
-            hard, _ = self._enforcer.validate_navigate(fallback, ctx)
-            if hard is None:
-                for v in violations:
-                    v.recovered = True
-                return fallback, violations, llm_stats
-        return AgentAction(action="stop", reasoning="no valid candidates"), violations, llm_stats
-
-    @staticmethod
-    def _fallback_only(drift: dict) -> bool:
-        """Recovery success < 50% при ≥2 попытках → link_scorer до конца run (doc 13)."""
-        attempts = drift["replan_ok"] + drift["replan_fail"]
-        return attempts >= DRIFT_MIN_RECOVERIES and drift["replan_ok"] / attempts < 0.5
-
-    @staticmethod
-    def _mark_recovered(violations: list[Violation], replans_used: int, drift: dict) -> None:
-        if not violations:
-            return
-        for v in violations:
-            v.recovered = True
-        if replans_used > 0:
-            drift["replan_ok"] += 1
 
     async def _synthesize(self, record: RunRecord, snapshots: list[PageSnapshot]) -> ExtractionResult:
         if not snapshots:
@@ -462,7 +439,8 @@ class CrawlOrchestrator:
         self._store.save(record)
         await self._llm.unload(self._s.nav_model)  # swap nav → synth (doc 14)
         result, stats = await self._synthesizer.synthesize(
-            task=record.config.task, snapshots=snapshots, intent=record.intent)
+            task=record.config.task, snapshots=snapshots, intent=record.intent
+        )
         record.steps[-1].llm_stats = stats
         return result
 

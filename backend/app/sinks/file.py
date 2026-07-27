@@ -20,7 +20,11 @@ def _safe_name(filename: str | None, title: str) -> str:
 
 
 def export_to_file(
-    title: str, text: str, *, out_dir: Path, filename: str | None = None,
+    title: str,
+    text: str,
+    *,
+    out_dir: Path,
+    filename: str | None = None,
 ) -> Path:
     """Записать `# title + text` в out_dir, вернуть путь к файлу."""
     out_dir.mkdir(parents=True, exist_ok=True)

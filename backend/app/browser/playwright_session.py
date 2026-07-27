@@ -65,8 +65,9 @@ class PlaywrightSession:
             try:
                 return await self._active.evaluate(OBSERVE_JS)
             except Exception as exc:
-                logger.debug("OBSERVE_JS attempt %s failed (%s) — page still settling",
-                             attempt, type(exc).__name__)
+                logger.debug(
+                    "OBSERVE_JS attempt %s failed (%s) — page still settling", attempt, type(exc).__name__
+                )
                 # Ожидание — best-effort перед следующей попыткой.
                 with contextlib.suppress(Exception):
                     await self._active.wait_for_load_state("domcontentloaded", timeout=5000)
@@ -149,8 +150,9 @@ class PlaywrightSession:
         except Exception as exc:
             # Не валит run, но молчание здесь стоит дорого: человек проходил
             # challenge/логин ради этого cookie, и без лога он «просто не сохранился».
-            logger.warning("storage_state not saved to %s (%s: %s)",
-                           self._persist_path, type(exc).__name__, exc)
+            logger.warning(
+                "storage_state not saved to %s (%s: %s)", self._persist_path, type(exc).__name__, exc
+            )
         if self._browser:
             await self._browser.close()
         if self._pw:

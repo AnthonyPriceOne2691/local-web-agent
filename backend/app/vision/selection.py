@@ -8,8 +8,17 @@ from dataclasses import dataclass
 from app.schemas.snapshot import PageSnapshot, ScreenshotRef
 
 SPA_TEXT_THRESHOLD = 200
-VISION_TASK_KEYWORDS = ("look", "design", "screenshot", "layout", "color",
-                        "дизайн", "выгляд", "скриншот", "цвет")
+VISION_TASK_KEYWORDS = (
+    "look",
+    "design",
+    "screenshot",
+    "layout",
+    "color",
+    "дизайн",
+    "выгляд",
+    "скриншот",
+    "цвет",
+)
 
 
 @dataclass

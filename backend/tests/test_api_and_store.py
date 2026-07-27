@@ -23,11 +23,25 @@ def _record(run_id: str = "r1", status: str = "running") -> RunRecord:
 def test_store_roundtrip_and_sweep(tmp_path):
     store = SqliteRunStore(tmp_path / "runs")
     rec = _record()
-    rec.steps.append(CrawlStep(index=1, state="OBSERVE", url="https://x.com", duration_ms=42,
-                               screenshot_paths={"desktop": "screenshots/001.png"}))
-    rec.steps.append(CrawlStep(index=1, state="ACT", action="navigate", target_url="https://x.com/a",
-                               violations=[Violation(constraint_id="I-H6", message="not in queue")],
-                               llm_stats={"eval_count": 7}))
+    rec.steps.append(
+        CrawlStep(
+            index=1,
+            state="OBSERVE",
+            url="https://x.com",
+            duration_ms=42,
+            screenshot_paths={"desktop": "screenshots/001.png"},
+        )
+    )
+    rec.steps.append(
+        CrawlStep(
+            index=1,
+            state="ACT",
+            action="navigate",
+            target_url="https://x.com/a",
+            violations=[Violation(constraint_id="I-H6", message="not in queue")],
+            llm_stats={"eval_count": 7},
+        )
+    )
     store.save(rec)
     loaded = store.get("r1")
     assert loaded and loaded.config.task == "t"
@@ -148,8 +162,9 @@ async def test_cancel_run_flow(api_client):
             return await super().run(record, cancel_event)
 
     app.state.orchestrator_factory = lambda: CancelableOrchestrator(app.state.run_store)
-    run_id = (await client.post(
-        "/runs", json={"start_url": "https://example.com", "task": "t"})).json()["run_id"]
+    run_id = (await client.post("/runs", json={"start_url": "https://example.com", "task": "t"})).json()[
+        "run_id"
+    ]
     r = await client.post(f"/runs/{run_id}/cancel")
     assert r.status_code == 202 and r.json()["status"] == "canceling"
     for _ in range(50):

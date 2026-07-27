@@ -34,24 +34,31 @@ def test_export_writes_markdown_and_dedupes(tmp_path):
 
 def test_build_export_content_article_and_facts():
     art = Article(title="T", url="http://a/x", main_text_excerpt="text body")
-    with_article = ExtractionResult(start_url="http://a", summary="s",
-                                    article=art, facts=[])
+    with_article = ExtractionResult(start_url="http://a", summary="s", article=art, facts=[])
     title, body = build_export_content(with_article)
     assert title == "T" and "http://a/x" in body and "text body" in body
 
-    facts_only = ExtractionResult(start_url="http://a", summary="s",
-                                  facts=[Fact(key="k", value="v", label="K")])
+    facts_only = ExtractionResult(
+        start_url="http://a", summary="s", facts=[Fact(key="k", value="v", label="K")]
+    )
     title, body = build_export_content(facts_only, title_override="Custom")
     assert title == "Custom" and "s" in body and "- K: v" in body
 
 
 # --------------------------------------------------------- runner llm path
 def _session_with_run(run_store, session_store) -> SessionRecord:
-    run_store.save(RunRecord(
-        id="run-a", config=RunConfig(start_url="http://a.example", task="t"),
-        status="completed", started_at="t", pages_visited=2,
-        result=ExtractionResult(start_url="http://a.example", summary="A is blue",
-                                facts=[Fact(key="k", value="v", label="K")])))
+    run_store.save(
+        RunRecord(
+            id="run-a",
+            config=RunConfig(start_url="http://a.example", task="t"),
+            status="completed",
+            started_at="t",
+            pages_visited=2,
+            result=ExtractionResult(
+                start_url="http://a.example", summary="A is blue", facts=[Fact(key="k", value="v", label="K")]
+            ),
+        )
+    )
     session = SessionRecord(id="s1", created_at="t", run_ids=["run-a"])
     session_store.save(session)
     return session
@@ -59,47 +66,59 @@ def _session_with_run(run_store, session_store) -> SessionRecord:
 
 def _runner(settings, run_store, session_store, llm) -> ResearchRunner:
     return ResearchRunner(
-        settings=settings, run_store=run_store, session_store=session_store,
+        settings=settings,
+        run_store=run_store,
+        session_store=session_store,
         orchestrator_factory=lambda: None,
         compare=CompareSynthesizer(llm, settings),  # type: ignore[arg-type]
-        planner=LlmPlanner(llm, settings))  # type: ignore[arg-type]
+        planner=LlmPlanner(llm, settings),
+    )  # type: ignore[arg-type]
 
 
 async def test_runner_llm_export_file(tmp_path):
     """export_file → markdown в artifacts сессии, путь в reply, M-S1 нота."""
-    settings = Settings(data_dir=REPO_ROOT / "data",
-                        runs_dir_override=tmp_path / "runs", site_cooldown_s=0.0)
+    settings = Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs", site_cooldown_s=0.0)
     run_store = SqliteRunStore(settings.runs_dir)
     session_store = SqliteSessionStore(settings.runs_dir)
     session = _session_with_run(run_store, session_store)
-    llm = FakeOllama([{"plan": [{"name": "export_file",
-                                 "args": {"run_id": "run-a", "filename": "итог"}}],
-                       "reply": "Сохраняю."}])
+    llm = FakeOllama(
+        [
+            {
+                "plan": [{"name": "export_file", "args": {"run_id": "run-a", "filename": "итог"}}],
+                "reply": "Сохраняю.",
+            }
+        ]
+    )
 
     session = await _runner(settings, run_store, session_store, llm).run_message(
-        session, "сохрани результат в файл")
+        session, "сохрани результат в файл"
+    )
     saved = session_store.artifacts_dir("s1") / "итог.md"
     assert saved.is_file()
     text = saved.read_text(encoding="utf-8")
     assert "A is blue" in text and text.startswith("# Research: http://a.example")
     assert str(saved) in session.messages[-1].content  # путь в ответе
-    assert any(m.role == "tool" and "export_file run=run-a" in m.content
-               for m in session.messages)  # M-S1
+    assert any(m.role == "tool" and "export_file run=run-a" in m.content for m in session.messages)  # M-S1
 
 
 async def test_planner_enforces_export_file_run_id(tmp_path):
     """M-H3: чужой run_id для export_file отброшен реестровым enforce."""
-    settings = Settings(data_dir=REPO_ROOT / "data",
-                        runs_dir_override=tmp_path / "runs", site_cooldown_s=0.0)
+    settings = Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs", site_cooldown_s=0.0)
     run_store = SqliteRunStore(settings.runs_dir)
     session_store = SqliteSessionStore(settings.runs_dir)
     session = _session_with_run(run_store, session_store)
-    llm = FakeOllama([{"plan": [
-        {"name": "export_file", "args": {"run_id": "fake-run"}},
-        {"name": "export_file", "args": {"run_id": "run-a"}},
-    ], "reply": ""}])
+    llm = FakeOllama(
+        [
+            {
+                "plan": [
+                    {"name": "export_file", "args": {"run_id": "fake-run"}},
+                    {"name": "export_file", "args": {"run_id": "run-a"}},
+                ],
+                "reply": "",
+            }
+        ]
+    )
     planner = LlmPlanner(llm, settings)  # type: ignore[arg-type]
 
     decision = await planner.plan(session, "сохрани в файл", run_store=run_store)
-    assert [(c.name, c.args.get("run_id")) for c in decision.plan] == [
-        ("export_file", "run-a")]
+    assert [(c.name, c.args.get("run_id")) for c in decision.plan] == [("export_file", "run-a")]

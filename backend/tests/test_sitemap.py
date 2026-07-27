@@ -51,8 +51,11 @@ async def test_content_search_filters_by_task_keywords(hints):
     )
     async with _client({f"{ORIGIN}/sitemap.xml": sm}) as client:
         urls = await fetch_sitemap_candidates(
-            client, origin=ORIGIN, intent="content_search",
-            task="Find the article about betting odds", hints=hints,
+            client,
+            origin=ORIGIN,
+            intent="content_search",
+            task="Find the article about betting odds",
+            hints=hints,
         )
     assert urls[0] == f"{ORIGIN}/blog/betting-odds-guide"  # keyword match — top
     assert f"{ORIGIN}/about" not in urls  # без сигнала — отфильтрован
@@ -60,10 +63,12 @@ async def test_content_search_filters_by_task_keywords(hints):
 
 
 async def test_sitemap_index_nested_and_robots_directive(hints):
-    index = (f'<?xml version="1.0"?><sitemapindex>'
-             f"<sitemap><loc>{ORIGIN}/sm-posts.xml</loc></sitemap>"
-             f"<sitemap><loc>{ORIGIN}/sm-pages.xml</loc></sitemap>"
-             f"</sitemapindex>")
+    index = (
+        f'<?xml version="1.0"?><sitemapindex>'
+        f"<sitemap><loc>{ORIGIN}/sm-posts.xml</loc></sitemap>"
+        f"<sitemap><loc>{ORIGIN}/sm-pages.xml</loc></sitemap>"
+        f"</sitemapindex>"
+    )
     routes = {
         f"{ORIGIN}/custom-map.xml": index,  # из robots.txt Sitemap:
         f"{ORIGIN}/sm-posts.xml": _urlset(f"{ORIGIN}/blog/betting-tips"),
@@ -71,8 +76,12 @@ async def test_sitemap_index_nested_and_robots_directive(hints):
     }
     async with _client(routes) as client:
         urls = await fetch_sitemap_candidates(
-            client, origin=ORIGIN, intent="content_search", task="betting news",
-            hints=hints, robots_sitemaps=[f"{ORIGIN}/custom-map.xml"],
+            client,
+            origin=ORIGIN,
+            intent="content_search",
+            task="betting news",
+            hints=hints,
+            robots_sitemaps=[f"{ORIGIN}/custom-map.xml"],
         )
     assert set(urls) == {f"{ORIGIN}/blog/betting-tips", f"{ORIGIN}/news/betting-market"}
 
@@ -81,7 +90,11 @@ async def test_site_map_intent_uses_path_hints(hints):
     sm = _urlset(f"{ORIGIN}/about", f"{ORIGIN}/contact", f"{ORIGIN}/x/random-page-1")
     async with _client({f"{ORIGIN}/sitemap.xml": sm}) as client:
         urls = await fetch_sitemap_candidates(
-            client, origin=ORIGIN, intent="site_map", task="map the site", hints=hints,
+            client,
+            origin=ORIGIN,
+            intent="site_map",
+            task="map the site",
+            hints=hints,
         )
     assert f"{ORIGIN}/x/random-page-1" not in urls
 
@@ -89,6 +102,10 @@ async def test_site_map_intent_uses_path_hints(hints):
 async def test_unreachable_sitemap_returns_empty(hints):
     async with _client({}) as client:
         urls = await fetch_sitemap_candidates(
-            client, origin=ORIGIN, intent="content_search", task="betting", hints=hints,
+            client,
+            origin=ORIGIN,
+            intent="content_search",
+            task="betting",
+            hints=hints,
         )
     assert urls == []

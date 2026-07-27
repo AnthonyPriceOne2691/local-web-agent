@@ -16,8 +16,9 @@ from app.sinks.gdocs import GdocsUnavailable, _load_credentials, export_to_doc
 
 
 def _write_creds(tmp_path, *, refresh: bool = True):
-    (tmp_path / "credentials.json").write_text(json.dumps(
-        {"web": {"client_id": "x", "client_secret": "y", "token_uri": "u"}}), encoding="utf-8")
+    (tmp_path / "credentials.json").write_text(
+        json.dumps({"web": {"client_id": "x", "client_secret": "y", "token_uri": "u"}}), encoding="utf-8"
+    )
     tok = {"access_token": "a"}
     if refresh:
         tok["refresh_token"] = "r"
@@ -41,8 +42,11 @@ def test_export_builds_create_then_insert(tmp_path, monkeypatch):
     calls: dict = {}
 
     class _Exec:
-        def __init__(self, ret): self._ret = ret
-        def execute(self): return self._ret
+        def __init__(self, ret):
+            self._ret = ret
+
+        def execute(self):
+            return self._ret
 
     class _Docs:
         def create(self, body):
@@ -54,15 +58,14 @@ def test_export_builds_create_then_insert(tmp_path, monkeypatch):
             return _Exec({})
 
     class _Service:
-        def documents(self): return _Docs()
+        def documents(self):
+            return _Docs()
 
     # creds уже валидны (без refresh) + google-клиент замокан
-    monkeypatch.setattr("app.sinks.gdocs._load_credentials",
-                        lambda c, t: type("C", (), {"valid": True})())
+    monkeypatch.setattr("app.sinks.gdocs._load_credentials", lambda c, t: type("C", (), {"valid": True})())
     monkeypatch.setattr("googleapiclient.discovery.build", lambda *a, **k: _Service())
 
-    url = export_to_doc("Report", "Body text here",
-                        credentials_path=creds, token_path=token)
+    url = export_to_doc("Report", "Body text here", credentials_path=creds, token_path=token)
     assert url == "https://docs.google.com/document/d/DOC1/edit"
     assert calls["create"] == {"title": "Report"}
     assert calls["batch"][0] == "DOC1"

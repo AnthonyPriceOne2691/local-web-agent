@@ -61,12 +61,15 @@ async def test_orchestrator_dismisses_before_screenshot(tmp_path):
 
     browser = FakeBrowserSession({f"{ORIGIN}/": page_raw(title="SPA", text="tiny")})
     browser.consent_js_detects = [True, False]  # detect → hidden
-    orch, _, _ = make_orchestrator(tmp_path, browser, [
-        {"action": "stop", "reasoning": "done"},
-        {"summary": "n/a", "facts": [], "not_found": [{"key": "x", "reason": "spa"}]},
-    ])
-    record = RunRecord(id="consent-run",
-                       config=RunConfig(start_url=f"{ORIGIN}/", task="Find the price"))
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "stop", "reasoning": "done"},
+            {"summary": "n/a", "facts": [], "not_found": [{"key": "x", "reason": "spa"}]},
+        ],
+    )
+    record = RunRecord(id="consent-run", config=RunConfig(start_url=f"{ORIGIN}/", task="Find the price"))
     record = await orch.run(record)
     assert record.metadata["consent"][f"{ORIGIN}/"] == "hidden"
     assert browser.screenshots  # скриншот снят после dismissal

@@ -90,6 +90,9 @@ max-statements = 50
 # правки этих модулей; новый код держится на канонных правилах без исключений.
 # Сложность (C901/PLR09xx) — разбить при следующем рефакторинге модуля.
 "app/orchestrator/loop.py" = ["C901", "PLR0912", "PLR0915"]
+# Тот же долг сложности, что был у loop.py: DECIDE-стадия переехала в decide.py
+# при разгрузке файла — заморозка перенесена, а не добавлена заново.
+"app/orchestrator/decide.py" = ["C901"]
 "app/orchestrator/vision_batch.py" = ["C901"]
 "app/navigation/candidate_queue.py" = ["C901", "PLR0912"]
 "app/navigation/sitemap.py" = ["C901"]

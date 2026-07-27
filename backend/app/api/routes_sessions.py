@@ -40,8 +40,9 @@ async def create_session(body: CreateSession, request: Request) -> dict:
         rubric_override=body.rubric,
         attended=body.attended,
     )
-    record = SessionRecord(id=uuid.uuid4().hex[:12], title=body.title, config=config,
-                           created_at=datetime.now(UTC).isoformat())
+    record = SessionRecord(
+        id=uuid.uuid4().hex[:12], title=body.title, config=config, created_at=datetime.now(UTC).isoformat()
+    )
     state.session_store.save(record)
     return {"session_id": record.id}
 
@@ -53,12 +54,10 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
     if session.status in BUSY_STATUSES:
-        raise HTTPException(status_code=409, detail={"error": "session_busy",
-                                                     "status": session.status})
+        raise HTTPException(status_code=409, detail={"error": "session_busy", "status": session.status})
     active = state.run_store.active_run_id()  # D-12: один crawl глобально
     if active is not None:
-        raise HTTPException(status_code=409,
-                            detail={"error": "run_in_progress", "active_run_id": active})
+        raise HTTPException(status_code=409, detail={"error": "run_in_progress", "active_run_id": active})
     cancel_event = asyncio.Event()
     state.session_cancel_events[session_id] = cancel_event
     resume_event = asyncio.Event()  # attended (Phase 5): пробрасывается в текущий crawl
@@ -67,8 +66,9 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
     async def _execute() -> None:
         try:
             runner = state.research_runner_factory()
-            await runner.run_message(session, body.content, cancel_event=cancel_event,
-                                     resume_event=resume_event)
+            await runner.run_message(
+                session, body.content, cancel_event=cancel_event, resume_event=resume_event
+            )
         except Exception:
             # Фоновая задача: без этого лога останется только status=failed
             # в сессии — без причины и стека.
@@ -92,8 +92,15 @@ async def list_sessions(request: Request, limit: int = 20) -> dict:
     for sid in ids:
         s = store.get(sid)
         if s:
-            sessions.append({"session_id": s.id, "title": s.title, "status": s.status,
-                             "runs": len(s.run_ids), "created_at": s.created_at})
+            sessions.append(
+                {
+                    "session_id": s.id,
+                    "title": s.title,
+                    "status": s.status,
+                    "runs": len(s.run_ids),
+                    "created_at": s.created_at,
+                }
+            )
     return {"sessions": sessions}
 
 
@@ -116,11 +123,13 @@ async def session_events(session_id: str, request: Request, since_messages: int 
     if state.session_store.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
     stream = session_event_stream(
-        session_id, sessions=state.session_store, runs=state.run_store,
-        settings=state.settings, since_messages=since_messages,
+        session_id,
+        sessions=state.session_store,
+        runs=state.run_store,
+        settings=state.settings,
+        since_messages=since_messages,
     )
-    return StreamingResponse(stream, media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache"})
+    return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/sessions/{session_id}/report")
@@ -132,8 +141,7 @@ async def get_session_report(session_id: str, request: Request) -> Response:
     path = state.session_store.artifacts_dir(session_id) / "comparison_report.md"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="report not generated")
-    return Response(path.read_text(encoding="utf-8"),
-                    media_type="text/markdown; charset=utf-8")
+    return Response(path.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
 
 
 @router.post("/sessions/{session_id}/cancel", status_code=202)
@@ -144,8 +152,7 @@ async def cancel_session(session_id: str, request: Request) -> dict:
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
     if session.status not in BUSY_STATUSES:
-        raise HTTPException(status_code=409, detail={"error": "not_running",
-                                                     "status": session.status})
+        raise HTTPException(status_code=409, detail={"error": "not_running", "status": session.status})
     event = state.session_cancel_events.get(session_id)
     if event is not None:
         event.set()

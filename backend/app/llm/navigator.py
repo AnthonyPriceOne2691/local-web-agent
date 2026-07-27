@@ -45,10 +45,13 @@ class Navigator:
         retry_note: str = "",
         temperature: float = 0.4,
     ) -> tuple[AgentAction | None, dict]:
-        cand_block = "\n".join(
-            f"{i + 1}. {c.href}  [{c.text[:60]}] (score {c.score}, {c.reason})"
-            for i, c in enumerate(candidates)
-        ) or "(none)"
+        cand_block = (
+            "\n".join(
+                f"{i + 1}. {c.href}  [{c.text[:60]}] (score {c.score}, {c.reason})"
+                for i, c in enumerate(candidates)
+            )
+            or "(none)"
+        )
         user = self._user_tpl.render(
             task=task,
             intent=intent,

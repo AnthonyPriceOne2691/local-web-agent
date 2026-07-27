@@ -69,7 +69,9 @@ class ResearchRunner:
 
     # ------------------------------------------------------------- message
     async def run_message(
-        self, session: SessionRecord, message: str,
+        self,
+        session: SessionRecord,
+        message: str,
         cancel_event: asyncio.Event | None = None,
         resume_event: asyncio.Event | None = None,  # attended (Phase 5)
     ) -> SessionRecord:
@@ -81,8 +83,11 @@ class ResearchRunner:
         cap = session.config.max_sites
         urls = found[:cap]
         if len(found) > cap:  # не глотаем лишние URL молча (честность перед пользователем)
-            self._note(session, f"В сообщении {len(found)} URL — беру первые {cap} "
-                                f"(лимит max_sites={cap}); отброшено {len(found) - cap}")
+            self._note(
+                session,
+                f"В сообщении {len(found)} URL — беру первые {cap} "
+                f"(лимит max_sites={cap}); отброшено {len(found) - cap}",
+            )
         if not urls:
             if self._planner is not None:  # Phase 4: свободный диалог → LLM-план
                 return await self._run_llm_plan(session, message, cancel_event, started)
@@ -108,8 +113,7 @@ class ResearchRunner:
                     break
                 if cancel_event is not None and cancel_event.is_set():
                     break
-                self._note(session, f"crawl_site {call.args['url']} "
-                                    f"({len(crawled) + 1}/{len(urls)})")  # M-S1
+                self._note(session, f"crawl_site {call.args['url']} ({len(crawled) + 1}/{len(urls)})")  # M-S1
                 record = await self._crawl_site(session, call, cancel_event)
                 crawled.append(record)
                 session.run_ids.append(record.id)
@@ -120,8 +124,11 @@ class ResearchRunner:
 
     # ------------------------------------------------------- llm plan path
     async def _run_llm_plan(
-        self, session: SessionRecord, message: str,
-        cancel_event: asyncio.Event | None, started: float,
+        self,
+        session: SessionRecord,
+        message: str,
+        cancel_event: asyncio.Event | None,
+        started: float,
     ) -> SessionRecord:
         """План от LLM-планнера (M-* уже enforced в нём); пустой план → reply."""
         if self._planner is None:  # вызывается только когда планнер сконфигурирован
@@ -156,8 +163,7 @@ class ResearchRunner:
             elif call.name == "compare_results":
                 compare_call = call  # enforced: максимум один, последним
             elif spec.tier >= 2:  # A-H2/A-H3: без подтверждения не исполняем
-                self._note(session, f"{call.name}: Tier {spec.tier} требует "
-                                    f"подтверждения — пропущено")
+                self._note(session, f"{call.name}: Tier {spec.tier} требует подтверждения — пропущено")
             elif spec.execute is not None:  # reply-block действия — через реестр
                 self._note(session, spec.note(call) if spec.note else call.name)  # M-S1
                 reply_blocks.append(spec.execute(call, self._action_ctx(session)))
@@ -165,13 +171,15 @@ class ResearchRunner:
         if compare_call is not None:
             records = self._records_for_compare(session, compare_call, crawled)
             task = compare_call.args.get("comparison_task") or strip_urls(message) or message
-            return await self._compare_stage(session, records, task, [compare_call],
-                                             cancel_event)
+            return await self._compare_stage(session, records, task, [compare_call], cancel_event)
         reply = "\n\n".join(b for b in (decision.reply.strip(), *reply_blocks) if b) or "done"
         return self._finish(session, "completed", reply)
 
     def _records_for_compare(
-        self, session: SessionRecord, call: ToolCall, crawled: list[RunRecord],
+        self,
+        session: SessionRecord,
+        call: ToolCall,
+        crawled: list[RunRecord],
     ) -> list[RunRecord]:
         """Свежие crawls + прошлые runs по run_ids (пусто → все runs сессии)."""
         ids = call.args.get("run_ids") or list(session.run_ids)
@@ -181,12 +189,15 @@ class ResearchRunner:
 
     def _action_ctx(self, session: SessionRecord) -> actions.ActionContext:
         """Контекст исполнения reply-block действий (registry, doc 25)."""
-        return actions.ActionContext(session=session, run_store=self._runs,
-                                     settings=self._s, session_store=self._sessions)
+        return actions.ActionContext(
+            session=session, run_store=self._runs, settings=self._s, session_store=self._sessions
+        )
 
     # ---------------------------------------------------------- crawl tool
     async def _crawl_site(
-        self, session: SessionRecord, call: ToolCall,
+        self,
+        session: SessionRecord,
+        call: ToolCall,
         cancel_event: asyncio.Event | None,
     ) -> RunRecord:
         args = dict(call.args)
@@ -198,8 +209,13 @@ class ResearchRunner:
             vision_enabled=args.get("vision_enabled", "auto"),
             attended=session.config.attended,  # Phase 5 (doc 24)
         )
-        record = RunRecord(id=uuid.uuid4().hex[:12], config=config, status="running",
-                           session_id=session.id, started_at=_now())
+        record = RunRecord(
+            id=uuid.uuid4().hex[:12],
+            config=config,
+            status="running",
+            session_id=session.id,
+            started_at=_now(),
+        )
         if args.get("intent"):
             record.intent = args["intent"]  # research-план фиксирует intent (doc 24)
         self._runs.save(record)
@@ -209,14 +225,14 @@ class ResearchRunner:
             from app.orchestrator.attended import EventAttendedGate
 
             kwargs["attended_gate"] = EventAttendedGate(
-                self._resume_event, self._runs, timeout_s=self._s.attended_wait_timeout_s)
+                self._resume_event, self._runs, timeout_s=self._s.attended_wait_timeout_s
+            )
         try:
             return await orchestrator.run(record, **kwargs)
         except Exception as exc:
             # Один упавший сайт не валит сессию (M-H4): в excluded[] уедет короткая
             # причина, а стек виден только здесь.
-            logger.exception("crawl_site %s failed inside session %s",
-                             config.start_url, session.id)
+            logger.exception("crawl_site %s failed inside session %s", config.start_url, session.id)
             record.status = "failed"
             record.error_message = (str(exc) or type(exc).__name__)[:500]
             self._runs.save(record)
@@ -224,25 +240,30 @@ class ResearchRunner:
 
     # -------------------------------------------------------- compare tool
     async def _compare_stage(
-        self, session: SessionRecord, crawled: list[RunRecord], task: str,
-        plan: list[ToolCall], cancel_event: asyncio.Event | None,
+        self,
+        session: SessionRecord,
+        crawled: list[RunRecord],
+        task: str,
+        plan: list[ToolCall],
+        cancel_event: asyncio.Event | None,
     ) -> SessionRecord:
         survivors = [r for r in crawled if r.status in COMPARABLE_STATUSES and r.result]
         survivor_urls = {r.config.start_url for r in survivors}
         excluded = [
             ExcludedSite(
                 start_url=r.config.start_url,
-                reason=f"{r.status}: "
-                       f"{r.metadata.get('blocked_by') or r.error_message or 'no result'}",
+                reason=f"{r.status}: {r.metadata.get('blocked_by') or r.error_message or 'no result'}",
             )
             # сайт, перекраленный успешно (re-crawl через LLM-план), не excluded
-            for r in crawled if r not in survivors and r.config.start_url not in survivor_urls
+            for r in crawled
+            if r not in survivors and r.config.start_url not in survivor_urls
         ]
         compare_call = next((c for c in plan if c.name == "compare_results"), None)
 
         if not survivors:  # 0 выживших (doc 24 § Partial failure)
-            return self._finish(session, "failed",
-                                "all sites failed: " + "; ".join(e.reason for e in excluded))
+            return self._finish(
+                session, "failed", "all sites failed: " + "; ".join(e.reason for e in excluded)
+            )
         if compare_call is None or len(survivors) < 2:  # M-H4: single-site ответ
             first_result = survivors[0].result
             reply = (first_result.summary if first_result else "") or "done"
@@ -255,7 +276,8 @@ class ResearchRunner:
         if cancel_event is not None and cancel_event.is_set():
             return self._finish(session, "failed", "canceled before compare")
         comparison, _ = await self._compare.compare(
-            task=task, rubric_id=compare_call.args.get("rubric", "generic_merge"),
+            task=task,
+            rubric_id=compare_call.args.get("rubric", "generic_merge"),
             inputs=[(r.id, r.result) for r in survivors if r.result is not None],
         )
         comparison.session_id = session.id
@@ -296,12 +318,10 @@ class ResearchRunner:
         if comparison.winner:
             lines.append(f"Winner: {comparison.winner.label} — {comparison.winner.reason}")
         if comparison.rankings:
-            lines.append("Rankings: " + " · ".join(
-                f"{r.url} ({r.score})" for r in comparison.rankings))
+            lines.append("Rankings: " + " · ".join(f"{r.url} ({r.score})" for r in comparison.rankings))
         if comparison.narrative:
             lines.append(comparison.narrative[:600])
         if comparison.excluded:
-            lines.append("Excluded: " + "; ".join(
-                f"{e.start_url} ({e.reason})" for e in comparison.excluded))
+            lines.append("Excluded: " + "; ".join(f"{e.start_url} ({e.reason})" for e in comparison.excluded))
         lines.append(f"Full report: artifacts/{comparison.session_id}/{report_name}")
         return "\n\n".join(lines)

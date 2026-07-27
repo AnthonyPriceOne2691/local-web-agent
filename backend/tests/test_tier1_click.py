@@ -24,11 +24,17 @@ def _enforcer() -> ContractEnforcer:
 
 
 def _ctx(elements: list[InteractiveElement], attended: bool = False) -> ActionContext:
-    return ActionContext(origin=ORIGIN, start_url=f"{ORIGIN}/", current_url=f"{ORIGIN}/",
-                         interactive_elements=elements, attended=attended)
+    return ActionContext(
+        origin=ORIGIN,
+        start_url=f"{ORIGIN}/",
+        current_url=f"{ORIGIN}/",
+        interactive_elements=elements,
+        attended=attended,
+    )
 
 
 # --- schema ---
+
 
 def test_agent_action_click_schema():
     a = AgentAction.model_validate({"action": "click", "element_index": 3, "reasoning": "expand"})
@@ -36,6 +42,7 @@ def test_agent_action_click_schema():
 
 
 # --- I-H10 click-safety (enforcer) ---
+
 
 def test_click_safe_button_passes():
     els = [InteractiveElement(index=0, kind="button", label="Show more")]
@@ -67,32 +74,50 @@ def test_navigate_not_affected_by_click_check():
 
 # --- loop integration ---
 
+
 async def test_click_executes_and_reobserves(tmp_path):
-    site = FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Article", text="Intro paragraph " * 40,
-                               interactive=[{"kind": "button", "label": "Show more"}]),
-    })
-    orch, _, _ = make_orchestrator(tmp_path, site, [
-        {"action": "click", "element_index": 0, "reasoning": "reveal hidden content"},
-        {"action": "stop", "reasoning": "done"},
-        SYNTH_MIN,
-    ])
+    site = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Article",
+                text="Intro paragraph " * 40,
+                interactive=[{"kind": "button", "label": "Show more"}],
+            ),
+        }
+    )
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        site,
+        [
+            {"action": "click", "element_index": 0, "reasoning": "reveal hidden content"},
+            {"action": "stop", "reasoning": "done"},
+            SYNTH_MIN,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/", task="read the article"))
     assert site.clicked_indices == [0]  # клик выполнен
     assert any(s.action == "click" for s in record.steps)
 
 
 async def test_click_on_submit_rejected_then_replan(tmp_path):
-    site = FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Form", text="Contact form here " * 30,
-                               interactive=[{"kind": "submit", "label": "Send",
-                                             "input_type": "submit"}]),
-    })
-    orch, _, _ = make_orchestrator(tmp_path, site, [
-        {"action": "click", "element_index": 0, "reasoning": "submit form"},  # I-H10 → reject
-        {"action": "stop", "reasoning": "cannot proceed"},
-        SYNTH_MIN,
-    ])
+    site = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Form",
+                text="Contact form here " * 30,
+                interactive=[{"kind": "submit", "label": "Send", "input_type": "submit"}],
+            ),
+        }
+    )
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        site,
+        [
+            {"action": "click", "element_index": 0, "reasoning": "submit form"},  # I-H10 → reject
+            {"action": "stop", "reasoning": "cannot proceed"},
+            SYNTH_MIN,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/"))
     assert site.clicked_indices == []  # клик заблокирован enforcer'ом до Playwright
     ih10 = [v for s in record.steps for v in s.violations if v.constraint_id == "I-H10"]
@@ -101,52 +126,70 @@ async def test_click_on_submit_rejected_then_replan(tmp_path):
 
 # --- I-H11 fill-safety (Tier 2) ---
 
+
 def test_fill_text_field_passes():
     els = [InteractiveElement(index=0, kind="text", input_type="text", label="Search")]
-    hard, _ = _enforcer().validate_fill(
-        AgentAction(action="fill", element_index=0, value="hi"), _ctx(els))
+    hard, _ = _enforcer().validate_fill(AgentAction(action="fill", element_index=0, value="hi"), _ctx(els))
     assert hard is None
 
 
 def test_fill_password_blocked():
     els = [InteractiveElement(index=0, kind="password", input_type="password")]
     hard, _ = _enforcer().validate_fill(
-        AgentAction(action="fill", element_index=0, value="secret"), _ctx(els))
+        AgentAction(action="fill", element_index=0, value="secret"), _ctx(els)
+    )
     assert hard is not None and hard.constraint_id == "I-H11"  # креды вводит человек
 
 
 def test_fill_non_text_blocked():
     els = [InteractiveElement(index=0, kind="button", label="Send")]
-    hard, _ = _enforcer().validate_fill(
-        AgentAction(action="fill", element_index=0, value="x"), _ctx(els))
+    hard, _ = _enforcer().validate_fill(AgentAction(action="fill", element_index=0, value="x"), _ctx(els))
     assert hard is not None and hard.constraint_id == "I-H11"
 
 
 async def test_fill_executes(tmp_path):
-    site = FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Search", text="Search page here " * 30,
-                               interactive=[{"kind": "text", "input_type": "text", "label": "q"}]),
-    })
-    orch, _, _ = make_orchestrator(tmp_path, site, [
-        {"action": "fill", "element_index": 0, "value": "football", "reasoning": "type query"},
-        {"action": "stop", "reasoning": "done"},
-        SYNTH_MIN,
-    ])
+    site = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Search",
+                text="Search page here " * 30,
+                interactive=[{"kind": "text", "input_type": "text", "label": "q"}],
+            ),
+        }
+    )
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        site,
+        [
+            {"action": "fill", "element_index": 0, "value": "football", "reasoning": "type query"},
+            {"action": "stop", "reasoning": "done"},
+            SYNTH_MIN,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/", task="search the site"))
     assert site.filled == [(0, "football")]  # fill выполнен
     assert any(s.action == "fill" for s in record.steps)
 
 
 async def test_fill_password_rejected_in_loop(tmp_path):
-    site = FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Login", text="Login page here " * 30,
-                               interactive=[{"kind": "password", "input_type": "password"}]),
-    })
-    orch, _, _ = make_orchestrator(tmp_path, site, [
-        {"action": "fill", "element_index": 0, "value": "secret", "reasoning": "type password"},
-        {"action": "stop", "reasoning": "cannot"},
-        SYNTH_MIN,
-    ])
+    site = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Login",
+                text="Login page here " * 30,
+                interactive=[{"kind": "password", "input_type": "password"}],
+            ),
+        }
+    )
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        site,
+        [
+            {"action": "fill", "element_index": 0, "value": "secret", "reasoning": "type password"},
+            {"action": "stop", "reasoning": "cannot"},
+            SYNTH_MIN,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/"))
     assert site.filled == []  # enforcer заблокировал fill в password (I-H11)
     assert [v for s in record.steps for v in s.violations if v.constraint_id == "I-H11"]
@@ -154,35 +197,46 @@ async def test_fill_password_rejected_in_loop(tmp_path):
 
 # --- Tier 2 submit под attended-подтверждением ---
 
+
 def test_click_submit_allowed_when_attended():
     els = [InteractiveElement(index=0, kind="button", input_type="submit", label="Search")]
     hard, _ = _enforcer().validate_click(
-        AgentAction(action="click", element_index=0), _ctx(els, attended=True))
+        AgentAction(action="click", element_index=0), _ctx(els, attended=True)
+    )
     assert hard is None  # submit разрешён enforcer'ом (подтверждение — в ACT)
 
 
 def test_click_submit_blocked_without_attended():
     els = [InteractiveElement(index=0, kind="button", input_type="submit", label="Search")]
     hard, _ = _enforcer().validate_click(
-        AgentAction(action="click", element_index=0), _ctx(els, attended=False))
+        AgentAction(action="click", element_index=0), _ctx(els, attended=False)
+    )
     assert hard is not None and hard.constraint_id == "I-H10"
 
 
 def _submit_site():
-    return FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Form", text="Search form here " * 30,
-                               interactive=[{"kind": "button", "input_type": "submit",
-                                             "label": "Search"}]),
-    })
+    return FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Form",
+                text="Search form here " * 30,
+                interactive=[{"kind": "button", "input_type": "submit", "label": "Search"}],
+            ),
+        }
+    )
 
 
 async def test_submit_confirmed_executes(tmp_path):
     site = _submit_site()
-    orch, store, _ = make_orchestrator(tmp_path, site, [
-        {"action": "click", "element_index": 0, "reasoning": "submit search"},
-        {"action": "stop", "reasoning": "done"},
-        SYNTH_MIN,
-    ])
+    orch, store, _ = make_orchestrator(
+        tmp_path,
+        site,
+        [
+            {"action": "click", "element_index": 0, "reasoning": "submit search"},
+            {"action": "stop", "reasoning": "done"},
+            SYNTH_MIN,
+        ],
+    )
     resume = asyncio.Event()
     gate = EventAttendedGate(resume, store, timeout_s=5.0)
     record = record_for(f"{ORIGIN}/", task="search", attended=True)
@@ -199,10 +253,14 @@ async def test_submit_confirmed_executes(tmp_path):
 
 async def test_submit_declined_stops(tmp_path):
     site = _submit_site()
-    orch, store, _ = make_orchestrator(tmp_path, site, [
-        {"action": "click", "element_index": 0, "reasoning": "submit"},
-        SYNTH_MIN,
-    ])
+    orch, store, _ = make_orchestrator(
+        tmp_path,
+        site,
+        [
+            {"action": "click", "element_index": 0, "reasoning": "submit"},
+            SYNTH_MIN,
+        ],
+    )
     resume = asyncio.Event()  # никто не подтвердит
     gate = EventAttendedGate(resume, store, timeout_s=0.05)
     record = record_for(f"{ORIGIN}/", task="search", attended=True)

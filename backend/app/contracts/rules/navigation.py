@@ -19,8 +19,7 @@ def url_in_allowed_domains(
 ) -> Violation | None:
     target = normalize_url(action.url or "")
     if not same_site(target, ctx.origin):
-        return Violation(constraint_id=code, message="target outside allowed site",
-                         proposed_url=target)
+        return Violation(constraint_id=code, message="target outside allowed site", proposed_url=target)
     return None
 
 
@@ -31,14 +30,11 @@ def url_in_candidate_queue(
     if "start_url" in params.get("except", []) and target == normalize_url(ctx.start_url):
         return None
     if target not in ctx.candidates:
-        return Violation(constraint_id=code, message="url not in candidate queue",
-                         proposed_url=target)
+        return Violation(constraint_id=code, message="url not in candidate queue", proposed_url=target)
     return None
 
 
-def public_http_url(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def public_http_url(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     target = action.url or ""
     if urlparse(target).scheme not in ("http", "https"):
         return Violation(constraint_id=code, message="scheme not http(s)", proposed_url=target)
@@ -46,22 +42,17 @@ def public_http_url(
         return None
     # private origin (fixtures) может ходить по своему private-хосту — same_site решает I-H1
     if is_private_host(target) and not is_private_host(ctx.origin):
-        return Violation(constraint_id=code, message="private network target",
-                         proposed_url=target)
+        return Violation(constraint_id=code, message="private network target", proposed_url=target)
     return None
 
 
-def action_not_in(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def action_not_in(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     if action.action in params.get("forbidden", ()):
         return Violation(constraint_id=code, message=f"forbidden action '{action.action}'")
     return None
 
 
-def url_not_visited(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def url_not_visited(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     target = normalize_url(action.url or "")
     if target in ctx.visited:
         return Violation(constraint_id=code, message="already visited", proposed_url=target)
@@ -76,9 +67,12 @@ def intent_conditional_paths(
         return None
     path = urlparse(action.url or "").path.lower()
     if any(sub in path for sub in ctx.forbidden_paths):
-        return Violation(constraint_id=code, severity="soft",
-                         message="legal/utility page — soft avoid",
-                         proposed_url=normalize_url(action.url or ""))
+        return Violation(
+            constraint_id=code,
+            severity="soft",
+            message="legal/utility page — soft avoid",
+            proposed_url=normalize_url(action.url or ""),
+        )
     return None
 
 
@@ -110,16 +104,15 @@ def click_not_destructive(
         return None
     if ctx.attended:
         return None  # → handoff в ACT (человек нажмёт сам)
-    return Violation(constraint_id=code,
-                     message=f"destructive «{label[:40]}» → Tier 3 handoff needs attended mode")
+    return Violation(
+        constraint_id=code, message=f"destructive «{label[:40]}» → Tier 3 handoff needs attended mode"
+    )
 
 
 _FILLABLE_KINDS = ("text", "email", "search", "tel", "url", "number", "textarea")
 
 
-def fill_target_safe(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def fill_target_safe(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     """I-H11 (doc 25 Tier 2): fill только в текстовые поля; НИКОГДА в password (креды
     вводит человек, attended), не в кнопки/чекбоксы/select."""
     if action.action != "fill":
@@ -139,9 +132,7 @@ def fill_target_safe(
     return None
 
 
-def click_target_safe(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def click_target_safe(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     """I-H10 (doc 25 Tier 1): click только по существующему интерактивному элементу,
     не submit/password/login. submit/login → Tier 2 (нужно attended-подтверждение)."""
     if action.action != "click":

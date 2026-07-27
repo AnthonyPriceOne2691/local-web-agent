@@ -38,9 +38,18 @@ def build_action_context(record, current, candidates, visited, hops, origin, rob
 
     cfg = record.config
     return ActionContext(
-        origin=origin, start_url=cfg.start_url, current_url=current.url,
-        intent=record.intent, candidates={normalize_url(c.href) for c in candidates},
-        visited=visited, hops=hops, max_pages=cfg.max_pages, max_depth=cfg.max_depth,
-        pages_visited=len(visited), robots=robots, allow_private=cfg.allow_private,
-        interactive_elements=current.interactive_elements, attended=cfg.attended,
+        origin=origin,
+        start_url=cfg.start_url,
+        current_url=current.url,
+        intent=record.intent,
+        candidates={normalize_url(c.href) for c in candidates},
+        visited=visited,
+        hops=hops,
+        max_pages=cfg.max_pages,
+        max_depth=cfg.max_depth,
+        pages_visited=len(visited),
+        robots=robots,
+        allow_private=cfg.allow_private,
+        interactive_elements=current.interactive_elements,
+        attended=cfg.attended,
     )

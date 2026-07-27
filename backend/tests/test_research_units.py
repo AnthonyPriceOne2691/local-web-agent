@@ -22,9 +22,14 @@ from tests.conftest import REPO_ROOT, FakeOllama
 def test_session_store_roundtrip_sweep_delete(tmp_path):
     SqliteRunStore(tmp_path / "runs")  # создаёт схему app.db
     store = SqliteSessionStore(tmp_path / "runs")
-    rec = SessionRecord(id="s1", title="compare", status="running_tools",
-                        research_intent="comparative_design", run_ids=["r1", "r2"],
-                        created_at="2026-07-18T00:00:00")
+    rec = SessionRecord(
+        id="s1",
+        title="compare",
+        status="running_tools",
+        research_intent="comparative_design",
+        run_ids=["r1", "r2"],
+        created_at="2026-07-18T00:00:00",
+    )
     rec.messages.append(SessionMessage(role="user", content="hi", created_at="t"))
     rec.comparison_result = ComparisonResult(narrative="x wins")
     store.save(rec)
@@ -45,9 +50,15 @@ def test_run_store_session_link(tmp_path):
 
     store = SqliteRunStore(tmp_path / "runs")
     for i, sid in enumerate(["sX", "sX", None]):
-        store.save(RunRecord(id=f"r{i}", session_id=sid, status="completed",
-                             config=RunConfig(start_url="https://x.com", task="t"),
-                             started_at=f"2026-07-18T0{i}:00:00"))
+        store.save(
+            RunRecord(
+                id=f"r{i}",
+                session_id=sid,
+                status="completed",
+                config=RunConfig(start_url="https://x.com", task="t"),
+                started_at=f"2026-07-18T0{i}:00:00",
+            )
+        )
     assert store.runs_for_session("sX") == ["r0", "r1"]
     assert store.get("r0").session_id == "sX"
 
@@ -56,8 +67,9 @@ def test_run_store_session_link(tmp_path):
 
 
 def test_parse_urls_dedupe_cap_and_strip():
-    msg = ("Вот 4 сайта: https://a.com, https://b.com/x, https://a.com и "
-           "https://c.com/page?q=1 — сравни дизайн.")
+    msg = (
+        "Вот 4 сайта: https://a.com, https://b.com/x, https://a.com и https://c.com/page?q=1 — сравни дизайн."
+    )
     urls = parse_urls(msg)
     assert urls == ["https://a.com", "https://b.com/x", "https://c.com/page?q=1"]
     assert parse_urls(msg, max_sites=2) == ["https://a.com", "https://b.com/x"]  # M-H2
@@ -73,8 +85,9 @@ def test_parse_urls_uncapped_returns_all():
 
 def test_research_intent_matrix():
     assert classify_research_intent("опиши дизайн, чем отличаются", 4) == "comparative_design"
-    assert classify_research_intent("find the most complete article about betting",
-                                    3) == "comparative_content"
+    assert (
+        classify_research_intent("find the most complete article about betting", 3) == "comparative_content"
+    )
     assert classify_research_intent("у кого статья полнее", 2) == "comparative_content"
     assert classify_research_intent("find pricing on each", 3) == "multi_site_research"
     assert classify_research_intent("anything", 1) == "single_site"
@@ -99,11 +112,16 @@ def test_build_plan_uc1_uc2():
 # ------------------------------------------------------ compare synthesizer
 
 
-def _res(url: str, run_id: str, *, summary: str = "",
-         article: Article | None = None) -> tuple[str, ExtractionResult]:
+def _res(
+    url: str, run_id: str, *, summary: str = "", article: Article | None = None
+) -> tuple[str, ExtractionResult]:
     return run_id, ExtractionResult(
-        run_id=run_id, start_url=url, summary=summary or f"summary {url}",
-        facts=[Fact(key="k", value="v")], article=article)
+        run_id=run_id,
+        start_url=url,
+        summary=summary or f"summary {url}",
+        facts=[Fact(key="k", value="v")],
+        article=article,
+    )
 
 
 async def test_compare_maps_run_ids_and_drops_invented_sites():
@@ -113,7 +131,7 @@ async def test_compare_maps_run_ids_and_drops_invented_sites():
         "winner": {"url": "https://a.com", "label": "a.com", "reason": "FAQ + таблицы"},
         "rankings": [
             {"url": "https://a.com", "score": 91, "summary": "full"},
-            {"url": "b.com", "score": 55, "summary": "thin"},          # по label — резолвится
+            {"url": "b.com", "score": 55, "summary": "thin"},  # по label — резолвится
             {"url": "https://evil.invented.com", "score": 99, "summary": "fake"},
         ],
         "dimensions": [{"name": "depth_sections", "scores": {"a.com": 9, "b.com": 4}}],
@@ -121,8 +139,7 @@ async def test_compare_maps_run_ids_and_drops_invented_sites():
     llm = FakeOllama([reply])
     cs = CompareSynthesizer(llm, settings)  # type: ignore[arg-type]
     inputs = [_res("https://a.com", "run-a"), _res("https://b.com", "run-b")]
-    result, _ = await cs.compare(task="у кого полнее", rubric_id="content_completeness",
-                                 inputs=inputs)
+    result, _ = await cs.compare(task="у кого полнее", rubric_id="content_completeness", inputs=inputs)
     assert result.status == "completed"
     assert result.winner.run_id == "run-a" and result.winner.start_url == "https://a.com"
     assert [r.run_id for r in result.rankings] == ["run-a", "run-b"]  # invented site отброшен
@@ -134,16 +151,23 @@ async def test_compare_maps_run_ids_and_drops_invented_sites():
 
 async def test_compare_article_block_and_invalid_json_fallback():
     settings = Settings(data_dir=REPO_ROOT / "data")
-    article = Article(url="https://a.com/blog/x", title="Guide", word_count=2800,
-                      headings=["Intro", "FAQ"], main_text_excerpt="betting odds " * 50)
+    article = Article(
+        url="https://a.com/blog/x",
+        title="Guide",
+        word_count=2800,
+        headings=["Intro", "FAQ"],
+        main_text_excerpt="betting odds " * 50,
+    )
     block = build_sites_block([_res("https://a.com", "run-a", article=article)])
     assert "ARTICLE: Guide" in block and "betting odds" in block
 
     llm = FakeOllama(["not json", "still not json"])
     cs = CompareSynthesizer(llm, settings)  # type: ignore[arg-type]
-    result, _ = await cs.compare(task="t", rubric_id="generic_merge",
-                                 inputs=[_res("https://a.com", "run-a"),
-                                         _res("https://b.com", "run-b")])
+    result, _ = await cs.compare(
+        task="t",
+        rubric_id="generic_merge",
+        inputs=[_res("https://a.com", "run-a"), _res("https://b.com", "run-b")],
+    )
     assert result.status == "failed"
     assert len(llm.calls) == 2  # 1 retry
 

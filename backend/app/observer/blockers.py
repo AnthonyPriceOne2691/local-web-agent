@@ -6,12 +6,21 @@ from app.schemas.snapshot import PageStatus
 
 _CAPTCHA_SIGNALS = (
     # Cloudflare challenge (старые + актуальные managed/Turnstile формулировки 2026)
-    "cf-browser-verification", "cloudflare", "checking your browser",
-    "just a moment", "enable javascript and cookies", "verifying you are human",
-    "needs to review the security of your connection", "challenges.cloudflare.com",
-    "__cf_chl", "attention required",
+    "cf-browser-verification",
+    "cloudflare",
+    "checking your browser",
+    "just a moment",
+    "enable javascript and cookies",
+    "verifying you are human",
+    "needs to review the security of your connection",
+    "challenges.cloudflare.com",
+    "__cf_chl",
+    "attention required",
     # прочие anti-bot / captcha
-    "verify you are human", "captcha", "are you a robot", "unusual traffic",
+    "verify you are human",
+    "captcha",
+    "are you a robot",
+    "unusual traffic",
 )
 _LOGIN_URL_HINTS = ("/login", "/signin", "/sign-in")
 
@@ -41,6 +50,8 @@ def looks_like_challenge(raw: dict) -> bool:
     ждал SPA-networkidle: это ожидание + повторный snapshot дают блокеру проскочить
     attended-паузу (Phase 5 — captcha; Tier 2 doc 25 — login_wall)."""
     return detect_status(
-        url="", main_text=raw.get("main_text") or "", title=raw.get("title") or "",
+        url="",
+        main_text=raw.get("main_text") or "",
+        title=raw.get("title") or "",
         has_password_field=bool(raw.get("has_password_field")),
     ) in ("captcha", "login_wall")

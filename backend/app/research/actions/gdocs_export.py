@@ -29,9 +29,9 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
     try:
         from app.sinks.gdocs import export_to_doc  # ленивый: optional extra `gdocs`
 
-        url = export_to_doc(title, body,
-                            credentials_path=ctx.settings.gdocs_credentials,
-                            token_path=ctx.settings.gdocs_token)
+        url = export_to_doc(
+            title, body, credentials_path=ctx.settings.gdocs_credentials, token_path=ctx.settings.gdocs_token
+        )
         return f"Экспортировано в Google Docs (облако): {url}"
     except Exception as exc:
         # Сессия не падает (сообщение уедет в чат), но класс сбоя — нет extra,
@@ -40,7 +40,14 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
         return f"Google Docs недоступен ({type(exc).__name__}): {str(exc)[:200]}"
 
 
-SPEC = register(ActionSpec(
-    name="export_gdocs", tier=0, reversible=True, cloud=True,
-    enforce=enforce_run_id_in_session, execute=_execute,
-    note=lambda call: f"export_gdocs run={call.args.get('run_id')} → Google Docs (облако)"))
+SPEC = register(
+    ActionSpec(
+        name="export_gdocs",
+        tier=0,
+        reversible=True,
+        cloud=True,
+        enforce=enforce_run_id_in_session,
+        execute=_execute,
+        note=lambda call: f"export_gdocs run={call.args.get('run_id')} → Google Docs (облако)",
+    )
+)

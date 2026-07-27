@@ -18,21 +18,33 @@ from app.storage.session_store import SqliteSessionStore
 from app.storage.sqlite_store import SqliteRunStore
 from tests.conftest import REPO_ROOT, FakeOllama
 
-CANONICAL = {"crawl_site", "get_run_result", "list_session_runs",
-             "compare_results", "export_gdocs", "export_file"}
+CANONICAL = {
+    "crawl_site",
+    "get_run_result",
+    "list_session_runs",
+    "compare_results",
+    "export_gdocs",
+    "export_file",
+}
 
 
 def _settings(tmp_path) -> Settings:
-    return Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs",
-                    site_cooldown_s=0.0)
+    return Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs", site_cooldown_s=0.0)
 
 
 def _session_with_run(run_store, session_store) -> SessionRecord:
-    run_store.save(RunRecord(
-        id="run-a", config=RunConfig(start_url="http://a.example", task="t"),
-        status="completed", started_at="t", pages_visited=2,
-        result=ExtractionResult(start_url="http://a.example", summary="A is blue",
-                                facts=[Fact(key="k", value="v", label="K")])))
+    run_store.save(
+        RunRecord(
+            id="run-a",
+            config=RunConfig(start_url="http://a.example", task="t"),
+            status="completed",
+            started_at="t",
+            pages_visited=2,
+            result=ExtractionResult(
+                start_url="http://a.example", summary="A is blue", facts=[Fact(key="k", value="v", label="K")]
+            ),
+        )
+    )
     session = SessionRecord(id="s1", created_at="t", run_ids=["run-a"])
     session_store.save(session)
     return session
@@ -40,10 +52,13 @@ def _session_with_run(run_store, session_store) -> SessionRecord:
 
 def _runner(settings, run_store, session_store, llm) -> ResearchRunner:
     return ResearchRunner(
-        settings=settings, run_store=run_store, session_store=session_store,
+        settings=settings,
+        run_store=run_store,
+        session_store=session_store,
         orchestrator_factory=lambda: None,
         compare=CompareSynthesizer(llm, settings),  # type: ignore[arg-type]
-        planner=LlmPlanner(llm, settings))  # type: ignore[arg-type]
+        planner=LlmPlanner(llm, settings),
+    )  # type: ignore[arg-type]
 
 
 def test_registry_contains_all_layer2_actions():
@@ -90,17 +105,17 @@ async def test_tier2_action_skipped_without_confirmation(tmp_path, monkeypatch):
     run_store = SqliteRunStore(settings.runs_dir)
     session_store = SqliteSessionStore(settings.runs_dir)
     session = _session_with_run(run_store, session_store)
-    llm = FakeOllama([{"plan": [{"name": "dangerous_submit", "args": {}}],
-                       "reply": "ok"}])
+    llm = FakeOllama([{"plan": [{"name": "dangerous_submit", "args": {}}], "reply": "ok"}])
     runner = _runner(settings, run_store, session_store, llm)  # planner до регистрации
     monkeypatch.setitem(
-        registry_mod._REGISTRY, "dangerous_submit",
-        ActionSpec(name="dangerous_submit", tier=2, reversible=False, execute=_boom))
+        registry_mod._REGISTRY,
+        "dangerous_submit",
+        ActionSpec(name="dangerous_submit", tier=2, reversible=False, execute=_boom),
+    )
 
     session = await runner.run_message(session, "сделай опасное")
     assert executed == []  # A-H2: не исполнено
-    assert any(m.role == "tool" and "требует подтверждения" in m.content
-               for m in session.messages)
+    assert any(m.role == "tool" and "требует подтверждения" in m.content for m in session.messages)
     assert session.status == "completed"  # сессия не падает
 
 
@@ -132,11 +147,9 @@ async def test_unknown_action_dropped_by_planner(tmp_path):
     run_store = SqliteRunStore(settings.runs_dir)
     session_store = SqliteSessionStore(settings.runs_dir)
     session = _session_with_run(run_store, session_store)
-    llm = FakeOllama([{"plan": [{"name": "run_shell", "args": {"cmd": "rm -rf /"}}],
-                       "reply": "готово"}])
+    llm = FakeOllama([{"plan": [{"name": "run_shell", "args": {"cmd": "rm -rf /"}}], "reply": "готово"}])
 
-    session = await _runner(settings, run_store, session_store, llm).run_message(
-        session, "выполни команду")
+    session = await _runner(settings, run_store, session_store, llm).run_message(session, "выполни команду")
     assert session.status == "completed"
     assert session.messages[-1].content == "готово"  # план опустел → только reply
     assert all("run_shell" not in m.content for m in session.messages if m.role == "tool")

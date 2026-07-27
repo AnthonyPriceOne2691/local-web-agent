@@ -20,8 +20,10 @@ from app.schemas.research import SessionRecord
 from app.storage.run_store import RunStore
 
 MAX_HISTORY_MESSAGES = 8
-FALLBACK_REPLY = ("Не понял задачу. Пришли URL сайтов и что по ним исследовать — "
-                  "или задай вопрос по уже готовым результатам этой сессии.")
+FALLBACK_REPLY = (
+    "Не понял задачу. Пришли URL сайтов и что по ним исследовать — "
+    "или задай вопрос по уже готовым результатам этой сессии."
+)
 
 
 class PlannerDecision(BaseModel):
@@ -34,17 +36,22 @@ class LlmPlanner:
         self._client = client
         self._s = settings
         prompts = settings.prompts_dir
-        self._system = ((prompts / "meta_planner_system.txt")
-                        .read_text(encoding="utf-8")
-                        .replace("{TOOLS_BLOCK}", actions.prompt_block(prompts)))
+        self._system = (
+            (prompts / "meta_planner_system.txt")
+            .read_text(encoding="utf-8")
+            .replace("{TOOLS_BLOCK}", actions.prompt_block(prompts))
+        )
         from jinja2 import Template
 
-        self._user_tpl = Template(
-            (prompts / "meta_planner_user.j2").read_text(encoding="utf-8"))
+        self._user_tpl = Template((prompts / "meta_planner_user.j2").read_text(encoding="utf-8"))
 
     # --------------------------------------------------------------- plan
     async def plan(
-        self, session: SessionRecord, message: str, *, run_store: RunStore,
+        self,
+        session: SessionRecord,
+        message: str,
+        *,
+        run_store: RunStore,
     ) -> PlannerDecision:
         """Meta-промпт → план; невалидный ответ LLM → пустой план + fallback reply."""
         allowed_urls = self._allowed_urls(session, message)
@@ -80,13 +87,17 @@ class LlmPlanner:
 
     # ------------------------------------------- контракты M-H1..M-H3 / A-H1
     def _enforce(
-        self, plan: list[ToolCall], session: SessionRecord,
-        allowed_urls: list[str], run_store: RunStore,
+        self,
+        plan: list[ToolCall],
+        session: SessionRecord,
+        allowed_urls: list[str],
+        run_store: RunStore,
     ) -> list[ToolCall]:
         """Membership + пер-action enforce — реестр (doc 25); здесь остаются
         только кросс-плановые правила: M-H2 и «compare один, последним»."""
-        ctx = actions.ActionContext(session=session, run_store=run_store,
-                                    settings=self._s, allowed_urls=frozenset(allowed_urls))
+        ctx = actions.ActionContext(
+            session=session, run_store=run_store, settings=self._s, allowed_urls=frozenset(allowed_urls)
+        )
         kept: list[ToolCall] = []
         crawls = 0
         for call in plan:

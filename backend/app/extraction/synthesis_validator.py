@@ -57,10 +57,11 @@ class SynthesisValidator:
         pages = {s.url: _norm(f"{s.title} {s.main_text}") for s in snapshots}
         all_text = " ".join(pages.values())
         vision_pages = {
-            s.url: _norm(" ".join(
-                _vision_text(ins) for ins in s.vision_insights if ins.get("status") == "ok"
-            ))
-            for s in snapshots if s.vision_insights
+            s.url: _norm(
+                " ".join(_vision_text(ins) for ins in s.vision_insights if ins.get("status") == "ok")
+            )
+            for s in snapshots
+            if s.vision_insights
         }
         all_vision = " ".join(vision_pages.values())
 
@@ -70,8 +71,7 @@ class SynthesisValidator:
         kept, removed_keys = [], []
         for fact in result.facts:
             fact.evidence = [
-                ev for ev in fact.evidence
-                if self._evidence_ok(ev, pages, all_text, vision_pages, all_vision)
+                ev for ev in fact.evidence if self._evidence_ok(ev, pages, all_text, vision_pages, all_vision)
             ]
             if not fact.evidence:  # S-H3c: URL-факт — визит страницы сам по себе пруф
                 visited_url = _visited_url_in_value(fact.value, snapshots)
@@ -92,9 +92,7 @@ class SynthesisValidator:
         result.facts = kept
         for key in removed_keys:
             if not any(nf.key == key for nf in result.not_found):
-                result.not_found.append(
-                    NotFound(key=key, reason="evidence quote not found in visited pages")
-                )
+                result.not_found.append(NotFound(key=key, reason="evidence quote not found in visited pages"))
         self._enrich_article(result, snapshots)
         return validate_result(result)  # S-H2 базовый + статус-согласование (S-G1)
 
@@ -118,8 +116,7 @@ class SynthesisValidator:
         if not article.title:
             article.title = source.title
 
-    def _evidence_ok(self, ev, pages: dict, all_text: str,
-                     vision_pages: dict, all_vision: str) -> bool:
+    def _evidence_ok(self, ev, pages: dict, all_text: str, vision_pages: dict, all_vision: str) -> bool:
         """S-H3a: DOM-цитата ⊆ snapshot text; S-H3b: vision-evidence не проверяется
         против DOM. Цитата не из DOM, но найденная в vision-инсайтах →
         переклассифицируется в source=vision (модель не всегда ставит source сама)."""

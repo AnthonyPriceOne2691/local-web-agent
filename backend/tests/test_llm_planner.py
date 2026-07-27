@@ -16,8 +16,7 @@ from tests.conftest import REPO_ROOT, FakeOllama
 
 
 def _settings(tmp_path) -> Settings:
-    return Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs",
-                    site_cooldown_s=0.0)
+    return Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs", site_cooldown_s=0.0)
 
 
 def _stores(settings):
@@ -26,29 +25,39 @@ def _stores(settings):
 
 def _finished_run(run_id: str, url: str, summary: str) -> RunRecord:
     return RunRecord(
-        id=run_id, config=RunConfig(start_url=url, task="t"), status="completed",
-        started_at="t", pages_visited=2,
-        result=ExtractionResult(start_url=url, summary=summary,
-                                facts=[Fact(key="k", value="v", label="K")]))
+        id=run_id,
+        config=RunConfig(start_url=url, task="t"),
+        status="completed",
+        started_at="t",
+        pages_visited=2,
+        result=ExtractionResult(start_url=url, summary=summary, facts=[Fact(key="k", value="v", label="K")]),
+    )
 
 
 def _session_with_runs(run_store, session_store) -> SessionRecord:
     run_store.save(_finished_run("run-a", "http://a.example", "A is blue"))
     run_store.save(_finished_run("run-b", "http://b.example", "B is red"))
-    session = SessionRecord(id="s1", created_at="t", run_ids=["run-a", "run-b"],
-                            comparison_result=ComparisonResult(
-                                rubric="design_diff",
-                                rankings=[Ranking(url="http://a.example", score=90)]))
+    session = SessionRecord(
+        id="s1",
+        created_at="t",
+        run_ids=["run-a", "run-b"],
+        comparison_result=ComparisonResult(
+            rubric="design_diff", rankings=[Ranking(url="http://a.example", score=90)]
+        ),
+    )
     session_store.save(session)
     return session
 
 
 def _runner(settings, run_store, session_store, llm) -> ResearchRunner:
     return ResearchRunner(
-        settings=settings, run_store=run_store, session_store=session_store,
+        settings=settings,
+        run_store=run_store,
+        session_store=session_store,
         orchestrator_factory=lambda: None,
         compare=CompareSynthesizer(llm, settings),  # type: ignore[arg-type]
-        planner=LlmPlanner(llm, settings))  # type: ignore[arg-type]
+        planner=LlmPlanner(llm, settings),
+    )  # type: ignore[arg-type]
 
 
 # ----------------------------------------------------------- planner unit
@@ -57,25 +66,28 @@ async def test_planner_enforces_m_contracts(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
-    llm = FakeOllama([{
-        "plan": [
-            {"name": "run_shell", "args": {"cmd": "rm -rf /"}},               # M-H1
-            {"name": "crawl_site", "args": {"url": "http://evil.example"}},   # M-H3: не в allowed
-            {"name": "get_run_result", "args": {"run_id": "fake-run"}},       # M-H3: чужой id
-            {"name": "get_run_result", "args": {"run_id": "run-a"}},
-            {"name": "compare_results", "args": {"run_ids": ["run-a", "fake"],
-                                                 "rubric": "nonsense"}},
-        ],
-        "reply": "",
-    }])
+    llm = FakeOllama(
+        [
+            {
+                "plan": [
+                    {"name": "run_shell", "args": {"cmd": "rm -rf /"}},  # M-H1
+                    {"name": "crawl_site", "args": {"url": "http://evil.example"}},  # M-H3: не в allowed
+                    {"name": "get_run_result", "args": {"run_id": "fake-run"}},  # M-H3: чужой id
+                    {"name": "get_run_result", "args": {"run_id": "run-a"}},
+                    {"name": "compare_results", "args": {"run_ids": ["run-a", "fake"], "rubric": "nonsense"}},
+                ],
+                "reply": "",
+            }
+        ]
+    )
     planner = LlmPlanner(llm, settings)  # type: ignore[arg-type]
 
     decision = await planner.plan(session, "сравни ещё раз", run_store=run_store)
     names = [c.name for c in decision.plan]
     assert names == ["get_run_result", "compare_results"]
     compare = decision.plan[-1]
-    assert compare.args["run_ids"] == ["run-a"]          # выдуманный id вычищен
-    assert compare.args["rubric"] == "generic_merge"     # неизвестная рубрика → дефолт
+    assert compare.args["run_ids"] == ["run-a"]  # выдуманный id вычищен
+    assert compare.args["rubric"] == "generic_merge"  # неизвестная рубрика → дефолт
     # промпт получил контекст: runs, comparison, allowed urls
     prompt = llm.calls[0]["user"]
     assert "run-a | http://a.example | completed" in prompt
@@ -87,10 +99,17 @@ async def test_planner_enforces_export_gdocs_run_id(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
-    llm = FakeOllama([{"plan": [
-        {"name": "export_gdocs", "args": {"run_id": "fake-run"}},   # M-H3: чужой id
-        {"name": "export_gdocs", "args": {"run_id": "run-a"}},
-    ], "reply": ""}])
+    llm = FakeOllama(
+        [
+            {
+                "plan": [
+                    {"name": "export_gdocs", "args": {"run_id": "fake-run"}},  # M-H3: чужой id
+                    {"name": "export_gdocs", "args": {"run_id": "run-a"}},
+                ],
+                "reply": "",
+            }
+        ]
+    )
     planner = LlmPlanner(llm, settings)  # type: ignore[arg-type]
 
     decision = await planner.plan(session, "сохрани в гугл докс", run_store=run_store)
@@ -114,11 +133,15 @@ async def test_planner_allows_urls_from_history(tmp_path):
     session = _session_with_runs(run_store, session_store)
     from app.schemas.research import SessionMessage
 
-    session.messages.append(SessionMessage(role="user",
-                                           content="смотри http://c.example", created_at="t"))
-    llm = FakeOllama([{"plan": [{"name": "crawl_site",
-                                 "args": {"url": "http://c.example", "max_pages": 99}}],
-                       "reply": ""}])
+    session.messages.append(SessionMessage(role="user", content="смотри http://c.example", created_at="t"))
+    llm = FakeOllama(
+        [
+            {
+                "plan": [{"name": "crawl_site", "args": {"url": "http://c.example", "max_pages": 99}}],
+                "reply": "",
+            }
+        ]
+    )
     planner = LlmPlanner(llm, settings)  # type: ignore[arg-type]
 
     decision = await planner.plan(session, "прогони его ещё раз", run_store=run_store)
@@ -147,17 +170,32 @@ async def test_runner_llm_recompare_from_store(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
-    llm = FakeOllama([
-        {"plan": [{"name": "compare_results",
-                   "args": {"run_ids": ["run-a", "run-b"],
+    llm = FakeOllama(
+        [
+            {
+                "plan": [
+                    {
+                        "name": "compare_results",
+                        "args": {
+                            "run_ids": ["run-a", "run-b"],
                             "comparison_task": "who is more complete",
-                            "rubric": "content_completeness"}}], "reply": ""},
-        {"narrative": "A fuller than B",
-         "winner": {"url": "http://a.example", "label": "a", "reason": "more facts"},
-         "rankings": [{"url": "http://a.example", "score": 80, "summary": "ok"},
-                      {"url": "http://b.example", "score": 40, "summary": "thin"}],
-         "dimensions": []},
-    ])
+                            "rubric": "content_completeness",
+                        },
+                    }
+                ],
+                "reply": "",
+            },
+            {
+                "narrative": "A fuller than B",
+                "winner": {"url": "http://a.example", "label": "a", "reason": "more facts"},
+                "rankings": [
+                    {"url": "http://a.example", "score": 80, "summary": "ok"},
+                    {"url": "http://b.example", "score": 40, "summary": "thin"},
+                ],
+                "dimensions": [],
+            },
+        ]
+    )
     runner = _runner(settings, run_store, session_store, llm)
 
     session = await runner.run_message(session, "а теперь сравни по полноте контента")
@@ -177,29 +215,49 @@ async def test_recompare_after_recrawl_drops_stale_excluded(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
-    failed_old = RunRecord(id="run-c-old", status="failed", started_at="t",
-                           config=RunConfig(start_url="http://c.example", task="t"),
-                           error_message="ReadTimeout")
+    failed_old = RunRecord(
+        id="run-c-old",
+        status="failed",
+        started_at="t",
+        config=RunConfig(start_url="http://c.example", task="t"),
+        error_message="ReadTimeout",
+    )
     run_store.save(failed_old)
     run_store.save(_finished_run("run-c-new", "http://c.example", "C is green"))
     session.run_ids += ["run-c-old", "run-c-new"]
     session_store.save(session)
-    llm = FakeOllama([
-        {"plan": [{"name": "compare_results",
-                   "args": {"run_ids": ["run-a", "run-b", "run-c-old", "run-c-new"],
-                            "rubric": "design_diff"}}], "reply": ""},
-        {"narrative": "ok", "winner": None,
-         "rankings": [{"url": "http://a.example", "score": 80, "summary": ""},
-                      {"url": "http://b.example", "score": 60, "summary": ""},
-                      {"url": "http://c.example", "score": 40, "summary": ""}],
-         "dimensions": []},
-    ])
+    llm = FakeOllama(
+        [
+            {
+                "plan": [
+                    {
+                        "name": "compare_results",
+                        "args": {
+                            "run_ids": ["run-a", "run-b", "run-c-old", "run-c-new"],
+                            "rubric": "design_diff",
+                        },
+                    }
+                ],
+                "reply": "",
+            },
+            {
+                "narrative": "ok",
+                "winner": None,
+                "rankings": [
+                    {"url": "http://a.example", "score": 80, "summary": ""},
+                    {"url": "http://b.example", "score": 60, "summary": ""},
+                    {"url": "http://c.example", "score": 40, "summary": ""},
+                ],
+                "dimensions": [],
+            },
+        ]
+    )
     runner = _runner(settings, run_store, session_store, llm)
 
     session = await runner.run_message(session, "пересравни всё")
     comparison = session.comparison_result
-    assert comparison.excluded == []          # старый failed перекрыт новым run'ом
-    assert comparison.status == "completed"   # не partial
+    assert comparison.excluded == []  # старый failed перекрыт новым run'ом
+    assert comparison.status == "completed"  # не partial
     assert len(comparison.rankings) == 3
 
 
@@ -207,8 +265,7 @@ async def test_runner_llm_list_runs_block(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
-    llm = FakeOllama([{"plan": [{"name": "list_session_runs", "args": {}}],
-                       "reply": "Вот что уже сделано:"}])
+    llm = FakeOllama([{"plan": [{"name": "list_session_runs", "args": {}}], "reply": "Вот что уже сделано:"}])
     runner = _runner(settings, run_store, session_store, llm)
 
     session = await runner.run_message(session, "что уже сделано?")
@@ -224,6 +281,7 @@ async def test_runner_llm_export_gdocs(tmp_path, monkeypatch):
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
     import app.sinks.gdocs as gd
+
     captured: dict = {}
 
     def fake_export(title, text, *, credentials_path, token_path):
@@ -231,8 +289,7 @@ async def test_runner_llm_export_gdocs(tmp_path, monkeypatch):
         return "https://docs.google.com/document/d/ABC/edit"
 
     monkeypatch.setattr(gd, "export_to_doc", fake_export)
-    llm = FakeOllama([{"plan": [{"name": "export_gdocs", "args": {"run_id": "run-a"}}],
-                       "reply": "Готово."}])
+    llm = FakeOllama([{"plan": [{"name": "export_gdocs", "args": {"run_id": "run-a"}}], "reply": "Готово."}])
     runner = _runner(settings, run_store, session_store, llm)
 
     session = await runner.run_message(session, "скопируй результат run-a в Google Docs")
@@ -256,10 +313,13 @@ async def test_runner_rules_fast_path_skips_llm(tmp_path):
             raise AssertionError("planner must not be called when URLs present")
 
     runner = ResearchRunner(
-        settings=settings, run_store=run_store, session_store=session_store,
+        settings=settings,
+        run_store=run_store,
+        session_store=session_store,
         orchestrator_factory=lambda: _InstantOrchestrator(run_store),
         compare=CompareSynthesizer(llm, settings),  # type: ignore[arg-type]
-        planner=BoomPlanner())  # type: ignore[arg-type]
+        planner=BoomPlanner(),
+    )  # type: ignore[arg-type]
 
     session = await runner.run_message(session, "глянь дизайн http://x.example")
     assert session.status == "completed"  # single_site: ответ из единственного result
@@ -271,9 +331,12 @@ async def test_runner_no_planner_keeps_phase3_behavior(tmp_path):
     session = SessionRecord(id="s3", created_at="t")
     session_store.save(session)
     runner = ResearchRunner(
-        settings=settings, run_store=run_store, session_store=session_store,
+        settings=settings,
+        run_store=run_store,
+        session_store=session_store,
         orchestrator_factory=lambda: None,
-        compare=CompareSynthesizer(FakeOllama([]), settings))  # type: ignore[arg-type]
+        compare=CompareSynthesizer(FakeOllama([]), settings),
+    )  # type: ignore[arg-type]
 
     session = await runner.run_message(session, "нет урлов")
     assert session.status == "failed"

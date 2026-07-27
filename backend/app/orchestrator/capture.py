@@ -42,5 +42,4 @@ async def maybe_screenshot(
     except Exception as exc:
         # Скриншот — вход для vision-пасса (doc 23): без лога его отсутствие
         # выглядело бы как «страница не выбрана для съёмки».
-        logger.warning("screenshot failed for %s (%s: %s)",
-                       snapshot.url, type(exc).__name__, exc)
+        logger.warning("screenshot failed for %s (%s: %s)", snapshot.url, type(exc).__name__, exc)

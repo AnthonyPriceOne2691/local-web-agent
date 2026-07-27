@@ -61,20 +61,22 @@ class SqliteSessionStore:
                        comparison_result_json=excluded.comparison_result_json,
                        created_at=excluded.created_at, finished_at=excluded.finished_at""",
                 (
-                    record.id, record.title, record.status, record.research_intent,
+                    record.id,
+                    record.title,
+                    record.status,
+                    record.research_intent,
                     record.config.model_dump_json(),
                     _dump_list([m.model_dump() for m in record.messages]),
                     _dump_list(record.run_ids),
                     record.comparison_result.model_dump_json() if record.comparison_result else None,
-                    record.created_at, record.finished_at,
+                    record.created_at,
+                    record.finished_at,
                 ),
             )
 
     def get(self, session_id: str) -> SessionRecord | None:
         with self._conn() as con:
-            row = con.execute(
-                "SELECT * FROM research_sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = con.execute("SELECT * FROM research_sessions WHERE id = ?", (session_id,)).fetchone()
         if row is None:
             return None
         import json
@@ -89,8 +91,7 @@ class SqliteSessionStore:
                 "messages": json.loads(row["messages_json"]),
                 "run_ids": json.loads(row["run_ids_json"]),
                 "comparison_result": (
-                    json.loads(row["comparison_result_json"])
-                    if row["comparison_result_json"] else None
+                    json.loads(row["comparison_result_json"]) if row["comparison_result_json"] else None
                 ),
                 "created_at": row["created_at"],
                 "finished_at": row["finished_at"],

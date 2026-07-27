@@ -32,8 +32,12 @@ def build_sites_block(inputs: list[tuple[str, ExtractionResult]]) -> str:
     blocks = []
     for run_id, res in inputs:
         label = _host(res.start_url)
-        lines = [f"SITE: {label}", f"URL: {res.start_url}", f"RUN: {run_id}",
-                 f"SUMMARY: {res.summary[:SITE_SUMMARY_CAP]}"]
+        lines = [
+            f"SITE: {label}",
+            f"URL: {res.start_url}",
+            f"RUN: {run_id}",
+            f"SUMMARY: {res.summary[:SITE_SUMMARY_CAP]}",
+        ]
         for fact in res.facts[:FACTS_PER_SITE]:
             lines.append(f"FACT {fact.key} ({fact.confidence}): {fact.value[:300]}")
         if res.design_tokens:
@@ -42,8 +46,9 @@ def build_sites_block(inputs: list[tuple[str, ExtractionResult]]) -> str:
             lines.append("DESIGN_TOKENS: " + json.dumps(res.design_tokens, ensure_ascii=False)[:800])
         if res.article:
             a = res.article
-            lines.append(f"ARTICLE: {a.title} | {a.url} | words={a.word_count} | "
-                         f"headings={'; '.join(a.headings[:12])}")
+            lines.append(
+                f"ARTICLE: {a.title} | {a.url} | words={a.word_count} | headings={'; '.join(a.headings[:12])}"
+            )
             lines.append(f"ARTICLE_EXCERPT: {a.main_text_excerpt[:ARTICLE_EXCERPT_CAP]}")
         if res.not_found:
             lines.append("NOT_FOUND: " + "; ".join(nf.key for nf in res.not_found[:6]))
@@ -74,8 +79,11 @@ class CompareSynthesizer:
         inputs: list[tuple[str, ExtractionResult]],
     ) -> tuple[ComparisonResult, dict]:
         user = self._user_tpl.render(
-            task=task, rubric_id=rubric_id, rubric=self._rubric_text(rubric_id),
-            sites_count=len(inputs), sites_block=build_sites_block(inputs),
+            task=task,
+            rubric_id=rubric_id,
+            rubric=self._rubric_text(rubric_id),
+            sites_count=len(inputs),
+            sites_block=build_sites_block(inputs),
         )
         num_ctx = WIDE_NUM_CTX if len(inputs) > 3 else self._s.synth_num_ctx
         content, stats = await self._client.chat(
@@ -91,21 +99,27 @@ class CompareSynthesizer:
         raw = extract_json(content)
         if raw is None:  # 1 retry (doc 05 § Validation)
             content, stats = await self._client.chat(
-                model=self._s.synth_model, system=self._system,
+                model=self._s.synth_model,
+                system=self._system,
                 user=user + "\n\nYour previous reply was not valid JSON. JSON object only.",
                 think=True if supports_think(self._s.synth_model) else None,
-                temperature=0.2, num_ctx=num_ctx,
-                max_tokens=self._s.synth_max_tokens, keep_alive=0,
+                temperature=0.2,
+                num_ctx=num_ctx,
+                max_tokens=self._s.synth_max_tokens,
+                keep_alive=0,
             )
             raw = extract_json(content)
         if raw is None:
-            return (ComparisonResult(status="failed",
-                                     narrative=strip_thinking(content)[:500]), stats)
+            return (ComparisonResult(status="failed", narrative=strip_thinking(content)[:500]), stats)
         result = self._validated(raw, task=task, rubric_id=rubric_id, inputs=inputs)
         return result, stats
 
     def _validated(
-        self, raw: dict, *, task: str, rubric_id: str,
+        self,
+        raw: dict,
+        *,
+        task: str,
+        rubric_id: str,
         inputs: list[tuple[str, ExtractionResult]],
     ) -> ComparisonResult:
         by_host = {_host(res.start_url): (run_id, res) for run_id, res in inputs}
@@ -122,8 +136,12 @@ class CompareSynthesizer:
                 {**raw, "comparison_task": task, "rubric": rubric_id, "status": "completed"}
             )
         except ValidationError:
-            return ComparisonResult(status="partial", comparison_task=task, rubric=rubric_id,
-                                    narrative=str(raw.get("narrative", ""))[:2000])
+            return ComparisonResult(
+                status="partial",
+                comparison_task=task,
+                rubric=rubric_id,
+                narrative=str(raw.get("narrative", ""))[:2000],
+            )
         # run_id — только детерминированно, по нашим inputs; чужие сайты отбрасываем
         # resolve() зовём один раз на ranking: раньше он вызывался дважды (в фильтре
         # и в цикле), и второй вызов формально мог вернуть None.
