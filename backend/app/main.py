@@ -62,8 +62,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.orchestrator_factory = orchestrator_factory
 
         def research_runner_factory() -> ResearchRunner:
-            planner = (LlmPlanner(app.state.llm_client, settings)
-                       if settings.planner == "llm" else None)  # doc 24 § Planner
+            planner = (
+                LlmPlanner(app.state.llm_client, settings) if settings.planner == "llm" else None
+            )  # doc 24 § Planner
             return ResearchRunner(
                 settings=settings,
                 run_store=app.state.run_store,

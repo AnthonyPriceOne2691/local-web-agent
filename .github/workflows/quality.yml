@@ -47,6 +47,12 @@ jobs:
       - name: Gate coverage (все гейты подключены)
         run: bash scripts/lint/check_gate_coverage.sh
 
+      # CQG §2.7: soft-режим здесь запрещён — история ветки сканируется целиком.
+      - name: Secrets scan (tracked files + branch history)
+        run: |
+          backend/.venv/bin/detect-secrets-hook --baseline .secrets.baseline \
+            $(git ls-files | grep -vE '^(\.secrets\.baseline|uv\.lock|frontend/package-lock\.json)$')
+
       - name: Baseline ratchet (снимки только вниз)
         env:
           BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}

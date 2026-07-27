@@ -15,20 +15,51 @@ from app.schemas.research import ResearchIntent
 URL_RE = re.compile(r"https?://[^\s,;\"'<>()\[\]]+", re.IGNORECASE)
 
 # триггеры research intent (doc 24 § Research intents; RU+EN стемы)
-DESIGN_KEYWORDS = ("design", "layout", "colors", "typography", "look and feel", "ui",
-                   "дизайн", "вёрстк", "верстк", "макет", "цвет", "шрифт", "выгляд", "отлича")
-CONTENT_KEYWORDS = ("article", "blog", "статья", "статью", "статьи", "текст", "контент",
-                    "полнее", "полнот", "конкурент", "guide", "гайд", "post")
+DESIGN_KEYWORDS = (
+    "design",
+    "layout",
+    "colors",
+    "typography",
+    "look and feel",
+    "ui",
+    "дизайн",
+    "вёрстк",
+    "верстк",
+    "макет",
+    "цвет",
+    "шрифт",
+    "выгляд",
+    "отлича",
+)
+CONTENT_KEYWORDS = (
+    "article",
+    "blog",
+    "статья",
+    "статью",
+    "статьи",
+    "текст",
+    "контент",
+    "полнее",
+    "полнот",
+    "конкурент",
+    "guide",
+    "гайд",
+    "post",
+)
 
 # per-site crawl defaults по intent (doc 21 § intents matrix, doc 24 § UC)
 CRAWL_DEFAULTS: dict[str, dict] = {
     "comparative_design": {
-        "intent": "design_audit", "max_pages": 6,  # UC-1: 20-мин бюджет (doc 24)
-        "capture_screenshots": "always", "vision_enabled": "always",
+        "intent": "design_audit",
+        "max_pages": 6,  # UC-1: 20-мин бюджет (doc 24)
+        "capture_screenshots": "always",
+        "vision_enabled": "always",
     },
     "comparative_content": {
-        "intent": "content_search", "max_pages": 12,  # UC-2 (doc 21)
-        "capture_screenshots": "never", "vision_enabled": "never",
+        "intent": "content_search",
+        "max_pages": 12,  # UC-2 (doc 21)
+        "capture_screenshots": "never",
+        "vision_enabled": "never",
     },
     "multi_site_research": {"intent": None, "max_pages": 10},
     "single_site": {"intent": None, "max_pages": 10},
@@ -76,13 +107,13 @@ def classify_research_intent(message: str, n_urls: int) -> ResearchIntent:
 def build_plan(intent: ResearchIntent, urls: list[str], task: str) -> list[ToolCall]:
     """Детерминированный план: N × crawl_site (sequential, D-7) → compare (если >1)."""
     defaults = {k: v for k, v in CRAWL_DEFAULTS[intent].items() if v is not None}
-    plan = [
-        ToolCall(name="crawl_site", args={"url": url, "task": task, **defaults})
-        for url in urls
-    ]
+    plan = [ToolCall(name="crawl_site", args={"url": url, "task": task, **defaults}) for url in urls]
     if len(urls) >= 2:
-        plan.append(ToolCall(name="compare_results",
-                             args={"comparison_task": task, "rubric": RUBRIC_BY_INTENT[intent]}))
+        plan.append(
+            ToolCall(
+                name="compare_results", args={"comparison_task": task, "rubric": RUBRIC_BY_INTENT[intent]}
+            )
+        )
     return plan
 
 

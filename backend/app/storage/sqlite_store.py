@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sqlite3
 from collections.abc import Iterator
@@ -14,6 +15,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from app.schemas.run import RunRecord
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS crawl_runs (
@@ -102,12 +105,20 @@ class SqliteRunStore:
                        error_message=excluded.error_message, started_at=excluded.started_at,
                        finished_at=excluded.finished_at, session_id=excluded.session_id""",
                 (
-                    record.id, record.config.task, record.config.start_url,
-                    record.config.model_dump_json(), record.status, record.intent,
-                    record.current_url, record.pages_visited,
+                    record.id,
+                    record.config.task,
+                    record.config.start_url,
+                    record.config.model_dump_json(),
+                    record.status,
+                    record.intent,
+                    record.current_url,
+                    record.pages_visited,
                     record.result.model_dump_json() if record.result else None,
-                    json.dumps(record.metadata, ensure_ascii=False), record.error_message,
-                    record.started_at, record.finished_at, record.session_id,
+                    json.dumps(record.metadata, ensure_ascii=False),
+                    record.error_message,
+                    record.started_at,
+                    record.finished_at,
+                    record.session_id,
                 ),
             )
             con.executemany(
@@ -117,10 +128,18 @@ class SqliteRunStore:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     (
-                        record.id, seq, s.index, s.state, s.url, s.action, s.target_url,
-                        s.reasoning, s.note,
+                        record.id,
+                        seq,
+                        s.index,
+                        s.state,
+                        s.url,
+                        s.action,
+                        s.target_url,
+                        s.reasoning,
+                        s.note,
                         json.dumps([v.model_dump() for v in s.violations], ensure_ascii=False),
-                        s.duration_ms, json.dumps(s.screenshot_paths),
+                        s.duration_ms,
+                        json.dumps(s.screenshot_paths),
                         json.dumps(s.llm_stats, ensure_ascii=False),
                     )
                     for seq, s in enumerate(record.steps)
@@ -142,9 +161,7 @@ class SqliteRunStore:
 
     def list_ids(self) -> list[str]:
         with self._conn() as con:
-            rows = con.execute(
-                "SELECT id FROM crawl_runs ORDER BY started_at DESC, id DESC"
-            ).fetchall()
+            rows = con.execute("SELECT id FROM crawl_runs ORDER BY started_at DESC, id DESC").fetchall()
         return [r["id"] for r in rows]
 
     def artifacts_dir(self, run_id: str) -> Path:
@@ -207,8 +224,16 @@ class SqliteRunStore:
                 record = RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
                 if self.get(record.id) is None:
                     self.save(record)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Файл всё равно уезжает в legacy_json/ — без лога потеря run'а
+                # выглядела бы как «его никогда не было».
+                logger.warning(
+                    "legacy run %s not imported (%s: %s) — moved to %s",
+                    path.name,
+                    type(exc).__name__,
+                    exc,
+                    backup.name,
+                )
             path.rename(backup / path.name)
 
 

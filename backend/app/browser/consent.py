@@ -50,7 +50,7 @@ class ConsentHandler:
         self,
         browser: ConsentBrowser,
         *,
-        mode: str = "auto",              # auto | hide_only | never
+        mode: str = "auto",  # auto | hide_only | never
         click_mode: str = "reject_first",  # reject_first | accept | never
         site_click_used: bool = False,
     ) -> str:

@@ -21,8 +21,13 @@ def tmp_store(tmp_path: Path) -> SqliteRunStore:
 @pytest.fixture(autouse=True)
 def _no_network_probes(monkeypatch):
     """Юниты оркестратора не ходят в сеть: slug-пробы отключены — иначе результаты
-    зависят от параллельно запущенного fixtures-сервера на 8901+ (флак)."""
-    from app.orchestrator import loop as loop_mod
+    зависят от параллельно запущенного fixtures-сервера на 8901+ (флак).
+
+    Патчим `orchestrator.discovery` — модуль, где пробы теперь и живут (вынесены
+    из loop.py ради ≤500 LOC). Патч ставится по месту их импорта, иначе фикстура
+    молча перестаёт работать при следующем переносе кода.
+    """
+    from app.orchestrator import discovery as discovery_mod
 
     async def no_probes(client, origin, slugs):
         return [], []
@@ -30,8 +35,8 @@ def _no_network_probes(monkeypatch):
     async def no_legal(client, origin, slugs, cache, timeout_s=4.0):
         return []
 
-    monkeypatch.setattr(loop_mod, "probe_slugs_f1", no_probes)
-    monkeypatch.setattr(loop_mod, "filter_alive", no_legal)
+    monkeypatch.setattr(discovery_mod, "probe_slugs_f1", no_probes)
+    monkeypatch.setattr(discovery_mod, "filter_alive", no_legal)
 
 
 @pytest.fixture(scope="session")
@@ -39,9 +44,15 @@ def hints() -> PathHints:
     return PathHints.load(REPO_ROOT / "data" / "navigation")
 
 
-def page_raw(*, title: str = "", text: str = "", links: list[tuple[str, str]] | None = None,
-             password: bool = False, meta: str = "",
-             interactive: list[dict] | None = None) -> dict:
+def page_raw(
+    *,
+    title: str = "",
+    text: str = "",
+    links: list[tuple[str, str]] | None = None,
+    password: bool = False,
+    meta: str = "",
+    interactive: list[dict] | None = None,
+) -> dict:
     """Хелпер: сырой результат OBSERVE_JS."""
     return {
         "title": title,

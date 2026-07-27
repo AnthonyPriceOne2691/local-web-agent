@@ -25,13 +25,22 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
     if ctx.session_store is None:
         return "export_file: недоступно вне сессии"
     title, body = build_export_content(r.result, title_override=call.args.get("title"))
-    path = export_to_file(title, body,
-                          out_dir=ctx.session_store.artifacts_dir(ctx.session.id),
-                          filename=call.args.get("filename"))
+    path = export_to_file(
+        title,
+        body,
+        out_dir=ctx.session_store.artifacts_dir(ctx.session.id),
+        filename=call.args.get("filename"),
+    )
     return f"Сохранено в файл: {path}"
 
 
-SPEC = register(ActionSpec(
-    name="export_file", tier=0, reversible=True,
-    enforce=enforce_run_id_in_session, execute=_execute,
-    note=lambda call: f"export_file run={call.args.get('run_id')}"))
+SPEC = register(
+    ActionSpec(
+        name="export_file",
+        tier=0,
+        reversible=True,
+        enforce=enforce_run_id_in_session,
+        execute=_execute,
+        note=lambda call: f"export_file run={call.args.get('run_id')}",
+    )
+)

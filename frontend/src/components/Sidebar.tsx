@@ -1,4 +1,5 @@
 import type { SessionListItem } from '../types';
+
 import StatusBadge from './StatusBadge';
 
 interface Props {

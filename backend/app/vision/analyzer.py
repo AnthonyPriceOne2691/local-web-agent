@@ -6,13 +6,18 @@ Structured outputs (schema:VisionInsight, doc 16); invalid JSON → 1 retry
 
 from __future__ import annotations
 
+import logging
+
 from jinja2 import Template
 from pydantic import ValidationError
 
 from app.config import Settings
 from app.llm.ollama_client import OllamaClient
 from app.llm.parsing import extract_json
+from app.schemas.snapshot import ViewportProfile
 from app.vision.schemas import VisionInsight
+
+logger = logging.getLogger(__name__)
 
 
 class VisionAnalyzer:
@@ -29,7 +34,7 @@ class VisionAnalyzer:
         image_base64: str,
         task: str,
         url: str,
-        profile: str,
+        profile: ViewportProfile,
         dom_excerpt: str | None = None,
     ) -> VisionInsight:
         user = self._user_tpl.render(
@@ -38,14 +43,20 @@ class VisionAnalyzer:
         insight, raw_error = await self._call(user, image_base64, retry_note="")
         if insight is None:  # 1 retry: почини JSON (doc 23 § Error handling)
             insight, raw_error = await self._call(
-                user, image_base64,
+                user,
+                image_base64,
                 retry_note="\nYour previous reply was not valid JSON. "
-                           "Respond with the VisionInsight JSON object only.",
+                "Respond with the VisionInsight JSON object only.",
             )
         if insight is None:
             status = "failed" if raw_error else "degraded"
-            return VisionInsight(profile=profile, url=url, status=status,
-                                 confidence="low", error=raw_error or "invalid JSON after retry")
+            return VisionInsight(
+                profile=profile,
+                url=url,
+                status=status,
+                confidence="low",
+                error=raw_error or "invalid JSON after retry",
+            )
         insight.profile = profile  # поля источника — истина оркестратора
         insight.url = url
         insight.status = "ok"
@@ -67,6 +78,9 @@ class VisionAnalyzer:
                 images=[image_base64],
             )
         except Exception as exc:
+            # Vision не валит run (doc 23): причина уезжает вызывающему строкой,
+            # но без лога в vision_errors теряется класс сбоя (таймаут vs OOM).
+            logger.warning("vision call failed (%s): %s", type(exc).__name__, str(exc)[:200])
             return None, str(exc)[:200]
         raw = extract_json(content)
         if raw is None:

@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.snapshot import ViewportProfile
+
 VisionStatus = Literal["ok", "skipped", "failed", "degraded"]
 ScreenStatus = Literal["ok", "blank", "obstructed", "error_page", "unknown"]
 
@@ -17,7 +19,7 @@ class VisionExtracted(BaseModel):
 
 
 class VisionInsight(BaseModel):
-    profile: Literal["desktop", "tablet", "mobile"] = "desktop"
+    profile: ViewportProfile = "desktop"
     url: str = ""
     status: VisionStatus = "ok"
     screen_status: ScreenStatus = "unknown"

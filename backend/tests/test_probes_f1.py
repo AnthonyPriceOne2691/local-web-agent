@@ -22,7 +22,8 @@ def _page(body: str, status: int = 200) -> httpx.Response:
 
 
 LINKED_PAGE = (
-    "<html><body>" + "Plenty of visible text here. " * 10
+    "<html><body>"
+    + "Plenty of visible text here. " * 10
     + '<a href="/contact-sales">Contact sales</a>'
     + f'<a href="{ORIGIN}/about">About us</a>'
     + '<a href="https://other.com/x">External</a>'

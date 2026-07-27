@@ -68,11 +68,20 @@ def test_detect_status_recognizes_modern_cloudflare():
         ("", "Verifying you are human. This may take a few seconds."),
         ("Attention Required! | Cloudflare", "needs to review the security of your connection"),
     ]:
-        assert detect_status(url="https://x.test/", main_text=text, title=title,
-                             has_password_field=False) == "captcha", title
+        assert (
+            detect_status(url="https://x.test/", main_text=text, title=title, has_password_field=False)
+            == "captcha"
+        ), title
     # обычная страница не ловится как captcha
-    assert detect_status(url="https://x.test/", main_text="Наша команда и контакты",
-                         title="О компании", has_password_field=False) == "ok"
+    assert (
+        detect_status(
+            url="https://x.test/",
+            main_text="Наша команда и контакты",
+            title="О компании",
+            has_password_field=False,
+        )
+        == "ok"
+    )
 
 
 def test_detect_status_ignores_embedded_widget_on_real_page():
@@ -82,20 +91,33 @@ def test_detect_status_ignores_embedded_widget_on_real_page():
     на реальной странице (форма регистрации) → бесконечная attended-пауза."""
     real = "Melhores casas de apostas online no Brasil em 2026. " * 40  # >800 симв
     real += " Registre-se: verifying you are human."  # встроенный Turnstile-виджет
-    assert detect_status(url="https://bet.test/apostas", main_text=real,
-                         title="Casas de Apostas 2026", has_password_field=False) == "ok"
+    assert (
+        detect_status(
+            url="https://bet.test/apostas",
+            main_text=real,
+            title="Casas de Apostas 2026",
+            has_password_field=False,
+        )
+        == "ok"
+    )
 
 
 def test_login_wall_thin_guard_ignores_widget_on_fat_page():
     """password-поле на толстой контентной странице (login-виджет) → ok, не login_wall."""
     fat = "Real article content here. " * 60  # >800 симв
-    assert detect_status(url="https://x.test/article", main_text=fat, title="Article",
-                         has_password_field=True) == "ok"
+    assert (
+        detect_status(url="https://x.test/article", main_text=fat, title="Article", has_password_field=True)
+        == "ok"
+    )
     # тонкая страница с password → login_wall; login-URL → login_wall независимо от текста
-    assert detect_status(url="https://x.test/acct", main_text="Sign in", title="Login",
-                         has_password_field=True) == "login_wall"
-    assert detect_status(url="https://x.test/login", main_text="x" * 2000, title="",
-                         has_password_field=False) == "login_wall"
+    assert (
+        detect_status(url="https://x.test/acct", main_text="Sign in", title="Login", has_password_field=True)
+        == "login_wall"
+    )
+    assert (
+        detect_status(url="https://x.test/login", main_text="x" * 2000, title="", has_password_field=False)
+        == "login_wall"
+    )
 
 
 # ---------------------------------------------------------- orchestrator
@@ -103,16 +125,26 @@ async def test_attended_pause_resume_then_observe(tmp_path):
     origin = "http://127.0.0.1:8911"
     browser = ChallengeBrowser(
         {f"{origin}/": page_raw(title="Home", text="Real page content here " * 40)},
-        challenge_url=f"{origin}/")
-    orch, store, _llm = make_orchestrator(tmp_path, browser, [
-        {"action": "stop", "reasoning": "content is here"},
-        {"summary": "Home read after challenge", "facts": [], "not_found": []},
-    ])
+        challenge_url=f"{origin}/",
+    )
+    orch, store, _llm = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "stop", "reasoning": "content is here"},
+            {"summary": "Home read after challenge", "facts": [], "not_found": []},
+        ],
+    )
     resume = asyncio.Event()
     gate = EventAttendedGate(resume, store, timeout_s=5.0)
-    record = record_for(f"{origin}/", task="read page", attended=True,
-                        respect_robots=False, vision_enabled="never",
-                        capture_screenshots="never")
+    record = record_for(
+        f"{origin}/",
+        task="read page",
+        attended=True,
+        respect_robots=False,
+        vision_enabled="never",
+        capture_screenshots="never",
+    )
 
     task = asyncio.create_task(orch.run(record, attended_gate=gate))
     assert await _wait_status(record, "waiting_user"), "run не встал на паузу"
@@ -121,9 +153,9 @@ async def test_attended_pause_resume_then_observe(tmp_path):
     resume.set()  # человек прошёл проверку
     result = await task
 
-    assert result.metadata.get("blocked_by") is None       # не заблокирован
+    assert result.metadata.get("blocked_by") is None  # не заблокирован
     assert result.metadata.get("challenge_cleared") == 1
-    assert result.metadata.get("challenge") is None         # снят
+    assert result.metadata.get("challenge") is None  # снят
     # goto был ОДИН раз (challenge); после resume — re-observe без нового goto,
     # иначе CF показал бы проверку повторно (баг двух галочек)
     assert browser.visited_log.count(f"{origin}/") == 1
@@ -136,16 +168,26 @@ async def test_attended_login_wall_pause_resume(tmp_path):
     origin = "http://127.0.0.1:8914"
     browser = LoginBrowser(
         {f"{origin}/": page_raw(title="Dashboard", text="Logged-in content here " * 40)},
-        login_url=f"{origin}/")
-    orch, store, _llm = make_orchestrator(tmp_path, browser, [
-        {"action": "stop", "reasoning": "content visible"},
-        {"summary": "read after login", "facts": [], "not_found": []},
-    ])
+        login_url=f"{origin}/",
+    )
+    orch, store, _llm = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "stop", "reasoning": "content visible"},
+            {"summary": "read after login", "facts": [], "not_found": []},
+        ],
+    )
     resume = asyncio.Event()
     gate = EventAttendedGate(resume, store, timeout_s=5.0)
-    record = record_for(f"{origin}/", task="read dashboard", attended=True,
-                        respect_robots=False, vision_enabled="never",
-                        capture_screenshots="never")
+    record = record_for(
+        f"{origin}/",
+        task="read dashboard",
+        attended=True,
+        respect_robots=False,
+        vision_enabled="never",
+        capture_screenshots="never",
+    )
 
     task = asyncio.create_task(orch.run(record, attended_gate=gate))
     assert await _wait_status(record, "waiting_user"), "login не встал на паузу"
@@ -161,16 +203,25 @@ async def test_attended_login_wall_pause_resume(tmp_path):
 async def test_attended_timeout_blocks(tmp_path):
     origin = "http://127.0.0.1:8912"
     browser = ChallengeBrowser(
-        {f"{origin}/": page_raw(title="Home", text="content " * 40)},
-        challenge_url=f"{origin}/")
-    orch, _store2, _llm = make_orchestrator(tmp_path, browser, [
-        {"summary": "unused", "facts": [], "not_found": []},
-    ])
+        {f"{origin}/": page_raw(title="Home", text="content " * 40)}, challenge_url=f"{origin}/"
+    )
+    orch, _store2, _llm = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"summary": "unused", "facts": [], "not_found": []},
+        ],
+    )
     resume = asyncio.Event()  # никто не пройдёт проверку
     gate = EventAttendedGate(resume, _store2, timeout_s=0.05)
-    record = record_for(f"{origin}/", task="read", attended=True,
-                        respect_robots=False, vision_enabled="never",
-                        capture_screenshots="never")
+    record = record_for(
+        f"{origin}/",
+        task="read",
+        attended=True,
+        respect_robots=False,
+        vision_enabled="never",
+        capture_screenshots="never",
+    )
 
     result = await orch.run(record, attended_gate=gate)
     assert result.status == "blocked"
@@ -182,12 +233,14 @@ async def test_captcha_without_attended_still_blocks(tmp_path):
     """Без attended-gate поведение прежнее: captcha → blocked сразу (регрессия Phase 2)."""
     origin = "http://127.0.0.1:8913"
     browser = ChallengeBrowser(
-        {f"{origin}/": page_raw(title="Home", text="content " * 40)},
-        challenge_url=f"{origin}/")
-    orch, _store3, _llm = make_orchestrator(tmp_path, browser, [
-        {"summary": "x", "facts": [], "not_found": []}])
-    record = record_for(f"{origin}/", task="read", respect_robots=False,
-                        vision_enabled="never", capture_screenshots="never")
+        {f"{origin}/": page_raw(title="Home", text="content " * 40)}, challenge_url=f"{origin}/"
+    )
+    orch, _store3, _llm = make_orchestrator(
+        tmp_path, browser, [{"summary": "x", "facts": [], "not_found": []}]
+    )
+    record = record_for(
+        f"{origin}/", task="read", respect_robots=False, vision_enabled="never", capture_screenshots="never"
+    )
 
     result = await orch.run(record)  # attended_gate=None
     assert result.status == "blocked"
@@ -201,10 +254,14 @@ async def test_sse_emits_challenge_wait(api_client):  # noqa: F811
     _fast_sse(app)
     sessions, runs = app.state.session_store, app.state.run_store
     sessions.save(SessionRecord(id="chsse", status="running_tools", created_at="t"))
-    run = RunRecord(id="runwait", status="waiting_user", session_id="chsse", started_at="t",
-                    config=RunConfig(start_url="http://site.test/x", task="t", attended=True),
-                    metadata={"challenge": {"url": "http://site.test/x", "kind": "captcha",
-                                            "action": "оплата заказа"}})
+    run = RunRecord(
+        id="runwait",
+        status="waiting_user",
+        session_id="chsse",
+        started_at="t",
+        config=RunConfig(start_url="http://site.test/x", task="t", attended=True),
+        metadata={"challenge": {"url": "http://site.test/x", "kind": "captcha", "action": "оплата заказа"}},
+    )
     runs.save(run)
 
     async def _advance() -> None:
@@ -229,8 +286,11 @@ async def test_resume_run_endpoint_guards(api_client):  # noqa: F811
     client, app = api_client
     runs = app.state.run_store
     assert (await client.post("/runs/nope/resume")).status_code == 404
-    runs.save(RunRecord(id="rdone", status="completed", started_at="t",
-                        config=RunConfig(start_url="http://a", task="t")))
+    runs.save(
+        RunRecord(
+            id="rdone", status="completed", started_at="t", config=RunConfig(start_url="http://a", task="t")
+        )
+    )
     r = await client.post("/runs/rdone/resume")  # не в waiting_user
     assert r.status_code == 409
     assert r.json()["detail"]["error"] == "not_waiting"
@@ -240,8 +300,15 @@ async def test_resume_session_endpoint_sets_event(api_client):  # noqa: F811
     client, app = api_client
     sessions, runs = app.state.session_store, app.state.run_store
     sessions.save(SessionRecord(id="srez", status="running_tools", created_at="t"))
-    runs.save(RunRecord(id="ractive", status="waiting_user", session_id="srez", started_at="t",
-                        config=RunConfig(start_url="http://a", task="t", attended=True)))
+    runs.save(
+        RunRecord(
+            id="ractive",
+            status="waiting_user",
+            session_id="srez",
+            started_at="t",
+            config=RunConfig(start_url="http://a", task="t", attended=True),
+        )
+    )
     event = asyncio.Event()
     app.state.session_resume_events["srez"] = event
 

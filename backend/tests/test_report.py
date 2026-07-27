@@ -11,30 +11,52 @@ URL = "https://x.com/"
 
 
 def _record(**meta) -> RunRecord:
-    rec = RunRecord(id="r1", config=RunConfig(start_url=URL, task="Find the price"),
-                    status="completed", pages_visited=2)
+    rec = RunRecord(
+        id="r1", config=RunConfig(start_url=URL, task="Find the price"), status="completed", pages_visited=2
+    )
     rec.metadata.update(meta)
     return rec
 
 
 def test_full_report_sections():
-    rec = _record(vision_calls_total=2, vision_pages_analyzed=1, vision_failures=1,
-                  vision_skipped_pages=["https://x.com/blog"])
+    rec = _record(
+        vision_calls_total=2,
+        vision_pages_analyzed=1,
+        vision_failures=1,
+        vision_skipped_pages=["https://x.com/blog"],
+    )
     rec.result = ExtractionResult(
-        status="completed", summary="Price found.",
-        facts=[Fact(key="price", label="Price", value="$49/mo", confidence="high",
-                    evidence=[Evidence(url=URL, quote="only $49/mo"),
-                              Evidence(url=URL, quote="", source="vision")])],
+        status="completed",
+        summary="Price found.",
+        facts=[
+            Fact(
+                key="price",
+                label="Price",
+                value="$49/mo",
+                confidence="high",
+                evidence=[
+                    Evidence(url=URL, quote="only $49/mo"),
+                    Evidence(url=URL, quote="", source="vision"),
+                ],
+            )
+        ],
         not_found=[NotFound(key="phone", reason="absent")],
     )
     snap = PageSnapshot(
-        url=URL, main_text="x",
-        screenshots=[ScreenshotRef(profile="desktop", relative_path="screenshots/001.png",
-                                   width=1440, height=900)],
-        vision_insights=[{"status": "ok", "profile": "desktop",
-                          "description": "Blue pricing card with $49/mo",
-                          "design": {"colors_approx": ["#2563eb"], "layout": "3 cards"}},
-                         {"status": "failed", "profile": "mobile", "error": "timeout"}],
+        url=URL,
+        main_text="x",
+        screenshots=[
+            ScreenshotRef(profile="desktop", relative_path="screenshots/001.png", width=1440, height=900)
+        ],
+        vision_insights=[
+            {
+                "status": "ok",
+                "profile": "desktop",
+                "description": "Blue pricing card with $49/mo",
+                "design": {"colors_approx": ["#2563eb"], "layout": "3 cards"},
+            },
+            {"status": "failed", "profile": "mobile", "error": "timeout"},
+        ],
     )
     report = build_report(rec, [snap])
     assert "# Crawl Report: Find the price" in report
@@ -60,9 +82,11 @@ def test_blocked_report_short():
 
 def test_plain_dom_report_omits_design_and_appendix():
     rec = _record()
-    rec.result = ExtractionResult(status="completed", summary="ok",
-                                  facts=[Fact(key="k", value="v", confidence="medium",
-                                              evidence=[Evidence(url=URL, quote="v here")])])
+    rec.result = ExtractionResult(
+        status="completed",
+        summary="ok",
+        facts=[Fact(key="k", value="v", confidence="medium", evidence=[Evidence(url=URL, quote="v here")])],
+    )
     report = build_report(rec, [PageSnapshot(url=URL, main_text="v here")])
     assert "## Design analysis" not in report
     assert "Appendix" not in report

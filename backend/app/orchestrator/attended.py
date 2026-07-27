@@ -23,8 +23,11 @@ from app.storage.run_store import RunStore
 
 class AttendedGate(Protocol):
     async def try_clear(
-        self, record: RunRecord, snapshot: PageSnapshot,
-        snapshots: list[PageSnapshot], visited: set[str],
+        self,
+        record: RunRecord,
+        snapshot: PageSnapshot,
+        snapshots: list[PageSnapshot],
+        visited: set[str],
     ) -> bool: ...
 
     async def confirm_action(self, record: RunRecord, description: str) -> bool: ...
@@ -41,8 +44,11 @@ class EventAttendedGate:
         self._timeout_s = timeout_s
 
     async def try_clear(
-        self, record: RunRecord, snapshot: PageSnapshot,
-        snapshots: list[PageSnapshot], visited: set[str],
+        self,
+        record: RunRecord,
+        snapshot: PageSnapshot,
+        snapshots: list[PageSnapshot],
+        visited: set[str],
     ) -> bool:
         """True — пользователь прошёл проверку (продолжаем); False — таймаут (blocked)."""
         self._resume.clear()  # до объявления паузы — иначе resume между save и clear теряется
@@ -88,8 +94,10 @@ class EventAttendedGate:
         self._resume.clear()
         record.status = "waiting_user"
         record.metadata["challenge"] = {
-            "url": record.current_url, "kind": kind,
-            "action": description, "since": datetime.now(UTC).isoformat(),
+            "url": record.current_url,
+            "kind": kind,
+            "action": description,
+            "since": datetime.now(UTC).isoformat(),
         }
         self._store.save(record)  # SSE увидит через poll → challenge_wait
         try:
@@ -106,9 +114,13 @@ class EventAttendedGate:
 
 
 async def reobserve_in_place(
-    browser: BrowserSession, record: RunRecord, *,
-    origin: str, step_index: int,
-    snapshots: list[PageSnapshot], visited: set[str],
+    browser: BrowserSession,
+    record: RunRecord,
+    *,
+    origin: str,
+    step_index: int,
+    snapshots: list[PageSnapshot],
+    visited: set[str],
     note: str = "attended: re-observe after resume",
 ) -> PageSnapshot:
     """OBSERVE текущей открытой страницы БЕЗ повторного goto.

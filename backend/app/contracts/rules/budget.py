@@ -15,30 +15,21 @@ from app.schemas.snapshot import AgentAction
 # ---------------------------------------------------------------- per-action
 
 
-def pages_budget(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def pages_budget(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     if ctx.pages_visited >= ctx.max_pages:
-        return Violation(constraint_id=code, message="page budget exhausted",
-                         proposed_url=action.url)
+        return Violation(constraint_id=code, message="page budget exhausted", proposed_url=action.url)
     return None
 
 
-def hop_depth(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def hop_depth(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     if ctx.hops.get(ctx.current_url, 0) + 1 > ctx.max_depth:
-        return Violation(constraint_id=code, message="hop depth exceeded",
-                         proposed_url=action.url)
+        return Violation(constraint_id=code, message="hop depth exceeded", proposed_url=action.url)
     return None
 
 
-def robots_allowed(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
-) -> Violation | None:
+def robots_allowed(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
     if ctx.robots is not None and not ctx.robots.allowed(action.url or ""):
-        return Violation(constraint_id=code, message="robots.txt disallow",
-                         proposed_url=action.url)
+        return Violation(constraint_id=code, message="robots.txt disallow", proposed_url=action.url)
     return None
 
 
@@ -66,8 +57,11 @@ def rate_limit_floor(code: str, params: dict, config: RunConfig) -> Violation | 
     if params.get("exempt") == "private_hosts" and is_private_host(config.start_url):
         return None
     if config.rate_limit_ms < floor:
-        return Violation(constraint_id=code, severity="soft",
-                         message=f"rate_limit_ms {config.rate_limit_ms} raised to floor {floor}")
+        return Violation(
+            constraint_id=code,
+            severity="soft",
+            message=f"rate_limit_ms {config.rate_limit_ms} raised to floor {floor}",
+        )
     return None
 
 
@@ -76,6 +70,5 @@ def page_timeout_ceiling(code: str, params: dict, config: RunConfig) -> Violatio
     ceiling = int(params.get("max", 0))
     configured = int(getattr(config, "page_timeout_ms", 0) or 0)
     if ceiling and configured > ceiling:
-        return Violation(constraint_id=code, severity="soft",
-                         message=f"page timeout capped at {ceiling} ms")
+        return Violation(constraint_id=code, severity="soft", message=f"page timeout capped at {ceiling} ms")
     return None

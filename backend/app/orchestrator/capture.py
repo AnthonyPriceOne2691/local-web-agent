@@ -5,12 +5,15 @@ desktop-only; multi-viewport (tablet/mobile) — backlog (doc 22, doc 25 Track A
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 
 from app.browser.base import BrowserSession
 from app.schemas.run import RunRecord
 from app.schemas.snapshot import PageSnapshot, ScreenshotRef
 from app.storage.run_store import RunStore
+
+logger = logging.getLogger(__name__)
 
 SPA_TEXT_THRESHOLD = 200  # < этого текста → SPA/пустой DOM, снимаем скрин даже в auto (docs 03/22)
 
@@ -36,5 +39,7 @@ async def maybe_screenshot(
         snapshot.screenshots.append(
             ScreenshotRef(profile="desktop", relative_path=rel, width=1440, height=900)
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        # Скриншот — вход для vision-пасса (doc 23): без лога его отсутствие
+        # выглядело бы как «страница не выбрана для съёмки».
+        logger.warning("screenshot failed for %s (%s: %s)", snapshot.url, type(exc).__name__, exc)

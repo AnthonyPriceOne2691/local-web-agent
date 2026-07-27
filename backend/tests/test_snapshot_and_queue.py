@@ -32,9 +32,15 @@ def test_queue_priorities_and_top_k(hints):
     links += [(f"{ORIGIN}/contact", "Contact us"), ("http://127.0.0.1:9999/ext", "other")]
     s = snap(f"{ORIGIN}/", title="Home", text="welcome " * 50, links=links)
     cands = build_candidates(
-        snapshot=s, homepage=None, intent="contact", task="find contact email",
-        hints=hints, origin=ORIGIN, visited=set(),
-        alive_probes=[f"{ORIGIN}/page/kontak"], legal_probes=[],
+        snapshot=s,
+        homepage=None,
+        intent="contact",
+        task="find contact email",
+        hints=hints,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[f"{ORIGIN}/page/kontak"],
+        legal_probes=[],
     )
     hrefs = [c.href for c in cands]
     assert len(cands) <= 10
@@ -46,21 +52,32 @@ def test_queue_priorities_and_top_k(hints):
 def test_queue_excludes_visited(hints):
     s = snap(f"{ORIGIN}/", title="Home", text="w " * 200, links=[(f"{ORIGIN}/a", "A")])
     cands = build_candidates(
-        snapshot=s, homepage=None, intent="generic", task="anything at all",
-        hints=hints, origin=ORIGIN, visited={f"{ORIGIN}/a"},
-        alive_probes=[], legal_probes=[],
+        snapshot=s,
+        homepage=None,
+        intent="generic",
+        task="anything at all",
+        hints=hints,
+        origin=ORIGIN,
+        visited={f"{ORIGIN}/a"},
+        alive_probes=[],
+        legal_probes=[],
     )
     assert cands == []
 
 
 # --- interactive elements (doc 25 A-1: element referencing) ---
 
+
 def test_interactive_elements_parsed_and_indexed():
-    raw = page_raw(title="Contact", text="reach us", interactive=[
-        {"kind": "text", "label": "Name", "input_type": "text", "name": "name"},
-        {"kind": "email", "label": "Email", "input_type": "email", "name": "email"},
-        {"kind": "button", "label": "Send"},
-    ])
+    raw = page_raw(
+        title="Contact",
+        text="reach us",
+        interactive=[
+            {"kind": "text", "label": "Name", "input_type": "text", "name": "name"},
+            {"kind": "email", "label": "Email", "input_type": "email", "name": "email"},
+            {"kind": "button", "label": "Send"},
+        ],
+    )
     els = build_snapshot(raw, page_url=f"{ORIGIN}/contact", origin=ORIGIN).interactive_elements
     assert [e.index for e in els] == [0, 1, 2]
     assert els[1].kind == "email" and els[1].input_type == "email" and els[1].name == "email"
@@ -75,8 +92,9 @@ def test_interactive_elements_cap_and_reindex():
 
 
 def test_interactive_label_truncated():
-    els = snap(f"{ORIGIN}/", title="T", text="x",
-               interactive=[{"kind": "button", "label": "z" * 300}]).interactive_elements
+    els = snap(
+        f"{ORIGIN}/", title="T", text="x", interactive=[{"kind": "button", "label": "z" * 300}]
+    ).interactive_elements
     assert len(els[0].label) == 120
 
 

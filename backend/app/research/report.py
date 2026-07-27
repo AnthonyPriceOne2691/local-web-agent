@@ -12,8 +12,7 @@ def build_comparison_report(
     lines = [
         "# Comparison Report",
         "",
-        f"**Task:** {comparison.comparison_task} · **Sites:** {len(runs)} · "
-        f"**Rubric:** {comparison.rubric}",
+        f"**Task:** {comparison.comparison_task} · **Sites:** {len(runs)} · **Rubric:** {comparison.rubric}",
         "",
         "## Conclusion",
         "",
@@ -21,8 +20,7 @@ def build_comparison_report(
         "",
     ]
     if comparison.winner:
-        lines += ["## Winner", "",
-                  f"**{comparison.winner.label}**: {comparison.winner.reason}", ""]
+        lines += ["## Winner", "", f"**{comparison.winner.label}**: {comparison.winner.reason}", ""]
     if comparison.rankings:
         lines += ["## Rankings", "", "| Site | Score | Summary |", "|------|-------|---------|"]
         lines += [f"| {r.url} | {r.score} | {r.summary} |" for r in comparison.rankings]
@@ -43,8 +41,10 @@ def build_comparison_report(
     lines += ["## Per-site details", ""]
     for run in runs:
         summary = (run.result.summary if run.result else run.status) or run.status
-        lines.append(f"- **{run.config.start_url}** (run `{run.id}`, {run.status}, "
-                     f"{run.pages_visited} pages): {summary[:300]} — "
-                     f"[report](../{run.id}/report.md)")
+        lines.append(
+            f"- **{run.config.start_url}** (run `{run.id}`, {run.status}, "
+            f"{run.pages_visited} pages): {summary[:300]} — "
+            f"[report](../{run.id}/report.md)"
+        )
     lines.append("")
     return "\n".join(lines)

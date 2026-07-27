@@ -25,11 +25,30 @@ CONTENT_PATH_MARKERS = ("/blog", "/article", "/news", "/guides", "/post")
 _LOC = re.compile(r"<loc>\s*([^<]+?)\s*</loc>", re.IGNORECASE)
 _WORD = re.compile(r"[a-zа-яё0-9]{4,}", re.IGNORECASE)
 # служебные слова задач — не сигнал в <loc> (RU+EN)
-_STOPWORDS = frozenset({
-    "find", "article", "about", "with", "from", "what", "where", "this", "that",
-    "page", "site", "website", "найди", "найти", "статью", "статья", "сайт",
-    "сайте", "текст", "guide",
-})
+_STOPWORDS = frozenset(
+    {
+        "find",
+        "article",
+        "about",
+        "with",
+        "from",
+        "what",
+        "where",
+        "this",
+        "that",
+        "page",
+        "site",
+        "website",
+        "найди",
+        "найти",
+        "статью",
+        "статья",
+        "сайт",
+        "сайте",
+        "текст",
+        "guide",
+    }
+)
 
 
 def sitemap_enabled(use_sitemap: str, intent: str) -> bool:

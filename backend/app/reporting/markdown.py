@@ -18,10 +18,14 @@ def build_report(record: RunRecord, snapshots: list[PageSnapshot]) -> str:
     lines: list[str] = [f"# Crawl Report: {record.config.task}", ""]
     vision_note = ""
     if meta.get("vision_calls_total"):
-        vision_note = (f" · **Vision:** {meta.get('vision_pages_analyzed', 0)} pages"
-                       f"/{meta.get('vision_calls_total', 0)} calls")
-    lines.append(f"**URL:** {record.config.start_url} · **Status:** {record.status} · "
-                 f"**Pages:** {record.pages_visited}{vision_note}")
+        vision_note = (
+            f" · **Vision:** {meta.get('vision_pages_analyzed', 0)} pages"
+            f"/{meta.get('vision_calls_total', 0)} calls"
+        )
+    lines.append(
+        f"**URL:** {record.config.start_url} · **Status:** {record.status} · "
+        f"**Pages:** {record.pages_visited}{vision_note}"
+    )
     lines.append("")
 
     if result is None or record.status in ("blocked", "failed"):
@@ -52,16 +56,17 @@ def build_report(record: RunRecord, snapshots: list[PageSnapshot]) -> str:
 
     if result.not_found:
         lines += ["## Not found", ""]
-        lines += [f"- {nf.key}: {nf.reason or 'not present on visited pages'}"
-                  for nf in result.not_found]
+        lines += [f"- {nf.key}: {nf.reason or 'not present on visited pages'}" for nf in result.not_found]
         lines.append("")
 
     appendix = _vision_appendix(meta, snapshots)
     if appendix:
         lines += appendix
 
-    lines.append(f"_Screenshots are relative to `artifacts/{record.id}/`. "
-                 f"Open report from that folder for images to render._")
+    lines.append(
+        f"_Screenshots are relative to `artifacts/{record.id}/`. "
+        f"Open report from that folder for images to render._"
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -73,14 +78,17 @@ def _vision_snippet(fact, snapshots: list[PageSnapshot]) -> str:
         if snap.url in vision_urls:
             for ins in snap.vision_insights:
                 if ins.get("status") == "ok" and ins.get("description"):
-                    return (f"Vision ({ins.get('profile', '?')}): "
-                            f"{ins['description'][:VISION_SNIPPET_CAP]}")
+                    return f"Vision ({ins.get('profile', '?')}): {ins['description'][:VISION_SNIPPET_CAP]}"
     return ""
 
 
 def _design_section(record: RunRecord, snapshots: list[PageSnapshot]) -> list[str]:
-    designs = [(s, ins) for s in snapshots for ins in s.vision_insights
-               if ins.get("status") == "ok" and ins.get("design")]
+    designs = [
+        (s, ins)
+        for s in snapshots
+        for ins in s.vision_insights
+        if ins.get("status") == "ok" and ins.get("design")
+    ]
     if not designs and record.intent != "design_audit":
         return []
     lines = ["## Design analysis", ""]
@@ -100,8 +108,7 @@ def _design_section(record: RunRecord, snapshots: list[PageSnapshot]) -> list[st
         lines.append(f"**Layout:** {layouts[0]}  ")
     if responsive:
         lines.append(f"**Responsive:** {responsive[0]}  ")
-    shots = [(ref.profile.capitalize(), ref.relative_path)
-             for s in snapshots for ref in s.screenshots][:6]
+    shots = [(ref.profile.capitalize(), ref.relative_path) for s in snapshots for ref in s.screenshots][:6]
     if shots:
         lines += ["", "| Viewport | Screenshot |", "|----------|------------|"]
         lines += [f"| {profile} | ![{profile.lower()}]({path}) |" for profile, path in shots]
@@ -112,13 +119,16 @@ def _design_section(record: RunRecord, snapshots: list[PageSnapshot]) -> list[st
 def _vision_appendix(meta: dict, snapshots: list[PageSnapshot]) -> list[str]:
     if not (meta.get("vision_failures") or meta.get("vision_skipped_pages")):
         return []
-    lines = ["## Appendix: vision diagnostics", "",
-             "| URL | Profile | Status | Note |", "|-----|---------|--------|------|"]
+    lines = [
+        "## Appendix: vision diagnostics",
+        "",
+        "| URL | Profile | Status | Note |",
+        "|-----|---------|--------|------|",
+    ]
     for snap in snapshots:
         for ins in snap.vision_insights:
             note = ins.get("error") or "—"
-            lines.append(f"| {snap.url} | {ins.get('profile', '?')} | "
-                         f"{ins.get('status', '?')} | {note} |")
+            lines.append(f"| {snap.url} | {ins.get('profile', '?')} | {ins.get('status', '?')} | {note} |")
     for url in meta.get("vision_skipped_pages", []):
         lines.append(f"| {url} | — | skipped | page cap |")
     lines.append("")

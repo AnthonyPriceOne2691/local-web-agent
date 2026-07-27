@@ -1,6 +1,8 @@
 import { useState } from 'react';
+
 import { api } from '../api';
 import type { RunRecord } from '../types';
+
 import StatusBadge from './StatusBadge';
 
 export default function RunCard({ run }: { run: RunRecord }) {

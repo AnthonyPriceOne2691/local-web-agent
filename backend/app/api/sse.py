@@ -35,8 +35,14 @@ def _active_run_progress(session_id: str, runs: RunStore) -> tuple | None:
     record = runs.get(active_id)
     if record is None or record.session_id != session_id:
         return None
-    return (record.id, record.status, record.config.start_url,
-            record.pages_visited, record.config.max_pages, record.current_url)
+    return (
+        record.id,
+        record.status,
+        record.config.start_url,
+        record.pages_visited,
+        record.config.max_pages,
+        record.current_url,
+    )
 
 
 def _active_challenge(session_id: str, runs: RunStore) -> dict | None:
@@ -48,10 +54,13 @@ def _active_challenge(session_id: str, runs: RunStore) -> dict | None:
     if record is None or record.session_id != session_id or record.status != "waiting_user":
         return None
     challenge = record.metadata.get("challenge") or {}
-    return {"run_id": record.id, "start_url": record.config.start_url,
-            "url": challenge.get("url", record.current_url),
-            "kind": challenge.get("kind", "captcha"),
-            "action": challenge.get("action")}  # confirm_submit/handoff: что подготовлено
+    return {
+        "run_id": record.id,
+        "start_url": record.config.start_url,
+        "url": challenge.get("url", record.current_url),
+        "kind": challenge.get("kind", "captcha"),
+        "action": challenge.get("action"),
+    }  # confirm_submit/handoff: что подготовлено
 
 
 async def session_event_stream(
@@ -80,8 +89,10 @@ async def session_event_stream(
         for i in range(seen_messages, len(session.messages)):
             msg = session.messages[i]
             idle_s = 0.0
-            yield format_sse("message", {"index": i, "role": msg.role,
-                                         "content": msg.content, "created_at": msg.created_at})
+            yield format_sse(
+                "message",
+                {"index": i, "role": msg.role, "content": msg.content, "created_at": msg.created_at},
+            )
         seen_messages = len(session.messages)
         progress = _active_run_progress(session_id, runs)
         if progress is not None and progress != last_progress:

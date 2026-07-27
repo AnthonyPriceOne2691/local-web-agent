@@ -28,6 +28,11 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
         files: ^(backend|cli)/
+      # Подключён после того, как база отформатирована целиком (поставка
+      # legacy-debt): до этого он переформатировал бы 71 файл на первом коммите.
+      # Стилевой коммит — в .git-blame-ignore-revs.
+      - id: ruff-format
+        files: ^(backend|cli)/
 
   # -------------------------------------------------------------------------
   # Python: mypy на изменённых файлах через проектный venv (local hook,
@@ -151,6 +156,20 @@ repos:
         entry: bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && ./.venv/bin/lint-imports'
         files: ^backend/.*\.py$
         pass_filenames: false
+
+  # -------------------------------------------------------------------------
+  # Secrets (CQG §2.7): в soft-режим НЕ переводится. Baseline пустой — известные
+  # ложные срабатывания помечаются `# pragma: allowlist secret` в коде, чтобы
+  # снимок не приходилось поддерживать.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets — ключи и токены не уезжают в git
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && backend/.venv/bin/detect-secrets-hook --baseline .secrets.baseline "$@"' --
+        exclude: ^(\.secrets\.baseline|uv\.lock|frontend/package-lock\.json)$
+        pass_filenames: true
 
   # -------------------------------------------------------------------------
   # pre-push (CQG §8.5.1 ③): тяжёлые проверки — цена обхода поднимается.

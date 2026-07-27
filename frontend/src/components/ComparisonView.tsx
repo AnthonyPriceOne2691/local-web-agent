@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import { api, downloadReport } from '../api';
 import type { ComparisonResult } from '../types';
 

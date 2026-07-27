@@ -19,12 +19,17 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
     lines = [f"{r.config.start_url} ({r.status}): {r.result.summary}"]
     lines += [f"- {f.label or f.key}: {f.value}" for f in r.result.facts[:5]]
     if r.result.article:
-        lines.append(f"- article: {r.result.article.title} "
-                     f"({r.result.article.word_count} words)")
+        lines.append(f"- article: {r.result.article.title} ({r.result.article.word_count} words)")
     return "\n".join(lines)
 
 
-SPEC = register(ActionSpec(
-    name="get_run_result", tier=0, reversible=True,
-    enforce=enforce_run_id_in_session, execute=_execute,
-    note=lambda call: f"get_run_result {call.args.get('run_id')}"))
+SPEC = register(
+    ActionSpec(
+        name="get_run_result",
+        tier=0,
+        reversible=True,
+        enforce=enforce_run_id_in_session,
+        execute=_execute,
+        note=lambda call: f"get_run_result {call.args.get('run_id')}",
+    )
+)

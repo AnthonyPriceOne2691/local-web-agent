@@ -39,8 +39,8 @@ def build_candidates(
     # P0: ссылки текущей страницы с intent/task-сигналом; P4: остальные
     for link in usable(snapshot):
         s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=is_home)
-        bucket = 0 if any(tag in reason for tag in ("slug", "task-kw", "homepage+intent")) else 5
-        buckets[bucket].append(Candidate(href=link["href"], text=link["text"], score=s, reason=reason))
+        tier = 0 if any(tag in reason for tag in ("slug", "task-kw", "homepage+intent")) else 5
+        buckets[tier].append(Candidate(href=link["href"], text=link["text"], score=s, reason=reason))
 
     # P1: ссылки с закэшированной homepage + ссылки с F1-проб (doc 03) — s > 0
     if homepage is not None and homepage.url != snapshot.url:

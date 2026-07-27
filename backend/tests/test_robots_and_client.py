@@ -60,13 +60,14 @@ async def test_chat_schema_think_and_stats():
 
         body = json.loads(request.content)
         seen.append(body)
-        return httpx.Response(200, json={
-            "message": {"content": '{"ok": true}'}, "eval_count": 5, "total_duration": 100})
+        return httpx.Response(
+            200, json={"message": {"content": '{"ok": true}'}, "eval_count": 5, "total_duration": 100}
+        )
 
     client = _ollama_client(handler)
     content, stats = await client.chat(
-        model="qwen3:14b", system="s", user="u",
-        schema={"type": "object"}, think=False, images=["QUJD"])
+        model="qwen3:14b", system="s", user="u", schema={"type": "object"}, think=False, images=["QUJD"]
+    )
     assert content == '{"ok": true}'
     assert stats["eval_count"] == 5
     body = seen[0]

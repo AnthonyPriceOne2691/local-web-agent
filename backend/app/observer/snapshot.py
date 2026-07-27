@@ -9,7 +9,8 @@ from app.schemas.snapshot import Heading, InteractiveElement, Link, PageSnapshot
 # OBSERVE_JS (сбор) и PlaywrightSession.click_element (клик по индексу) используют его.
 INTERACTIVE_SELECTOR = "button, input:not([type=hidden]), select, textarea, [role=button], [onclick]"
 
-OBSERVE_JS = """() => {
+OBSERVE_JS = (
+    """() => {
   const pick = sel => document.querySelector(sel);
   const mainEl = pick('main') || pick('[role=main]') || pick('article') || document.body;
   return {
@@ -21,7 +22,9 @@ OBSERVE_JS = """() => {
     links: [...document.querySelectorAll('a[href]')].map(a => ({
       href: a.getAttribute('href') || '', text: (a.innerText || '').trim()
     })),
-    interactive: [...document.querySelectorAll('""" + INTERACTIVE_SELECTOR + """')]
+    interactive: [...document.querySelectorAll('"""
+    + INTERACTIVE_SELECTOR
+    + """')]
       .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
       .slice(0, 60)
       .map(el => {
@@ -43,6 +46,7 @@ OBSERVE_JS = """() => {
     has_password_field: !!pick('input[type=password]'),
   };
 }"""
+)
 
 # Caps — doc 20 / doc 03 таблица Page Observer
 TITLE_CAP = 200

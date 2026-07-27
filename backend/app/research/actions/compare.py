@@ -22,5 +22,6 @@ def _enforce(call: ToolCall, ctx: ActionContext) -> ToolCall | None:
     return call
 
 
-SPEC = register(ActionSpec(
-    name="compare_results", tier=0, reversible=True, structural=True, enforce=_enforce))
+SPEC = register(
+    ActionSpec(name="compare_results", tier=0, reversible=True, structural=True, enforce=_enforce)
+)

@@ -17,9 +17,15 @@ ORIGIN = "http://127.0.0.1:8901"
 
 SYNTH_OK = {
     "summary": "Phone found",
-    "facts": [{"key": "phone", "label": "Phone", "value": "+1 555",
-               "confidence": "high",
-               "evidence": [{"url": f"{ORIGIN}/contact", "quote": "+1 555"}]}],
+    "facts": [
+        {
+            "key": "phone",
+            "label": "Phone",
+            "value": "+1 555",
+            "confidence": "high",
+            "evidence": [{"url": f"{ORIGIN}/contact", "quote": "+1 555"}],
+        }
+    ],
     "not_found": [],
 }
 
@@ -48,19 +54,26 @@ def record_for(url: str, task: str = "Find the phone number", **cfg) -> RunRecor
 
 @pytest.fixture
 def two_page_site() -> FakeBrowserSession:
-    return FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Home", text="Welcome to Acme " * 30,
-                               links=[(f"{ORIGIN}/contact", "Contact us")]),
-        f"{ORIGIN}/contact": page_raw(title="Contact", text="Call +1 555 " * 30),
-    })
+    return FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Home", text="Welcome to Acme " * 30, links=[(f"{ORIGIN}/contact", "Contact us")]
+            ),
+            f"{ORIGIN}/contact": page_raw(title="Contact", text="Call +1 555 " * 30),
+        }
+    )
 
 
 async def test_happy_path_navigate_extract_synthesize(tmp_path, two_page_site):
-    orch, store, llm = make_orchestrator(tmp_path, two_page_site, [
-        {"action": "navigate", "url": f"{ORIGIN}/contact", "reasoning": "contact page"},
-        {"action": "stop", "reasoning": "found"},
-        SYNTH_OK,
-    ])
+    orch, store, llm = make_orchestrator(
+        tmp_path,
+        two_page_site,
+        [
+            {"action": "navigate", "url": f"{ORIGIN}/contact", "reasoning": "contact page"},
+            {"action": "stop", "reasoning": "found"},
+            SYNTH_OK,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/"))
     assert record.status == "completed"
     assert record.pages_visited == 2
@@ -71,28 +84,34 @@ async def test_happy_path_navigate_extract_synthesize(tmp_path, two_page_site):
 
 
 async def test_persist_session_passes_profile_path(tmp_path, two_page_site):
-    orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
-        {"action": "stop", "reasoning": "done"}, SYNTH_OK])
+    orch, _, _ = make_orchestrator(
+        tmp_path, two_page_site, [{"action": "stop", "reasoning": "done"}, SYNTH_OK]
+    )
     await orch.run(record_for(f"{ORIGIN}/", persist_session=True))
     assert two_page_site.storage_state_path is not None  # профиль передан в браузер
     assert two_page_site.storage_state_path.endswith("127.0.0.1_8901.json")  # ключ = host
 
 
 async def test_no_persist_session_by_default(tmp_path, two_page_site):
-    orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
-        {"action": "stop", "reasoning": "done"}, SYNTH_OK])
+    orch, _, _ = make_orchestrator(
+        tmp_path, two_page_site, [{"action": "stop", "reasoning": "done"}, SYNTH_OK]
+    )
     await orch.run(record_for(f"{ORIGIN}/"))  # persist_session off по умолчанию
     assert two_page_site.storage_state_path is None
 
 
 async def test_fabricated_url_recovers_via_fallback(tmp_path, two_page_site):
-    orch, _, _ = make_orchestrator(tmp_path, two_page_site, [
-        {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "invented"},  # I-H6
-        {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "again"},     # replan 1 мимо
-        {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "stubborn"},  # replan 2 (k=2) мимо
-        {"action": "stop", "reasoning": "done"},
-        SYNTH_OK,
-    ])
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        two_page_site,
+        [
+            {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "invented"},  # I-H6
+            {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "again"},  # replan 1 мимо
+            {"action": "navigate", "url": f"{ORIGIN}/admin", "reasoning": "stubborn"},  # replan 2 (k=2) мимо
+            {"action": "stop", "reasoning": "done"},
+            SYNTH_OK,
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/"))
     violations = [v for s in record.steps for v in s.violations]
     assert sum(v.constraint_id == "I-H6" for v in violations) == 3  # k=2 → 3 попытки
@@ -107,8 +126,7 @@ async def test_drift_fallback_only_skips_llm_navigation(tmp_path, two_page_site)
     """Recovery success < 50% → link_scorer-only до конца run (doc 13 § Drift)."""
     orch, _, llm = make_orchestrator(tmp_path, two_page_site, [SYNTH_OK])
     record = record_for(f"{ORIGIN}/")
-    record.metadata["drift"] = {"hard_total": 4, "ih6": 0,
-                                "replan_ok": 0, "replan_fail": 2, "fallbacks": 2}
+    record.metadata["drift"] = {"hard_total": 4, "ih6": 0, "replan_ok": 0, "replan_fail": 2, "fallbacks": 2}
     record = await orch.run(record)
     # навигация шла без LLM (fallback-only): единственный chat-вызов — synthesis
     assert len(llm.calls) == 1
@@ -116,13 +134,16 @@ async def test_drift_fallback_only_skips_llm_navigation(tmp_path, two_page_site)
 
 
 async def test_drift_low_temperature_after_hard_violations(tmp_path, two_page_site):
-    orch, _, llm = make_orchestrator(tmp_path, two_page_site, [
-        {"action": "stop", "reasoning": "done"},
-        SYNTH_OK,
-    ])
+    orch, _, llm = make_orchestrator(
+        tmp_path,
+        two_page_site,
+        [
+            {"action": "stop", "reasoning": "done"},
+            SYNTH_OK,
+        ],
+    )
     record = record_for(f"{ORIGIN}/")
-    record.metadata["drift"] = {"hard_total": 3, "ih6": 0,
-                                "replan_ok": 5, "replan_fail": 0, "fallbacks": 0}
+    record.metadata["drift"] = {"hard_total": 3, "ih6": 0, "replan_ok": 5, "replan_fail": 0, "fallbacks": 0}
     await orch.run(record)
     assert llm.calls[0]["temperature"] == 0.2  # auto-tighten 0.4 → 0.2
 
@@ -130,45 +151,68 @@ async def test_drift_low_temperature_after_hard_violations(tmp_path, two_page_si
 async def test_offsite_redirect_discarded_mid_run(tmp_path):
     browser = FakeBrowserSession(
         pages={
-            f"{ORIGIN}/": page_raw(title="Home", text="w " * 200,
-                                   links=[(f"{ORIGIN}/out", "Out")]),
+            f"{ORIGIN}/": page_raw(title="Home", text="w " * 200, links=[(f"{ORIGIN}/out", "Out")]),
             "http://127.0.0.1:9999/evil": page_raw(title="Evil", text="evil " * 100),
         },
         redirects={f"{ORIGIN}/out": "http://127.0.0.1:9999/evil"},
     )
-    orch, _, _ = make_orchestrator(tmp_path, browser, [
-        {"action": "navigate", "url": f"{ORIGIN}/out", "reasoning": "go"},
-        {"action": "stop", "reasoning": "nothing else"},
-        {"summary": "nothing", "facts": [], "not_found": [{"key": "phone", "reason": "n/a"}]},
-    ])
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "navigate", "url": f"{ORIGIN}/out", "reasoning": "go"},
+            {"action": "stop", "reasoning": "nothing else"},
+            {"summary": "nothing", "facts": [], "not_found": [{"key": "phone", "reason": "n/a"}]},
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/"))
     assert any("redirect_offsite" in s.note for s in record.steps)
     assert record.pages_visited == 1  # evil-страница не вошла
 
 
 async def test_blocker_stops_run(tmp_path):
-    browser = FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="Verify", text="Checking your browser before accessing"),
-    })
-    orch, _, _ = make_orchestrator(tmp_path, browser, [
-        {"summary": "blocked", "facts": [], "not_found": []},
-    ])
+    browser = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(title="Verify", text="Checking your browser before accessing"),
+        }
+    )
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"summary": "blocked", "facts": [], "not_found": []},
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/"))
     assert record.status == "blocked"
     assert record.metadata["blocked_by"] == "captcha"
 
 
 async def test_spa_fallback_screenshot_captured(tmp_path):
-    browser = FakeBrowserSession({
-        f"{ORIGIN}/": page_raw(title="SPA", text="tiny"),  # < 200 chars
-    })
-    orch, _, _ = make_orchestrator(tmp_path, browser, [
-        {"action": "stop", "reasoning": "nothing to click"},
-        {"profile": "desktop", "screen_status": "blank", "description": "empty page",
-         "extracted": [], "confidence": "low"},  # vision batch (auto: empty DOM)
-        {"summary": "no price visible in DOM", "facts": [],
-         "not_found": [{"key": "price", "reason": "not in DOM"}]},
-    ])
+    browser = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(title="SPA", text="tiny"),  # < 200 chars
+        }
+    )
+    orch, _, _ = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "stop", "reasoning": "nothing to click"},
+            {
+                "profile": "desktop",
+                "screen_status": "blank",
+                "description": "empty page",
+                "extracted": [],
+                "confidence": "low",
+            },  # vision batch (auto: empty DOM)
+            {
+                "summary": "no price visible in DOM",
+                "facts": [],
+                "not_found": [{"key": "price", "reason": "not in DOM"}],
+            },
+        ],
+    )
     record = await orch.run(record_for(f"{ORIGIN}/", task="Find the price"))
     assert browser.screenshots  # SPA fallback capture сработал при auto
     assert record.status == "not_found"
@@ -197,13 +241,16 @@ async def test_early_stop_gs1_after_three_stale_pages(tmp_path):
         nxt = ["a", "b", "c", "d"][i] if i < 4 else None
         links = [(f"{ORIGIN}/{nxt}", f"page {nxt}")] if nxt else []
         chain[f"{ORIGIN}/{name}" if name else f"{ORIGIN}/"] = page_raw(
-            title=f"P{i}", text="generic filler words here " * 20, links=links)
+            title=f"P{i}", text="generic filler words here " * 20, links=links
+        )
     browser = FakeBrowserSession(chain)
-    replies = [{"action": "navigate", "url": f"{ORIGIN}/{n}", "reasoning": "next"}
-               for n in ["a", "b", "c", "d"]]
+    replies = [
+        {"action": "navigate", "url": f"{ORIGIN}/{n}", "reasoning": "next"} for n in ["a", "b", "c", "d"]
+    ]
     replies.append({"action": "stop", "reasoning": "exhausted"})
-    replies.append({"summary": "nothing found", "facts": [],
-                    "not_found": [{"key": "phone", "reason": "absent"}]})
+    replies.append(
+        {"summary": "nothing found", "facts": [], "not_found": [{"key": "phone", "reason": "absent"}]}
+    )
     orch, _, _ = make_orchestrator(tmp_path, browser, replies)
     record = await orch.run(record_for(f"{ORIGIN}/", max_pages=10))
     assert record.metadata.get("early_stop", "").startswith("G-S1")

@@ -36,8 +36,11 @@ async def run_vision_batch(
     if not vision_wanted(cfg.vision_enabled, record.intent, cfg.task, snapshots):
         return
     jobs, skipped = select_vision_jobs(
-        snapshots, intent=record.intent, mode=cfg.vision_enabled,
-        max_pages=settings.max_vision_pages, max_calls=settings.max_vision_calls,
+        snapshots,
+        intent=record.intent,
+        mode=cfg.vision_enabled,
+        max_pages=settings.max_vision_pages,
+        max_calls=settings.max_vision_calls,
     )
     if not jobs:
         return
@@ -55,24 +58,35 @@ async def run_vision_batch(
             image = loader.read_base64(record.id, job.shot.relative_path, allowlist=allowlist)
         except VisionLoadError as exc:  # V-H1/H2/H3 → skip call (doc 13 recovery)
             job.snapshot.vision_insights.append(
-                VisionInsight(profile=job.shot.profile, url=job.snapshot.url,
-                              status="skipped", confidence="low", error=exc.reason).model_dump())
+                VisionInsight(
+                    profile=job.shot.profile,
+                    url=job.snapshot.url,
+                    status="skipped",
+                    confidence="low",
+                    error=exc.reason,
+                ).model_dump()
+            )
             continue
         insight = await analyzer.analyze(
-            image_base64=image, task=cfg.task, url=job.snapshot.url,
-            profile=job.shot.profile, dom_excerpt=job.snapshot.main_text,
+            image_base64=image,
+            task=cfg.task,
+            url=job.snapshot.url,
+            profile=job.shot.profile,
+            dom_excerpt=job.snapshot.main_text,
         )
         calls += 1
         failures += insight.status != "ok"
         job.snapshot.vision_insights.append(insight.model_dump())
     await llm.unload(settings.vision_model)  # evict VLM → R1 (doc 23 swap)
-    record.metadata.update({
-        "vision_enabled": cfg.vision_enabled,
-        "vision_pages_analyzed": len({j.snapshot.url for j in jobs}),
-        "vision_calls_total": calls,
-        "vision_failures": failures,
-        "vision_partial": calls < len(jobs),
-    })
+    record.metadata.update(
+        {
+            "vision_enabled": cfg.vision_enabled,
+            "vision_pages_analyzed": len({j.snapshot.url for j in jobs}),
+            "vision_calls_total": calls,
+            "vision_failures": failures,
+            "vision_partial": calls < len(jobs),
+        }
+    )
     if skipped:
         record.metadata["vision_skipped_pages"] = skipped
     store.save(record)

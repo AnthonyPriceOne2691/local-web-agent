@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { api, subscribeSessionEvents } from './api';
 import Chat from './components/Chat';
 import Sidebar from './components/Sidebar';

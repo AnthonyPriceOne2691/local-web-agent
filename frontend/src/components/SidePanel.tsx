@@ -1,5 +1,7 @@
 import { useState } from 'react';
+
 import type { CrawlProgress, RunRecord, SessionRecord } from '../types';
+
 import ComparisonView from './ComparisonView';
 import RunCard from './RunCard';
 

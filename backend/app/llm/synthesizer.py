@@ -62,7 +62,9 @@ class Synthesizer:
         self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
     ) -> tuple[ExtractionResult, dict]:
         user = self._user_tpl.render(
-            task=task, intent=intent, pages_count=len(snapshots),
+            task=task,
+            intent=intent,
+            pages_count=len(snapshots),
             pages_block=build_pages_block(snapshots, intent),
         )
         content, stats = await self._client.chat(
@@ -105,6 +107,5 @@ class Synthesizer:
             try:
                 result = ExtractionResult.model_validate(payload)
             except ValidationError:
-                result = ExtractionResult(status="partial",
-                                          summary=str(raw.get("summary", ""))[:500])
+                result = ExtractionResult(status="partial", summary=str(raw.get("summary", ""))[:500])
         return result, stats

@@ -27,8 +27,11 @@ def normalize_url(url: str) -> str:
     host = (p.hostname or "").lower()
     port = f":{p.port}" if p.port and p.port not in (80, 443) else ""
     query = urlencode(
-        [(k, v) for k, v in parse_qsl(p.query)
-         if not any(k.lower().startswith(t) or k.lower() == t for t in TRACKING_PARAMS)]
+        [
+            (k, v)
+            for k, v in parse_qsl(p.query)
+            if not any(k.lower().startswith(t) or k.lower() == t for t in TRACKING_PARAMS)
+        ]
     )
     path = p.path.rstrip("/") or "/"
     return urlunparse((p.scheme.lower(), host + port, path, "", query, ""))
