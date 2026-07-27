@@ -93,6 +93,19 @@ command -v pre-commit >/dev/null 2>&1 && [[ -f .pre-commit-config.yaml ]] \
   && run_gate "canon sync" "$PY" scripts/okf_sync_gate.py --base "$TARGET"
 [[ -f delivery/evals/smoke/run.sh ]] \
   && run_gate "smoke evals" bash delivery/evals/smoke/run.sh
+# Последним — статус неподделываемого прогона. Локальные гейты выше проверяют код
+# ЛОКАЛЬНЫМИ версиями инструментов; расхождение с CI-окружением видит только сам
+# CI (Delivery §10.4). Гоняется в основном клоне, а не в worktree: ему нужен git
+# remote и `gh`, а не слитое дерево.
+if [[ -f scripts/lint/check_ci_status.sh ]]; then
+  printf '  → ci status (%s)\n' "$TARGET"
+  if CI_REF="$TARGET" bash scripts/lint/check_ci_status.sh >/tmp/merge_guard_ci 2>&1; then
+    printf '    %sOK%s\n' "$green" "$reset"; sed -n '1,3p' /tmp/merge_guard_ci
+  else
+    printf '    %sFAIL%s\n' "$red" "$reset"; sed -n '1,6p' /tmp/merge_guard_ci
+    failed+=("ci status")
+  fi
+fi
 
 if (( ${#failed[@]} )); then
   printf '\n%smerge_guard: МЕРЖ ЗАБЛОКИРОВАН — красные гейты: %s%s\n' "$red" "${failed[*]}" "$reset" >&2

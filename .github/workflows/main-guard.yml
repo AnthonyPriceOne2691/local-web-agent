@@ -1,31 +1,43 @@
 # .github/workflows/main-guard.yml
+#
+# «Красное на main не остаётся тихим» (CQG §8.5.1 ④). Отклонение от канонного
+# шаблона — с причиной: шаблон сам гонял `pre-commit run --all-files`, но наши
+# хуки зовут `backend/.venv/bin/*` и `npx --no-install`, поэтому без установки
+# окружения он падал ВСЕГДА и открывал issue на каждый push (3 ложных за вечер).
+# Ставить установку второй раз — дорого и всё равно расходится с quality, поэтому
+# guard стал реакцией на РЕЗУЛЬТАТ quality: одна истина, ноль дублей.
 name: main-guard
 on:
-  push:
+  workflow_run:
+    workflows: [quality]
+    types: [completed]
     branches: [main]
 permissions:
   contents: read
   issues: write
 jobs:
-  verify:
+  report-red:
+    if: github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with: {fetch-depth: 0}
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - id: gates
-        continue-on-error: true
-        run: |
-          pip install pre-commit
-          pre-commit run --all-files
-      - if: steps.gates.outcome == 'failure'
-        env:
+      - env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          REPO: ${{ github.repository }}
         run: |
-          gh issue create \
-            --title "RED on main: ${{ github.sha }}" \
-            --body "Гейты на main красные. Слито мимо merge_guard.sh (CQG §8.5). Починить или откатить." \
+          # Один issue на один красный коммит: re-run того же workflow не должен
+          # плодить дубли (именно так и набежали три ложных).
+          existing=$(gh issue list --repo "$REPO" --state open --label bug \
+            --search "RED on main: $SHA in:title" --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "issue #$existing already tracks $SHA — nothing to do"
+            exit 0
+          fi
+          gh issue create --repo "$REPO" \
+            --title "RED on main: $SHA" \
+            --body "Гейты на main красные: $RUN_URL
+
+Слито мимо \`scripts/merge_guard.sh\` или сломано прямым коммитом (CQG §8.5).
+Починить или откатить: красный main блокирует DoD всех поставок (Delivery §10.4)." \
             --label bug
-      - if: steps.gates.outcome == 'failure'
-        run: exit 1
