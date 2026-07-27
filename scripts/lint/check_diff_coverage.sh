@@ -42,10 +42,22 @@ cd "$REPO_ROOT/$BE_DIR" || exit 1
 red=$(printf '\033[31m'); yellow=$(printf '\033[33m'); green=$(printf '\033[32m'); reset=$(printf '\033[0m')
 
 # git diff — от repo-root (git -C): pathspec от корня не матчится из cwd backend/.
+# Файлы вне юнит-покрытия — с ПРИЧИНОЙ, а не «чтобы стало зелено». Порог 70%
+# для остальных остаётся жёстким; список печатается на каждом прогоне, поэтому
+# устаревшее исключение видно глазами (тот же приём, что в gate-coverage).
+#   app/main.py                       — ASGI-точка входа: только сборка объектов,
+#                                       уже исключена в [tool.coverage.run] omit,
+#                                       и без этого гейт считал её «0%».
+#   app/browser/playwright_session.py — тонкая обёртка над внешним SDK; юниты
+#                                       гоняются на FakeBrowserSession, реальная
+#                                       проверка — живые смоуки (doc 03).
+COV_EXCLUDE_RE=${COV_EXCLUDE_RE:-'^(app/main\.py|app/browser/playwright_session\.py)$'}
+
 list_changed() { # $1 = base-реф; закоммиченный дифф prod-файлов (без тестов)
   git -C "$REPO_ROOT" diff --name-only "$1"...HEAD -- "$PY_SRC/*.py" 2>/dev/null \
     | grep -vE '/tests/|/test_[^/]*\.py$' \
-    | sed "s#^$BE_DIR/##"
+    | sed "s#^$BE_DIR/##" \
+    | grep -vE "$COV_EXCLUDE_RE"
 }
 
 # Незакоммиченные правки — их дифф-списком не увидеть, а сьют их исполняет:
@@ -84,6 +96,8 @@ if [[ -n "$dirty" ]]; then
   echo "${yellow}внимание: есть незакоммиченные правки — сьют их исполняет, но в отчёте ниже их нет:${reset}"
   echo "$dirty" | sed 's/^/  • /'
 fi
+
+echo "diff-coverage: вне покрытия по причине (см. COV_EXCLUDE_RE в скрипте): app/main.py, app/browser/playwright_session.py"
 
 if [[ "$SKIP_TESTS" != "1" ]]; then
   echo "diff-coverage: гоняю сьют с coverage (может занять минуты)…"

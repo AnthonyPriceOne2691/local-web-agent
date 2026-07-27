@@ -40,14 +40,19 @@ repos:
   # -------------------------------------------------------------------------
   - repo: local
     hooks:
+      # Один вызов на весь пакет, а НЕ по списку файлов (отклонение от канонного
+      # шаблона с причиной): pre-commit разбивает длинный список на пачки, и в CI
+      # (Python 3.12) mypy 2.3.0 падал на второй пачке с INTERNAL ERROR — первая
+      # печатала «Success: 42 files», джоба обрывалась, следующие шаги не шли.
+      # Плюс так локальный прогон и `--all-files` проверяют ровно одно и то же:
+      # типы — свойство пакета целиком, а не отдельного файла.
       - id: mypy
-        name: mypy (изменённые файлы)
+        name: mypy (весь пакет app)
         language: system
-        types_or: [python]
-        files: ^backend/
+        files: ^backend/.*\.py$
         exclude: /tests/
-        entry: bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && files=(); for f in "$@"; do files+=("${f#backend/}"); done; .venv/bin/mypy --config-file pyproject.toml "${files[@]}"' --
-        pass_filenames: true
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && .venv/bin/mypy --config-file pyproject.toml app'
+        pass_filenames: false
 
   # -------------------------------------------------------------------------
   # TypeScript / React: ESLint (per-file errors) + warning-ратчет + Prettier.
