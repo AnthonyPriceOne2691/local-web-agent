@@ -27,6 +27,12 @@ from pathlib import Path
 BUNDLE = os.environ.get("OKF_BUNDLE", "knowledge")
 STRICT = os.environ.get("STRICT", "1") != "0"
 ALLOW_DRIFT = os.environ.get("ALLOW_CANON_DRIFT", "0") == "1"
+# Waiver, ВИДИМЫЙ в репозитории. env-переменной в CI не задать (а значит любая
+# правка кода без смены инварианта — форматирование, типизация, логирование —
+# роняла бы PR), поэтому осознанный дрейф объявляется строкой в STATUS:
+#   canon_drift_waiver: reason=… by=human:…
+# Она попадает в дифф, читается ревьюером и живёт ровно одну поставку.
+STATUS_WAIVER_RE = re.compile(r"(?im)^[ \t]*[-*]?[ \t]*\**canon_drift_waiver\**[ \t]*:[ \t]*(.+)$")
 RESERVED = {"index.md", "log.md"}
 
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
@@ -108,6 +114,17 @@ def changed_files(base: str | None, staged: bool) -> tuple[list[str], list[str]]
     merge_base = git("merge-base", base, "HEAD").strip() or base
     out = git("diff", "--name-only", f"{merge_base}..HEAD")
     return [f for f in out.splitlines() if f], []
+
+
+def status_waiver() -> str:
+    """Строка `canon_drift_waiver:` из delivery/active/STATUS.md (пусто = нет)."""
+    status = repo_root() / "delivery" / "active" / "STATUS.md"
+    if not status.is_file():
+        return ""
+    m = STATUS_WAIVER_RE.search(status.read_text(encoding="utf-8"))
+    if not m:
+        return ""
+    return re.sub(r"<!--.*?-->", "", m.group(1)).strip().lstrip("*").strip()
 
 
 def main() -> int:
@@ -196,10 +213,12 @@ def main() -> int:
             f"{len(warnings)} warning(s))"
         )
         return 0
-    if ALLOW_DRIFT:
+    waiver = status_waiver()
+    if ALLOW_DRIFT or waiver:
+        source = "ALLOW_CANON_DRIFT=1" if ALLOW_DRIFT else f"STATUS: {waiver}"
         print(
-            f"okf_sync_gate: drift allowed by ALLOW_CANON_DRIFT=1 "
-            f"({len(errors)} finding(s)) — explain in PR",
+            f"okf_sync_gate: drift allowed ({source}) — {len(errors)} finding(s); "
+            f"инварианты обязаны быть не тронуты, иначе это ложное «обновлено»",
             file=sys.stderr,
         )
         return 0

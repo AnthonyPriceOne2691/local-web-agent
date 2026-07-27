@@ -22,10 +22,10 @@ def build_candidates(
     alive_probes: list[str],
     legal_probes: list[str],
     sitemap_urls: list[str] | None = None,
-    probe_links: list[dict] | None = None,
+    probe_links: list[dict[str, str]] | None = None,
     top_k: int = 10,
 ) -> list[Candidate]:
-    def usable(snap: PageSnapshot) -> list[dict]:
+    def usable(snap: PageSnapshot) -> list[dict[str, str]]:
         return [
             {"href": ln.href, "text": ln.text}
             for ln in snap.links

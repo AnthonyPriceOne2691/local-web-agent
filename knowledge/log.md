@@ -1,5 +1,12 @@
 # Knowledge Bundle Update Log
 
+## 2026-07-28 (поставка mypy-strict)
+* **Note (no canon change)**: код под `implementation:` четырёх concept'ов
+  затронут типизацией (`mypy --strict`): аннотации сигнатур и параметризация
+  дженериков. **Инварианты не менялись** — тиры действий, LLM-канон, запрет
+  anti-bot bypass и runbook остаются как записаны. Гейт пропущен по
+  `canon_drift_waiver` в STATUS (видимый waiver вместо env-переменной).
+
 ## 2026-07-27 (позже, поставка legacy-debt)
 * **Note (no canon change)**: код под `implementation:` шести concept'ов изменён
   поставкой `legacy-debt` — добавлено логирование в `except`-ветки, исправлены

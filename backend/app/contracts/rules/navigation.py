@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlparse
 
 from app.contracts.context import ActionContext
@@ -15,7 +16,7 @@ from app.schemas.snapshot import AgentAction
 
 
 def url_in_allowed_domains(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
 ) -> Violation | None:
     target = normalize_url(action.url or "")
     if not same_site(target, ctx.origin):
@@ -24,7 +25,7 @@ def url_in_allowed_domains(
 
 
 def url_in_candidate_queue(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
 ) -> Violation | None:
     target = normalize_url(action.url or "")
     if "start_url" in params.get("except", []) and target == normalize_url(ctx.start_url):
@@ -34,7 +35,9 @@ def url_in_candidate_queue(
     return None
 
 
-def public_http_url(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def public_http_url(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     target = action.url or ""
     if urlparse(target).scheme not in ("http", "https"):
         return Violation(constraint_id=code, message="scheme not http(s)", proposed_url=target)
@@ -46,13 +49,17 @@ def public_http_url(code: str, params: dict, action: AgentAction, ctx: ActionCon
     return None
 
 
-def action_not_in(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def action_not_in(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     if action.action in params.get("forbidden", ()):
         return Violation(constraint_id=code, message=f"forbidden action '{action.action}'")
     return None
 
 
-def url_not_visited(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def url_not_visited(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     target = normalize_url(action.url or "")
     if target in ctx.visited:
         return Violation(constraint_id=code, message="already visited", proposed_url=target)
@@ -60,7 +67,7 @@ def url_not_visited(code: str, params: dict, action: AgentAction, ctx: ActionCon
 
 
 def intent_conditional_paths(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
 ) -> Violation | None:
     """I-S2: legal/utility пути — soft avoid; при intent=contact наоборот boost (нет violation)."""
     if ctx.intent == params.get("boost_when_intent"):
@@ -83,7 +90,7 @@ def label_is_destructive(label: str | None, signals: tuple[str, ...]) -> bool:
 
 
 def click_not_destructive(
-    code: str, params: dict, action: AgentAction, ctx: ActionContext
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
 ) -> Violation | None:
     """I-H12 (doc 25 Tier 3): click по destructive-элементу агент не исполняет.
 
@@ -112,7 +119,9 @@ def click_not_destructive(
 _FILLABLE_KINDS = ("text", "email", "search", "tel", "url", "number", "textarea")
 
 
-def fill_target_safe(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def fill_target_safe(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     """I-H11 (doc 25 Tier 2): fill только в текстовые поля; НИКОГДА в password (креды
     вводит человек, attended), не в кнопки/чекбоксы/select."""
     if action.action != "fill":
@@ -132,7 +141,9 @@ def fill_target_safe(code: str, params: dict, action: AgentAction, ctx: ActionCo
     return None
 
 
-def click_target_safe(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def click_target_safe(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     """I-H10 (doc 25 Tier 1): click только по существующему интерактивному элементу,
     не submit/password/login. submit/login → Tier 2 (нужно attended-подтверждение)."""
     if action.action != "click":

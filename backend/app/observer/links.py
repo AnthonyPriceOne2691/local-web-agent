@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import tldextract
@@ -70,7 +71,9 @@ def origin_of(url: str) -> str:
     return f"{p.scheme}://{p.netloc}"
 
 
-def clean_links(base_url: str, raw_links: list[dict], origin: str, cap: int = 40) -> list[dict]:
+def clean_links(
+    base_url: str, raw_links: list[dict[str, Any]], origin: str, cap: int = 40
+) -> list[dict[str, Any]]:
     """Resolve, drop mailto/tel/js/anchors, dedupe by normalized href (doc 03)."""
     out, seen = [], set()
     for item in raw_links:

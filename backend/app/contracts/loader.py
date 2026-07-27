@@ -38,7 +38,7 @@ class ContractSpec(BaseModel):
     recovery: dict[str, Any] = Field(default_factory=dict)
 
 
-def _parse_rules(raw_list: list[dict] | None, severity: str, *, path: Path) -> list[ContractRule]:
+def _parse_rules(raw_list: list[dict[str, Any]] | None, severity: str, *, path: Path) -> list[ContractRule]:
     rules: list[ContractRule] = []
     for raw in raw_list or []:
         known = {k: raw[k] for k in _RESERVED_KEYS if k in raw}

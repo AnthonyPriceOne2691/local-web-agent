@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -45,11 +45,11 @@ class Article(BaseModel):
 
     @field_validator("word_count", mode="before")
     @classmethod
-    def _coerce_word_count(cls, v):  # LLM пишет "≈2400"/"about 950" — вытащить цифры
+    def _coerce_word_count(cls, v: object) -> int:  # LLM пишет "≈2400"/"about 950" — вытащить цифры
         if isinstance(v, str):
             digits = "".join(ch for ch in v if ch.isdigit())
             return int(digits) if digits else 0
-        return v or 0
+        return int(v) if isinstance(v, int | float) else 0
 
 
 class ArticleCandidate(BaseModel):
@@ -68,7 +68,7 @@ class ExtractionResult(BaseModel):
     not_found: list[NotFound] = Field(default_factory=list)
     article: Article | None = None  # UC-2 content_search (doc 05)
     article_candidates_considered: list[ArticleCandidate] = Field(default_factory=list)
-    design_tokens: dict = Field(default_factory=dict)  # из vision_insights[].design (doc 05)
+    design_tokens: dict[str, Any] = Field(default_factory=dict)  # из vision_insights[].design (doc 05)
     pages_visited: int = 0
     duration_seconds: float = 0.0
     generated_at: str = ""

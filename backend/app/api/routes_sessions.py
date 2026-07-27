@@ -7,6 +7,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -33,7 +34,7 @@ class UserMessage(BaseModel):
 
 
 @router.post("/sessions", status_code=201)
-async def create_session(body: CreateSession, request: Request) -> dict:
+async def create_session(body: CreateSession, request: Request) -> dict[str, Any]:
     state = request.app.state
     config = SessionConfig(
         max_sites=body.max_sites or state.settings.max_sites_per_session,
@@ -48,7 +49,7 @@ async def create_session(body: CreateSession, request: Request) -> dict:
 
 
 @router.post("/sessions/{session_id}/messages", status_code=202)
-async def post_message(session_id: str, body: UserMessage, request: Request) -> dict:
+async def post_message(session_id: str, body: UserMessage, request: Request) -> dict[str, Any]:
     state = request.app.state
     session = state.session_store.get(session_id)
     if session is None:
@@ -85,7 +86,7 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
 
 
 @router.get("/sessions")
-async def list_sessions(request: Request, limit: int = 20) -> dict:
+async def list_sessions(request: Request, limit: int = 20) -> dict[str, Any]:
     store = request.app.state.session_store
     ids = store.list_ids()[:limit]
     sessions = []
@@ -106,14 +107,14 @@ async def list_sessions(request: Request, limit: int = 20) -> dict:
 
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str, request: Request) -> SessionRecord:
-    session = request.app.state.session_store.get(session_id)
+    session: SessionRecord | None = request.app.state.session_store.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
     return session
 
 
 @router.get("/sessions/{session_id}/events")
-async def session_events(session_id: str, request: Request, since_messages: int = 0):
+async def session_events(session_id: str, request: Request, since_messages: int = 0) -> StreamingResponse:
     """SSE-прогресс (doc 15 v0.6): status / message / crawl_progress / done.
 
     Poll-паттерн поверх store (Phase 4, no WebSocket); реконнект возобновляет
@@ -145,7 +146,7 @@ async def get_session_report(session_id: str, request: Request) -> Response:
 
 
 @router.post("/sessions/{session_id}/cancel", status_code=202)
-async def cancel_session(session_id: str, request: Request) -> dict:
+async def cancel_session(session_id: str, request: Request) -> dict[str, Any]:
     """doc 15: текущий crawl доводится до cancel, очередь очищается."""
     state = request.app.state
     session = state.session_store.get(session_id)
@@ -164,7 +165,7 @@ async def cancel_session(session_id: str, request: Request) -> dict:
 
 
 @router.post("/sessions/{session_id}/resume", status_code=202)
-async def resume_session(session_id: str, request: Request) -> dict:
+async def resume_session(session_id: str, request: Request) -> dict[str, Any]:
     """Attended (Phase 5): пользователь прошёл challenge → снять паузу активного crawl."""
     state = request.app.state
     session = state.session_store.get(session_id)
@@ -181,7 +182,7 @@ async def resume_session(session_id: str, request: Request) -> dict:
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, request: Request) -> dict:
+async def delete_session(session_id: str, request: Request) -> dict[str, Any]:
     state = request.app.state
     session = state.session_store.get(session_id)
     if session is None:

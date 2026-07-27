@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -10,7 +11,7 @@ _INTENT_CATEGORIES = ("contact", "contact_legal", "about", "pricing", "careers",
 
 
 class PathHints:
-    def __init__(self, data: dict):
+    def __init__(self, data: dict[str, Any]):
         self._data = data or {}
 
     @classmethod

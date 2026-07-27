@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.contracts.context import ActionContext
-from app.contracts.loader import ContractSpec, load_contract, load_forbidden_paths
+from app.contracts.loader import ContractRule, ContractSpec, load_contract, load_forbidden_paths
 from app.contracts.rules import ACTION_CHECKS, CONFIG_CHECKS
 from app.schemas.run import RunConfig, Violation
 from app.schemas.snapshot import AgentAction
@@ -140,7 +140,7 @@ class ContractEnforcer:
                 return tuple(str(s).casefold() for s in rule.params.get("destructive_signals", ()))
         return ()
 
-    def _rule(self, check: str):
+    def _rule(self, check: str) -> ContractRule | None:
         for rule in (
             self.spec.governance_hard
             + self.spec.governance_soft

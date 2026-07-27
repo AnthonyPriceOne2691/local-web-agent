@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.observer import blockers, links
 from app.schemas.snapshot import Heading, InteractiveElement, Link, PageSnapshot
 
@@ -58,7 +60,7 @@ INTERACTIVE_CAP = 50  # doc 20 token budget — интерактивных эл�
 INTERACTIVE_LABEL_CAP = 120
 
 
-def build_snapshot(raw: dict, *, page_url: str, origin: str) -> PageSnapshot:
+def build_snapshot(raw: dict[str, Any], *, page_url: str, origin: str) -> PageSnapshot:
     main_text = (raw.get("main_text") or "")[:MAIN_TEXT_CAP]
     truncated = len(raw.get("main_text") or "") > MAIN_TEXT_CAP
     headings = [

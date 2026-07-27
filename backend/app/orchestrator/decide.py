@@ -9,6 +9,8 @@ interaction / capture / discovery. Тема модуля: **как из канд
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.contracts.context import build_action_context
 from app.contracts.enforcer import ContractEnforcer
 from app.llm.navigator import Navigator
@@ -35,9 +37,9 @@ async def plan_validated(
     *,
     navigator: Navigator,
     enforcer: ContractEnforcer,
-) -> tuple[AgentAction, list[Violation], dict]:
+) -> tuple[AgentAction, list[Violation], dict[str, Any]]:
     violations: list[Violation] = []
-    llm_stats: dict = {}
+    llm_stats: dict[str, Any] = {}
     retry_note = ""
     drift = record.metadata.setdefault(
         "drift", {"hard_total": 0, "ih6": 0, "replan_ok": 0, "replan_fail": 0, "fallbacks": 0}
@@ -105,13 +107,14 @@ async def plan_validated(
     return AgentAction(action="stop", reasoning="no valid candidates"), violations, llm_stats
 
 
-def _fallback_only(drift: dict) -> bool:
+def _fallback_only(drift: dict[str, Any]) -> bool:
     """Recovery success < 50% при ≥2 попытках → link_scorer до конца run (doc 13)."""
-    attempts = drift["replan_ok"] + drift["replan_fail"]
-    return attempts >= DRIFT_MIN_RECOVERIES and drift["replan_ok"] / attempts < 0.5
+    ok, fail = int(drift["replan_ok"]), int(drift["replan_fail"])
+    attempts = ok + fail
+    return attempts >= DRIFT_MIN_RECOVERIES and ok / attempts < 0.5
 
 
-def _mark_recovered(violations: list[Violation], replans_used: int, drift: dict) -> None:
+def _mark_recovered(violations: list[Violation], replans_used: int, drift: dict[str, Any]) -> None:
     if not violations:
         return
     for v in violations:

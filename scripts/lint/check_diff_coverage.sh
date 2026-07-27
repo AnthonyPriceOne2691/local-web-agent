@@ -54,9 +54,14 @@ red=$(printf '\033[31m'); yellow=$(printf '\033[33m'); green=$(printf '\033[32m'
 COV_EXCLUDE_RE=${COV_EXCLUDE_RE:-'^(app/main\.py|app/browser/playwright_session\.py)$'}
 
 list_changed() { # $1 = base-реф; закоммиченный дифф prod-файлов (без тестов)
+  # Меряем ТОЛЬКО файлы измеряемого пакета ($COV_PKG): coverage.json собирается
+  # через `--cov=$COV_PKG`, поэтому всё вне него по определению «0%» — не потому
+  # что не покрыто, а потому что не измерялось. Без этого фильтра гейт валил PR
+  # на собственных harness-скриптах (scripts/lint/*, okf_sync_gate).
   git -C "$REPO_ROOT" diff --name-only "$1"...HEAD -- "$PY_SRC/*.py" 2>/dev/null \
     | grep -vE '/tests/|/test_[^/]*\.py$' \
     | sed "s#^$BE_DIR/##" \
+    | grep -E "^${COV_PKG}/" \
     | grep -vE "$COV_EXCLUDE_RE"
 }
 

@@ -6,6 +6,9 @@ PNG — относительные пути внутри artifacts/{run_id}/ (re
 
 from __future__ import annotations
 
+from typing import Any
+
+from app.schemas.extraction import Fact
 from app.schemas.run import RunRecord
 from app.schemas.snapshot import PageSnapshot
 
@@ -70,7 +73,7 @@ def build_report(record: RunRecord, snapshots: list[PageSnapshot]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _vision_snippet(fact, snapshots: list[PageSnapshot]) -> str:
+def _vision_snippet(fact: Fact, snapshots: list[PageSnapshot]) -> str:
     vision_urls = {ev.url for ev in fact.evidence if ev.source in ("vision", "both")}
     if not vision_urls:
         return ""
@@ -116,7 +119,7 @@ def _design_section(record: RunRecord, snapshots: list[PageSnapshot]) -> list[st
     return lines
 
 
-def _vision_appendix(meta: dict, snapshots: list[PageSnapshot]) -> list[str]:
+def _vision_appendix(meta: dict[str, Any], snapshots: list[PageSnapshot]) -> list[str]:
     if not (meta.get("vision_failures") or meta.get("vision_skipped_pages")):
         return []
     lines = [

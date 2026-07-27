@@ -32,7 +32,7 @@ class ProbeResult:
     url: str
     alive: bool
     escalate: bool = False  # F2: только Playwright (анти-бот/пустой DOM)
-    links: list[dict] = field(default_factory=list)  # {href, text} same-site
+    links: list[dict[str, str]] = field(default_factory=list)  # {href, text} same-site
 
 
 async def fetch_probe(client: httpx.AsyncClient, url: str, origin: str) -> ProbeResult:
@@ -79,10 +79,10 @@ async def filter_alive(
 
 async def probe_slugs_f1(
     client: httpx.AsyncClient, origin: str, slugs: list[str]
-) -> tuple[list[str], list[dict]]:
+) -> tuple[list[str], list[dict[str, str]]]:
     """Интент-слуги через полный F1: (живые URL, ссылки с живых страниц)."""
     alive: list[str] = []
-    links: list[dict] = []
+    links: list[dict[str, str]] = []
     seen_href: set[str] = set()
     for slug in slugs:
         result = await fetch_probe(client, origin.rstrip("/") + slug, origin)
@@ -122,8 +122,8 @@ def _https_http_variants(url: str) -> list[str]:
     return [url]
 
 
-def _parse_links(body: str, base_url: str, origin: str) -> list[dict]:
-    out: list[dict] = []
+def _parse_links(body: str, base_url: str, origin: str) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
     for href, inner in _HREF.findall(body):
         if href.startswith(("mailto:", "tel:", "javascript:")):
             continue

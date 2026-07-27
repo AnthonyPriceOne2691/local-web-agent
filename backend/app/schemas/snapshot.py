@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -56,7 +56,7 @@ class PageSnapshot(BaseModel):
     links: list[Link] = Field(default_factory=list)
     interactive_elements: list[InteractiveElement] = Field(default_factory=list)  # doc 25 A-1
     screenshots: list[ScreenshotRef] = Field(default_factory=list)
-    vision_insights: list[dict] = Field(default_factory=list)  # VisionInsight dumps (doc 23)
+    vision_insights: list[dict[str, Any]] = Field(default_factory=list)  # VisionInsight dumps (doc 23)
     truncated: bool = False
     priority: bool = False
 

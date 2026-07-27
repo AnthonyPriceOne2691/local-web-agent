@@ -14,7 +14,9 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 from app.config import Settings
 from app.research import actions
@@ -55,7 +57,7 @@ class ResearchRunner:
         settings: Settings,
         run_store: RunStore,
         session_store: SessionStore,
-        orchestrator_factory,
+        orchestrator_factory: Callable[[], Any],
         compare: CompareSynthesizer,
         planner: LlmPlanner | None = None,
     ):
@@ -220,7 +222,7 @@ class ResearchRunner:
             record.intent = args["intent"]  # research-план фиксирует intent (doc 24)
         self._runs.save(record)
         orchestrator = self._factory()
-        kwargs: dict = {"cancel_event": cancel_event}
+        kwargs: dict[str, Any] = {"cancel_event": cancel_event}
         if config.attended and self._resume_event is not None:
             from app.orchestrator.attended import EventAttendedGate
 
@@ -228,7 +230,8 @@ class ResearchRunner:
                 self._resume_event, self._runs, timeout_s=self._s.attended_wait_timeout_s
             )
         try:
-            return await orchestrator.run(record, **kwargs)
+            done: RunRecord = await orchestrator.run(record, **kwargs)
+            return done
         except Exception as exc:
             # Один упавший сайт не валит сессию (M-H4): в excluded[] уедет короткая
             # причина, а стек виден только здесь.
