@@ -30,6 +30,7 @@ playwright/.cache/
 # Coverage artifacts
 .coverage
 coverage.xml
+coverage.json      # артефакт check_diff_coverage.sh (--cov-report=json)
 
 # Локальный контекст Claude Code (не часть кодовой базы)
 CLAUDE.md
