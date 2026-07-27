@@ -20,9 +20,18 @@
 - **hooks:** claude    <!-- stop-on-red + protect-main, .claude/settings.json -->
 - **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
      CI их не видит; гоняется вручную при каждой правке канонов -->
-- **blockers:** живой exit-смоук требует человека у клавиатуры (Tier 3 по построению:
-  необратимую кнопку жмёт человек) — ждём окна у Антона
+- **blockers:** (1) живой exit-смоук требует человека у клавиатуры (Tier 3 по
+  построению: необратимую кнопку жмёт человек) — ждём окна у Антона;
+  (2) **bootstrap канон-стека превысил circuit breaker** (71 файл / 7080 LOC net
+  против лимитов 25 / 800) — нужен waiver **человека**, агент его не подписывает
 - **waivers:** —
+  <!-- Готовая строка для владельца: раскомментировать и подписать своим именем.
+       Причина превышения: развёртывание инфраструктуры (7 гейт-скриптов + 3
+       workflow + конфиги + bundle из 14 файлов) — единый неделимый bootstrap,
+       а не oneshot фичи; разбить его на 3 поставки постфактум уже нельзя.
+  waiver: max_files_touched=80 max_loc_diff=8000 reason=canon-stack bootstrap (infra, not feature oneshot) by=human:anthony -->
+  <!-- Альтернатива: push с --no-verify и запись причины здесь же. После того как
+       origin/main догонит HEAD, breaker снова считает пустой дифф и молчит. -->
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
 ## Backlog гейтов (заведён при развёртывании стека, 2026-07-27)

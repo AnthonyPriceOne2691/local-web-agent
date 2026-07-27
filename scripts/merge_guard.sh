@@ -56,6 +56,19 @@ if ! git -C "$WT" merge --no-ff --no-edit "$SOURCE" >/dev/null 2>&1; then
   die "конфликт при слиянии $SOURCE в $TARGET — разреши его в ветке и повтори"
 fi
 
+# Адаптация проекта: тулчейн (backend/.venv, frontend/node_modules) gitignored,
+# поэтому в свежем worktree его нет, и хуки, зовущие `backend/.venv/bin/python`,
+# падают по окружению — а не по качеству кода. Симлинкуем тулчейн из основного
+# клона: проверяем КОД слитого состояния теми же инструментами, что локально.
+# (В CI этого не нужно: там `uv sync` ставит окружение с нуля.)
+MAIN_ROOT=$(pwd)
+for tool in backend/.venv frontend/node_modules; do
+  if [[ -e "$MAIN_ROOT/$tool" && ! -e "$WT/$tool" ]]; then
+    mkdir -p "$WT/$(dirname "$tool")"
+    ln -s "$MAIN_ROOT/$tool" "$WT/$tool"
+  fi
+done
+
 # Гейты гоняются в слитом дереве. Каждый — только если он в проекте есть:
 # стек разворачивается послойно, и отсутствующий слой не должен ронять мерж.
 failed=()
