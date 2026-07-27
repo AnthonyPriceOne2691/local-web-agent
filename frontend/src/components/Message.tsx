@@ -1,4 +1,4 @@
-import type { SessionMessage } from '../types'
+import type { SessionMessage } from '../types';
 
 export default function Message({ message }: { message: SessionMessage }) {
   if (message.role === 'user') {
@@ -8,7 +8,7 @@ export default function Message({ message }: { message: SessionMessage }) {
           {message.content}
         </div>
       </div>
-    )
+    );
   }
   if (message.role === 'assistant') {
     return (
@@ -17,7 +17,7 @@ export default function Message({ message }: { message: SessionMessage }) {
           {message.content}
         </div>
       </div>
-    )
+    );
   }
   // tool / system notes (M-S1) — компактная строка
   return (
@@ -25,5 +25,5 @@ export default function Message({ message }: { message: SessionMessage }) {
       <span>⚙</span>
       <span className="truncate">{message.content}</span>
     </div>
-  )
+  );
 }

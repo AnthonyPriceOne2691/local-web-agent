@@ -45,7 +45,7 @@ async def start_run(config: RunConfig, request: Request) -> dict:
         try:
             orchestrator = state.orchestrator_factory()
             await orchestrator.run(record, **run_kwargs)
-        except Exception as exc:  # noqa: BLE001 — фон не должен падать молча
+        except Exception as exc:
             record.status = "failed"
             record.error_message = (str(exc) or type(exc).__name__)[:500]
             state.run_store.save(record)

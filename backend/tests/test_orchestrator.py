@@ -46,7 +46,7 @@ def record_for(url: str, task: str = "Find the phone number", **cfg) -> RunRecor
     return RunRecord(id="test-run", config=RunConfig(start_url=url, task=task, **cfg))
 
 
-@pytest.fixture()
+@pytest.fixture
 def two_page_site() -> FakeBrowserSession:
     return FakeBrowserSession({
         f"{ORIGIN}/": page_raw(title="Home", text="Welcome to Acme " * 30,

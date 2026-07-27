@@ -44,12 +44,12 @@ class PlaywrightSession:
         for attempt in (1, 2, 3):
             try:
                 return await self._page.evaluate(OBSERVE_JS)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 if attempt == 3:
                     raise
                 try:
                     await self._page.wait_for_load_state("domcontentloaded", timeout=5000)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
                 await self._page.wait_for_timeout(1500)
 
@@ -112,7 +112,7 @@ class PlaywrightSession:
                     await locator.click(timeout=deadline_per_sel)
                     await self._page.wait_for_timeout(300)  # banner teardown settle
                     return sel
-            except Exception:  # noqa: BLE001 — селектор мимо, пробуем следующий
+            except Exception:
                 continue
         return None
 
@@ -121,7 +121,7 @@ class PlaywrightSession:
             if self._persist_path and self._context is not None:
                 Path(self._persist_path).parent.mkdir(parents=True, exist_ok=True)
                 await self._context.storage_state(path=self._persist_path)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         if self._browser:
             await self._browser.close()

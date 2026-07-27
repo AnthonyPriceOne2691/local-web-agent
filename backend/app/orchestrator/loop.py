@@ -267,7 +267,7 @@ class CrawlOrchestrator:
                 cancel_event=cancel_event,
             )
             result = await self._synthesize(record, snapshots)
-        except Exception as exc:  # noqa: BLE001 — run не должен терять запись
+        except Exception as exc:
             record.status = "failed"
             # str(httpx.ReadTimeout) пуст — без имени типа excluded[] нечитаем (M-H4)
             record.error_message = (str(exc) or type(exc).__name__)[:500]
@@ -293,7 +293,7 @@ class CrawlOrchestrator:
         try:  # markdown report (doc 05) — не валит run
             report_path = self._store.artifacts_dir(record.id) / "report.md"
             report_path.write_text(build_report(record, snapshots), encoding="utf-8")
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return record
 
@@ -337,7 +337,7 @@ class CrawlOrchestrator:
             try:
                 final_url = await self._browser.goto(url, timeout_ms=timeout_ms)
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if attempt == 2:
                     record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=url,
                                                   note=f"nav_error: {str(exc)[:150]}"))
@@ -358,7 +358,7 @@ class CrawlOrchestrator:
         if len(raw.get("main_text") or "") < SPA_TEXT_THRESHOLD and not looks_like_challenge(raw):
             try:
                 await self._browser.wait_networkidle(10000)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             raw = await self._browser.raw_snapshot()
         snapshot = build_snapshot(raw, page_url=final_url, origin=new_origin)
@@ -378,7 +378,7 @@ class CrawlOrchestrator:
                 self._browser, mode=cfg.consent_handling, click_mode=cfg.consent_click,
                 site_click_used=self._consent_click_used,
             )
-        except Exception:  # noqa: BLE001 — consent не должен валить скриншот
+        except Exception:
             status = "failed"
         if status.startswith("clicked"):
             self._consent_click_used = True
@@ -487,5 +487,5 @@ class CrawlOrchestrator:
     async def _safe_close(self) -> None:
         try:
             await self._browser.close()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass

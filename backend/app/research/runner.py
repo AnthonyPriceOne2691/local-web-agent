@@ -169,7 +169,7 @@ class ResearchRunner:
         self, session: SessionRecord, call: ToolCall, crawled: list[RunRecord],
     ) -> list[RunRecord]:
         """Свежие crawls + прошлые runs по run_ids (пусто → все runs сессии)."""
-        ids = call.args.get("run_ids") or [r for r in session.run_ids]
+        ids = call.args.get("run_ids") or list(session.run_ids)
         fresh = {r.id for r in crawled}
         stored = [self._runs.get(i) for i in ids if i not in fresh]
         return crawled + [r for r in stored if r is not None]
@@ -207,7 +207,7 @@ class ResearchRunner:
                 self._resume_event, self._runs, timeout_s=self._s.attended_wait_timeout_s)
         try:
             return await orchestrator.run(record, **kwargs)
-        except Exception as exc:  # noqa: BLE001 — один сайт не валит сессию (M-H4 edge)
+        except Exception as exc:
             record.status = "failed"
             record.error_message = (str(exc) or type(exc).__name__)[:500]
             self._runs.save(record)

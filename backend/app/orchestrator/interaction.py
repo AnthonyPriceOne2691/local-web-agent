@@ -64,7 +64,7 @@ async def act_on_element(
             await browser.fill_element(idx, action.value)
         else:
             await browser.click_element(idx)
-    except Exception as exc:  # noqa: BLE001 — неудачное действие не валит run
+    except Exception as exc:
         record.metadata.setdefault("action_errors", []).append(
             f"{action.action} #{idx}: {str(exc)[:120]}")
     await browser.wait(rate_ms)

@@ -1,0 +1,72 @@
+# Static dependency direction enforcement (import-linter), CQG §3.6.
+# Запуск: .venv/bin/lint-imports (из backend/).
+# Слои выведены из ФАКТИЧЕСКИХ импортов проекта (не выдуманы): api/research —
+# верх, schemas/config — низ; Layer 1 orchestrator знает про browser/llm/vision,
+# но ни один нижний слой не знает про orchestrator/research/api.
+# Легаси-нарушения выносить в ignore_imports с пометкой "TODO: <причина>".
+
+[importlinter]
+root_packages =
+    app
+
+# --------------------------------------------------------------------
+# Контракт 1: слоистость app. Верхние слои знают про нижние, не наоборот.
+# api → research → orchestrator → (интеграции) → storage/observer → schemas.
+# --------------------------------------------------------------------
+[importlinter:contract:app-layered]
+name = app: api -> research -> orchestrator -> integrations -> schemas
+type = layers
+layers =
+    api
+    research
+    orchestrator
+    vision
+    extraction
+    navigation
+    browser
+    contracts
+    llm
+    reporting
+    sinks
+    storage
+    observer
+    config
+    schemas
+containers =
+    app
+exhaustive = False
+
+# --------------------------------------------------------------------
+# Контракт 2: schemas — листовой слой (Pydantic-модели ничего не тянут).
+# --------------------------------------------------------------------
+[importlinter:contract:schemas-leaf]
+name = app.schemas не импортирует другие слои
+type = forbidden
+source_modules =
+    app.schemas
+forbidden_modules =
+    app.api
+    app.research
+    app.orchestrator
+    app.storage
+    app.browser
+    app.llm
+    app.contracts
+allow_indirect_imports = True
+
+# --------------------------------------------------------------------
+# Контракт 3: web-слой не протекает вниз (CQG §2.3 «сервис не знает про web»).
+# Layer 1/2 не импортируют FastAPI-роутеры.
+# --------------------------------------------------------------------
+[importlinter:contract:no-web-in-core]
+name = orchestrator / research / storage не импортируют app.api
+type = forbidden
+source_modules =
+    app.orchestrator
+    app.research
+    app.storage
+    app.browser
+    app.llm
+forbidden_modules =
+    app.api
+allow_indirect_imports = True

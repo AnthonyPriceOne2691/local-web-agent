@@ -7,7 +7,7 @@ from app.research.actions.registry import register
 from app.research.meta_agent import ToolCall
 
 
-def _execute(call: ToolCall, ctx: ActionContext) -> str:  # noqa: ARG001 — сигнатура хука
+def _execute(call: ToolCall, ctx: ActionContext) -> str:
     lines = []
     for run_id in ctx.session.run_ids:
         r = ctx.run_store.get(run_id)

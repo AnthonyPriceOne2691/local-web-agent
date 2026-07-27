@@ -38,3 +38,8 @@ MEMORY.md
 # Референс-решение по Google Docs (OAuth креды/токены + Node-код; логику переиспользуем,
 # саму папку не коммитим — там credentials.json/token.json = секреты)
 Gdocs-tabs editor/
+
+# Канон-стек (AGENT_STACK/Delivery/CQG/OKF) — источник вне репозитория.
+# Следствие (AGENT_STACK §7.1 вариант B): CI канонов не видит → stack_selftest
+# гоняется вручную здесь же; записано в delivery/STACK-ACCEPTANCE.md и STATUS.
+Prepare/

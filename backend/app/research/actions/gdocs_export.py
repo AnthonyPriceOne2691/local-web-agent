@@ -29,7 +29,7 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
                             credentials_path=ctx.settings.gdocs_credentials,
                             token_path=ctx.settings.gdocs_token)
         return f"Экспортировано в Google Docs (облако): {url}"
-    except Exception as exc:  # noqa: BLE001 — GdocsUnavailable/сеть → не роняем сессию
+    except Exception as exc:
         return f"Google Docs недоступен ({type(exc).__name__}): {str(exc)[:200]}"
 
 

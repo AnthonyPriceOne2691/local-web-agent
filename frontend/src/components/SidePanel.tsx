@@ -1,27 +1,34 @@
-import { useState } from 'react'
-import type { CrawlProgress, RunRecord, SessionRecord } from '../types'
-import ComparisonView from './ComparisonView'
-import RunCard from './RunCard'
+import { useState } from 'react';
+import type { CrawlProgress, RunRecord, SessionRecord } from '../types';
+import ComparisonView from './ComparisonView';
+import RunCard from './RunCard';
 
 interface Props {
-  session: SessionRecord | null
-  runs: Record<string, RunRecord>
-  progress: CrawlProgress | null
+  session: SessionRecord | null;
+  runs: Record<string, RunRecord>;
+  progress: CrawlProgress | null;
 }
 
 export default function SidePanel({ session, runs, progress }: Props) {
-  const [tab, setTab] = useState<'runs' | 'comparison'>('runs')
-  if (!session) return null
-  const hasComparison = session.comparison_result != null
-  const active = tab === 'comparison' && hasComparison ? 'comparison' : 'runs'
+  const [tab, setTab] = useState<'runs' | 'comparison'>('runs');
+  if (!session) return null;
+  const hasComparison = session.comparison_result != null;
+  const active = tab === 'comparison' && hasComparison ? 'comparison' : 'runs';
 
   return (
     <aside className="w-[380px] shrink-0 border-l border-slate-200 bg-slate-50 flex flex-col">
       <div className="h-12 shrink-0 border-b border-slate-200 bg-white flex items-center px-2 gap-1">
-        <TabButton label={`Runs (${session.run_ids.length})`} active={active === 'runs'}
-                   onClick={() => setTab('runs')} />
-        <TabButton label="Comparison" active={active === 'comparison'} disabled={!hasComparison}
-                   onClick={() => setTab('comparison')} />
+        <TabButton
+          label={`Runs (${session.run_ids.length})`}
+          active={active === 'runs'}
+          onClick={() => setTab('runs')}
+        />
+        <TabButton
+          label="Comparison"
+          active={active === 'comparison'}
+          disabled={!hasComparison}
+          onClick={() => setTab('comparison')}
+        />
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {active === 'runs' && (
@@ -39,8 +46,13 @@ export default function SidePanel({ session, runs, progress }: Props) {
               <div className="text-xs text-slate-400 px-1">No crawl runs yet</div>
             )}
             {[...session.run_ids].reverse().map((id) =>
-              runs[id] ? <RunCard key={id} run={runs[id]} /> : (
-                <div key={id} className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-400">
+              runs[id] ? (
+                <RunCard key={id} run={runs[id]} />
+              ) : (
+                <div
+                  key={id}
+                  className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-400"
+                >
                   loading {id}…
                 </div>
               ),
@@ -52,14 +64,19 @@ export default function SidePanel({ session, runs, progress }: Props) {
         )}
       </div>
     </aside>
-  )
+  );
 }
 
-function TabButton({ label, active, disabled, onClick }: {
-  label: string
-  active: boolean
-  disabled?: boolean
-  onClick: () => void
+function TabButton({
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -70,5 +87,5 @@ function TabButton({ label, active, disabled, onClick }: {
     >
       {label}
     </button>
-  )
+  );
 }

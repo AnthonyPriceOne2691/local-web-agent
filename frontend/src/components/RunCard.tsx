@@ -1,13 +1,13 @@
-import { useState } from 'react'
-import { api } from '../api'
-import type { RunRecord } from '../types'
-import StatusBadge from './StatusBadge'
+import { useState } from 'react';
+import { api } from '../api';
+import type { RunRecord } from '../types';
+import StatusBadge from './StatusBadge';
 
 export default function RunCard({ run }: { run: RunRecord }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
   const shots = run.steps
     .map((step, pos) => ({ step, pos }))
-    .filter(({ step }) => Object.keys(step.screenshot_paths).length > 0)
+    .filter(({ step }) => Object.keys(step.screenshot_paths).length > 0);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white text-xs">
@@ -31,9 +31,10 @@ export default function RunCard({ run }: { run: RunRecord }) {
           {shots.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto pb-1">
               {shots.map(({ step, pos }) => {
-                const profile = step.screenshot_paths.desktop ? 'desktop'
-                  : Object.keys(step.screenshot_paths)[0]
-                const url = api.screenshotUrl(run.id, pos, profile)
+                const profile = step.screenshot_paths.desktop
+                  ? 'desktop'
+                  : Object.keys(step.screenshot_paths)[0];
+                const url = api.screenshotUrl(run.id, pos, profile);
                 return (
                   <a key={pos} href={url} target="_blank" rel="noreferrer" className="shrink-0">
                     <img
@@ -43,7 +44,7 @@ export default function RunCard({ run }: { run: RunRecord }) {
                       className="h-20 rounded border border-slate-200 hover:border-blue-400"
                     />
                   </a>
-                )
+                );
               })}
             </div>
           )}
@@ -69,5 +70,5 @@ export default function RunCard({ run }: { run: RunRecord }) {
         </div>
       )}
     </div>
-  )
+  );
 }

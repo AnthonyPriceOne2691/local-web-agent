@@ -1,0 +1,8 @@
+# file_length_baseline.txt — снимок file-length гейта. Генерируется --generate, НЕ руками.
+# Формат: <lines>:<path> (path в нотации git ls-files от repo-root).
+# [baseline] тает по мере сплитов (--tighten опускает снимки); файл проходит при size <= снимок+30.
+# [exemption] не тает (швов нет); лимит = снимок+50, рост сверх — пере-ревью в PR.
+# Вне обоих списков (в т.ч. любой новый файл) — hard 500/1000.
+[baseline]
+663:scripts/spike/benchmark_crawl.py
+[exemption]

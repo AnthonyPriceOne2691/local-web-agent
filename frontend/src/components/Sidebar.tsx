@@ -1,12 +1,12 @@
-import type { SessionListItem } from '../types'
-import StatusBadge from './StatusBadge'
+import type { SessionListItem } from '../types';
+import StatusBadge from './StatusBadge';
 
 interface Props {
-  sessions: SessionListItem[]
-  currentId: string | null
-  onSelect: (id: string) => void
-  onNew: () => void
-  onDelete: (id: string) => void
+  sessions: SessionListItem[];
+  currentId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
 }
 
 export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete }: Props) {
@@ -40,8 +40,9 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
               <span className="flex-1 truncate">{s.title || 'Untitled session'}</span>
               <button
                 onClick={(e) => {
-                  e.stopPropagation()
-                  if (confirm(`Delete session "${s.title || s.session_id}"?`)) onDelete(s.session_id)
+                  e.stopPropagation();
+                  if (confirm(`Delete session "${s.title || s.session_id}"?`))
+                    onDelete(s.session_id);
                 }}
                 className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 text-xs px-1"
                 title="Delete session"
@@ -57,5 +58,5 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
         ))}
       </nav>
     </aside>
-  )
+  );
 }

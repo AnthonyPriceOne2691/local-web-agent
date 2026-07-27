@@ -26,6 +26,8 @@ dev = [
   "pytest-cov>=5",
   "ruff>=0.6",
   "mypy>=1.11",
+  "import-linter>=2.0",   # CQG §3.6: направление зависимостей между слоями
+  "pre-commit>=3.8",      # CQG §4: оркестрация гейтов
 ]
 gdocs = [  # Tier 0 sink (doc 25): экспорт в Google Docs — optional, cloud carve-out
   "google-api-python-client>=2.100",
@@ -36,15 +38,95 @@ gdocs = [  # Tier 0 sink (doc 25): экспорт в Google Docs — optional, c
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.ruff]
-line-length = 110
-target-version = "py312"
+# --- mypy (CQG §2.2). Канон предлагает strict; здесь включён базовый режим:
+# strict дал 146 ошибок в 40 из 82 модулей — заморозить половину кодовой базы в
+# overrides было бы профанацией гейта. Путь к strict — тающий список ниже плюс
+# пункт backlog в delivery/active/STATUS.md, а не разовое ужесточение флага.
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+namespace_packages = true
+implicit_reexport = true
+ignore_missing_imports = true          # playwright/google-либы без стабов
+follow_imports = "silent"
+warn_redundant_casts = true
+warn_unused_ignores = false            # noqa/type: ignore чистим вместе с strict
+exclude = ["tests/", ".venv/", "scripts/"]
+plugins = ["pydantic.mypy"]
 
+# TODO(legacy, тающий список — CQG §1): 12 модулей с ошибками типов на момент
+# развёртывания стека (2026-07-27). Правишь модуль → чинишь типы → убираешь строку.
+# Новый код проверяется без исключений.
+[[tool.mypy.overrides]]
+module = [
+    "app.browser.consent",
+    "app.browser.playwright_session",
+    "app.contracts.loader",
+    "app.navigation.candidate_queue",
+    "app.navigation.path_hints",
+    "app.orchestrator.interaction",
+    "app.orchestrator.loop",
+    "app.research.compare_synthesizer",
+    "app.research.llm_planner",
+    "app.research.runner",
+    "app.sinks.gdocs",
+    "app.vision.analyzer",
+]
+ignore_errors = true
+
+[tool.ruff]
+line-length = 110          # проектный стиль (канон CQG предлагает 100 — не ломаем историю)
+target-version = "py312"
+extend-exclude = [".venv", "venv", "__pycache__"]
+
+# Набор правил — по CODE_QUALITY_GATES.md §2 (канонный select); ignore-список канона
+# плюс проектные заморозки легаси (помечены TODO — тают по мере правки файлов).
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E","W","F","I","N","UP","B","C4","C90","SIM","RUF","ASYNC","S","PT","RET","PIE","PL","TRY400","DTZ"]
+ignore = [
+    "E501",                 # длину разрулит форматтер
+    "S101",                 # assert разрешён
+    "S104","S105","S106","S301","S311","S324","S603","S607",  # bandit-шум / осознанные кейсы
+    "PLR0913",              # too-many-args — DI-конструкторы
+    "PLR2004",              # magic-value — шумно
+    "B008",                 # DI-объект как default (typer.Option/FastAPI Depends)
+    "RUF001","RUF002","RUF003",  # ambiguous unicode — проза в комментариях русская
+    "PLC0415",              # import-outside-top-level — осознанный lazy-import (optional extras)
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 8
+max-branches = 12
+max-returns = 6
+max-statements = 50
 
 [tool.ruff.lint.per-file-ignores]
 "../cli/**" = ["B008"]  # typer.Option в defaults — идиома typer
+# TODO(legacy, тающий список — CQG §1 baseline-ratchet): пере-снимать ВНИЗ по мере
+# правки этих модулей; новый код держится на канонных правилах без исключений.
+# Сложность (C901/PLR09xx) — разбить при следующем рефакторинге модуля.
+"app/orchestrator/loop.py" = ["C901", "PLR0912", "PLR0915", "S110", "SIM105"]
+"app/orchestrator/vision_batch.py" = ["C901"]
+"app/orchestrator/capture.py" = ["S110"]
+"app/navigation/candidate_queue.py" = ["C901", "PLR0912"]
+"app/navigation/sitemap.py" = ["C901"]
+"app/observer/snapshot.py" = ["C901"]
+"app/extraction/synthesis_validator.py" = ["C901"]
+"app/reporting/markdown.py" = ["C901"]
+"app/vision/selection.py" = ["C901"]
+"app/research/compare_synthesizer.py" = ["C901", "PLR0912"]
+"app/research/runner.py" = ["C901"]
+# S110/S112/SIM105 = молчаливое подавление исключений (CQG §1.5 «ошибки не молчат»)
+# в 5 модулях; долг зафиксирован в delivery/active/STATUS.md — разобрать отдельной
+# поставкой (нужны осмысленные логи, а не contextlib.suppress ради зелени).
+"app/browser/playwright_session.py" = ["S110", "S112", "SIM105", "ASYNC240", "RET503"]
+"app/llm/ollama_client.py" = ["SIM105"]
+"app/storage/sqlite_store.py" = ["S110"]
+"app/sinks/gdocs.py" = ["N818"]  # GdocsUnavailable — переименование ломает публичный API
+"tests/**/*.py" = ["S","PLR2004","PLR0915","PLR0912","C901","PLC0415","B017","PT011","PT012","PT018","N806","N803","N802","E402","SIM117","PT006","E741","PLW0108","DTZ","RUF059","C408","ASYNC109","ASYNC240","N817"]
 
 [tool.coverage.run]
 source = ["app"]

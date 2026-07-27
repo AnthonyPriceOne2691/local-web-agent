@@ -13,7 +13,7 @@ from app.storage.sqlite_store import SqliteRunStore
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.fixture()
+@pytest.fixture
 def tmp_store(tmp_path: Path) -> SqliteRunStore:
     return SqliteRunStore(tmp_path / "runs")
 
@@ -24,10 +24,10 @@ def _no_network_probes(monkeypatch):
     зависят от параллельно запущенного fixtures-сервера на 8901+ (флак)."""
     from app.orchestrator import loop as loop_mod
 
-    async def no_probes(client, origin, slugs):  # noqa: ARG001
+    async def no_probes(client, origin, slugs):
         return [], []
 
-    async def no_legal(client, origin, slugs, cache, timeout_s=4.0):  # noqa: ARG001
+    async def no_legal(client, origin, slugs, cache, timeout_s=4.0):
         return []
 
     monkeypatch.setattr(loop_mod, "probe_slugs_f1", no_probes)

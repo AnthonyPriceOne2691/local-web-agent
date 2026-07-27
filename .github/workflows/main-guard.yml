@@ -1,0 +1,31 @@
+# .github/workflows/main-guard.yml
+name: main-guard
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - id: gates
+        continue-on-error: true
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files
+      - if: steps.gates.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "RED on main: ${{ github.sha }}" \
+            --body "Гейты на main красные. Слито мимо merge_guard.sh (CQG §8.5). Починить или откатить." \
+            --label bug
+      - if: steps.gates.outcome == 'failure'
+        run: exit 1

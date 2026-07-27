@@ -1,0 +1,120 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  STRICT: "1"                 # soft-режим в CI запрещён (Delivery §10.4)
+  LINT_PY_SRC: "."            # прод-Python: backend/app + cli (CQG §6, раскладка проекта)
+  LINT_FE_DIR: frontend
+  LINT_BE_DIR: backend
+  LINT_COV_PKG: app
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # нужен для BASE-диффа: diff-coverage и baseline-ratchet
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Проект на uv + pyproject extras (requirements-dev.txt нет): venv и deps
+      # ставит `uv sync`, чтобы CI и локальная машина ели один и тот же lock-файл.
+      - name: Install backend deps (uv)
+        run: |
+          pip install uv
+          cd backend && uv sync --extra dev --extra gdocs
+
+      - name: Install frontend deps
+        run: npm ci --prefix frontend
+
+      - name: pre-commit (all files, STRICT=1)
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Gate coverage (все гейты подключены)
+        run: bash scripts/lint/check_gate_coverage.sh
+
+      - name: Baseline ratchet (снимки только вниз)
+        env:
+          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+        run: bash scripts/lint/check_baseline_ratchet.sh
+
+      - name: Diff coverage
+        env:
+          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+          MIN_PCT: "70"
+        run: bash scripts/lint/check_diff_coverage.sh
+
+  delivery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # breakers и метрики считаются по merge-base..HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Нужен smoke-набору (S1 pytest / S3 uvicorn гоняются из backend/.venv).
+      # Без этого шага run.sh падал бы на «no backend/.venv», а не на реальном дефекте.
+      - name: Install backend deps (uv)
+        run: |
+          pip install uv
+          cd backend && uv sync --extra dev --extra gdocs
+
+      - name: Delivery phase gate + circuit breakers
+        env:
+          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          if [ -f delivery/active/STATUS.md ]; then
+            python scripts/delivery_check.py --require-ci --diff-base "$BASE"
+          else
+            echo "no active delivery — skip"
+          fi
+
+      - name: Canon sync gate (code <-> knowledge)
+        env:
+          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          if [ -f scripts/okf_sync_gate.py ]; then
+            python scripts/okf_sync_gate.py --base "$BASE"
+          else
+            echo "no OKF sync gate — skip"
+          fi
+
+      - name: Harness metrics (report only, never fails)
+        env:
+          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          if [ -f scripts/delivery_metrics.py ]; then
+            python scripts/delivery_metrics.py --base "$BASE" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Smoke evals (product oracles)
+        run: |
+          if [ -f delivery/evals/smoke/run.sh ]; then
+            bash delivery/evals/smoke/run.sh
+          else
+            echo "no smoke suite — Delivery §6 backlog"
+          fi
+
+      - name: OKF bundle validator
+        run: |
+          if [ -f scripts/okf_validate.py ] && [ -d knowledge ]; then
+            python scripts/okf_validate.py knowledge/
+          else
+            echo "no OKF bundle — skip"
+          fi

@@ -207,7 +207,7 @@ class SqliteRunStore:
                 record = RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
                 if self.get(record.id) is None:
                     self.save(record)
-            except Exception:  # noqa: BLE001 — битый файл не должен валить старт
+            except Exception:
                 pass
             path.rename(backup / path.name)
 

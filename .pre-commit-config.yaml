@@ -1,0 +1,182 @@
+# pre-commit hooks. Установка: pre-commit install && pre-commit install --hook-type pre-push.
+# Прогон по всему дереву: pre-commit run --all-files.
+#
+# Скопировано дословно из CODE_QUALITY_GATES.md Приложения B, затем поправлены пути
+# под раскладку ЭТОГО проекта (CQG §6):
+#   * прод-Python живёт в backend/app + cli/ (не backend/features) → LINT_PY_SRC=.
+#     (скрипты сами отбрасывают тесты; так гейт видит и cli/, и scripts/)
+#   * venv: backend/.venv (менеджер uv)
+#   * фронт: frontend/ (React+Vite), пакет для coverage: app
+#
+# Осознанно НЕ подключён (называем вслух, а не обходим молча — AGENT_STACK §2.A′):
+#   * ruff-format — переформатировал бы 68 файлов (~2.2k строк) при развёртывании;
+#     это отдельный style-коммит с .git-blame-ignore-revs и waiver'ом circuit
+#     breaker'а, решение человека. `ruff` (lint) подключён и зелёный.
+#   * detect-secrets/gitleaks — секретов в репо нет (OAuth-креды в gitignored
+#     `Gdocs-tabs editor/`), но хук нужен; в backlog STATUS: shape-oracles.
+
+default_install_hook_types: [pre-commit, pre-push]
+fail_fast: false
+
+repos:
+  # -------------------------------------------------------------------------
+  # Python: ruff lint — backend/app + cli (прод-код проекта).
+  # -------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.13
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(backend|cli)/
+
+  # -------------------------------------------------------------------------
+  # Python: mypy на изменённых файлах через проектный venv (local hook,
+  # НЕ mirrors-mypy: у того изолированное venv без проектных плагинов/модулей).
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (изменённые файлы)
+        language: system
+        types_or: [python]
+        files: ^backend/
+        exclude: /tests/
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && files=(); for f in "$@"; do files+=("${f#backend/}"); done; .venv/bin/mypy --config-file pyproject.toml "${files[@]}"' --
+        pass_filenames: true
+
+  # -------------------------------------------------------------------------
+  # TypeScript / React: ESLint (per-file errors) + warning-ратчет + Prettier.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint (TypeScript)
+        language: system
+        types_or: [ts, tsx]
+        files: ^frontend/src/
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)/frontend" && files=(); for f in "$@"; do files+=("${f#frontend/}"); done; npx --no-install eslint "${files[@]}"' --
+        pass_filenames: true
+
+      - id: eslint-warning-ratchet
+        name: ESLint warnings — рост запрещён (count-ratchet)
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && bash scripts/lint/check_eslint_warnings.sh'
+        files: ^frontend/src/.*\.(ts|tsx)$
+        pass_filenames: false
+
+      - id: prettier
+        name: Prettier (TypeScript / JSON / CSS)
+        language: system
+        types_or: [ts, tsx, javascript, json, css]
+        files: ^frontend/src/
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)/frontend" && files=(); for f in "$@"; do files+=("${f#frontend/}"); done; npx --no-install prettier --check "${files[@]}"' --
+        pass_filenames: true
+
+  # -------------------------------------------------------------------------
+  # Файлы кода: prod <= 500 / tests <= 1000 строк (baseline-ratchet).
+  # Проектный гейт doc 18 (scripts/check_module_size.py) остаётся как есть —
+  # он про backend/app и живёт в smoke-наборе; этот добавляет ратчет и тесты.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: file-length
+        name: Файлы кода <= 500/1000 строк (baseline-ratchet)
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && bash scripts/lint/check_file_length.sh'
+        types_or: [python, ts, tsx]
+        pass_filenames: false
+
+  # -------------------------------------------------------------------------
+  # Греп-гейты конвенций (per-file baseline-ratchet). LINT_PY_SRC=. — весь репо.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: config-access-gate
+        name: config-access — типизированный config.X, не getattr/os.getenv
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule config-access'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: di-indirection-gate
+        name: di-indirection — без pkg/session/ctx Any и importlib reach-back
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule di-indirection'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: service-no-web-gate
+        name: service-no-web — сервис-слой не импортирует web-фреймворк
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule service-no-web'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: no-grab-bag-module-gate
+        name: no-grab-bag — utils/misc/common/helpers.py без темы запрещены
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule no-grab-bag-module'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: silent-except-gate
+        name: silent-except — broad-except без raise/лога (AST)
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. backend/.venv/bin/python scripts/lint/check_ast_gate.py --rule silent-except'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: inline-prompt-gate
+        name: inline-prompt — LLM-промпт инлайном в .py (AST)
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. backend/.venv/bin/python scripts/lint/check_ast_gate.py --rule inline-prompt'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+
+  # -------------------------------------------------------------------------
+  # DRY / copy-paste гейт (jscpd clone-count ratchet). Бинарь — frontend/node_modules.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: jscpd-dry-gate
+        name: DRY — рост копипаста (jscpd clone-count ratchet)
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_jscpd_gate.sh'
+        files: ^(backend|cli)/.*\.py$
+        pass_filenames: false
+
+  # -------------------------------------------------------------------------
+  # import-linter — направление зависимостей между слоями app (см. .importlinter).
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: import-linter
+        name: import-linter — dependency direction
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && ./.venv/bin/lint-imports'
+        files: ^backend/.*\.py$
+        pass_filenames: false
+
+  # -------------------------------------------------------------------------
+  # pre-push (CQG §8.5.1 ③): тяжёлые проверки — цена обхода поднимается.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: delivery-gate
+        name: delivery phase gate + breakers (pre-push)
+        entry: bash -c 'PY=$(command -v python3 || command -v python); "$PY" scripts/delivery_check.py --diff-base "$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo origin/main)"'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+      - id: baseline-ratchet
+        name: baseline only melts (pre-push)
+        entry: bash scripts/lint/check_baseline_ratchet.sh
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+
+  # Мета-гейт — ПОСЛЕДНИМ. Проверяет, что все гейты выше вообще подключены:
+  # забытый в этом файле скрипт молча не работает (§3, gate-coverage).
+  - repo: local
+    hooks:
+      - id: gate-coverage
+        name: every gate script is wired into pre-commit/CI
+        entry: bash scripts/lint/check_gate_coverage.sh
+        language: system
+        pass_filenames: false
+        always_run: true

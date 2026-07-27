@@ -89,7 +89,7 @@ class InstantOrchestrator:
         return record
 
 
-@pytest.fixture()
+@pytest.fixture
 async def api_client(tmp_path, monkeypatch):
     settings = Settings(data_dir=REPO_ROOT / "data", runs_dir_override=tmp_path / "runs")
     app = create_app(settings)

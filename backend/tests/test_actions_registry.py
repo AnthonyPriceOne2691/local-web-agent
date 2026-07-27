@@ -82,7 +82,7 @@ async def test_tier2_action_skipped_without_confirmation(tmp_path, monkeypatch):
     """A-H2/A-H3: действие tier ≥ 2 runner не исполняет — нота вместо execute."""
     executed: list[str] = []
 
-    def _boom(call, ctx):  # noqa: ARG001
+    def _boom(call, ctx):
         executed.append(call.name)
         return "boom"
 

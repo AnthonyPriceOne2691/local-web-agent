@@ -15,7 +15,7 @@ NOT_FOUND_SYNTH = {"summary": "none", "facts": [],
                    "not_found": [{"key": "phone", "reason": "absent"}]}
 
 
-@pytest.fixture()
+@pytest.fixture
 def one_pager() -> FakeBrowserSession:
     return FakeBrowserSession({
         f"{ORIGIN}/": page_raw(title="Home", text="Welcome words " * 30,
@@ -36,13 +36,13 @@ async def test_config_soft_note_on_public_rate(tmp_path, monkeypatch):
     """rate_limit_ms=0 на публичном хосте → soft G-H4 note, run продолжается."""
     from app.orchestrator import loop as loop_mod
 
-    async def no_probes(client, origin, slugs):  # noqa: ARG001 — без сети
+    async def no_probes(client, origin, slugs):
         return [], []
 
-    async def no_legal(client, origin, slugs, cache, timeout_s=4.0):  # noqa: ARG001
+    async def no_legal(client, origin, slugs, cache, timeout_s=4.0):
         return []
 
-    async def no_robots(origin, *, respect):  # noqa: ARG001
+    async def no_robots(origin, *, respect):
         return RobotsPolicy(None, 0.0)
 
     monkeypatch.setattr(loop_mod, "probe_slugs_f1", no_probes)
@@ -80,7 +80,7 @@ async def test_robots_deny_skips_navigation(tmp_path, one_pager, monkeypatch):
         def allowed(self, url: str) -> bool:
             return False
 
-    async def fake_load(cls, origin, *, respect):  # noqa: ARG001
+    async def fake_load(cls, origin, *, respect):
         return DenyAll()
 
     monkeypatch.setattr(RobotsPolicy, "load", classmethod(fake_load))

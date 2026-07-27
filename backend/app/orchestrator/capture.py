@@ -36,5 +36,5 @@ async def maybe_screenshot(
         snapshot.screenshots.append(
             ScreenshotRef(profile="desktop", relative_path=rel, width=1440, height=900)
         )
-    except Exception:  # noqa: BLE001 — скриншот не валит run
+    except Exception:
         pass

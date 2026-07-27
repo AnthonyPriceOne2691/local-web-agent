@@ -252,7 +252,7 @@ async def test_runner_rules_fast_path_skips_llm(tmp_path):
     llm = FakeOllama([])
 
     class BoomPlanner:
-        async def plan(self, *a, **k):  # noqa: ANN002, ANN003
+        async def plan(self, *a, **k):
             raise AssertionError("planner must not be called when URLs present")
 
     runner = ResearchRunner(

@@ -84,7 +84,7 @@ def test_selection_key_pages_and_caps():
     # design_audit: все страницы со скриншотами, cap только по calls
     jobs, skipped = select_vision_jobs([home, spa, prio, plain], intent="design_audit",
                                        mode="auto", max_calls=3)
-    assert len(jobs) == 3 and not skipped or len(jobs) == 3  # обрезано max_calls
+    assert (len(jobs) == 3 and not skipped) or len(jobs) == 3  # обрезано max_calls
 
 
 # ----------------------------------------------------------------- analyzer

@@ -87,7 +87,7 @@ class Settings(BaseSettings):
 
     def profile_path(self, origin: str) -> str:
         """storage_state-файл сессии по хосту (persist_session, doc 24)."""
-        key = (origin.split("://")[-1] or "profile").replace(":", "_")
+        key = (origin.rsplit("://", maxsplit=1)[-1] or "profile").replace(":", "_")
         return str(self.profiles_dir / f"{key}.json")
 
     @property

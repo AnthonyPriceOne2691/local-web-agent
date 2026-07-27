@@ -66,7 +66,7 @@ class VisionAnalyzer:
                 keep_alive="5m",
                 images=[image_base64],
             )
-        except Exception as exc:  # noqa: BLE001 — timeout/unreachable → failed
+        except Exception as exc:
             return None, str(exc)[:200]
         raw = extract_json(content)
         if raw is None:

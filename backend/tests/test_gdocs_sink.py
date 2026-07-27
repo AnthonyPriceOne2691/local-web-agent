@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("googleapiclient")  # extra `gdocs` не установлен → пропустить
 pytest.importorskip("google.oauth2.credentials")
 
-from app.sinks.gdocs import GdocsUnavailable, _load_credentials, export_to_doc  # noqa: E402
+from app.sinks.gdocs import GdocsUnavailable, _load_credentials, export_to_doc
 
 
 def _write_creds(tmp_path, *, refresh: bool = True):

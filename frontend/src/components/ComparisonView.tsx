@@ -1,13 +1,16 @@
-import { useState } from 'react'
-import { api, downloadReport } from '../api'
-import type { ComparisonResult } from '../types'
+import { useState } from 'react';
+import { api, downloadReport } from '../api';
+import type { ComparisonResult } from '../types';
 
-export default function ComparisonView({ comparison, sessionId }: {
-  comparison: ComparisonResult
-  sessionId: string
+export default function ComparisonView({
+  comparison,
+  sessionId,
+}: {
+  comparison: ComparisonResult;
+  sessionId: string;
 }) {
-  const [error, setError] = useState('')
-  const siteColumns = [...new Set(comparison.dimensions.flatMap((d) => Object.keys(d.scores)))]
+  const [error, setError] = useState('');
+  const siteColumns = [...new Set(comparison.dimensions.flatMap((d) => Object.keys(d.scores)))];
 
   return (
     <div className="space-y-3 text-xs">
@@ -31,7 +34,9 @@ export default function ComparisonView({ comparison, sessionId }: {
 
       {comparison.winner && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-          <div className="font-semibold text-emerald-800">🏆 {comparison.winner.label || comparison.winner.start_url}</div>
+          <div className="font-semibold text-emerald-800">
+            🏆 {comparison.winner.label || comparison.winner.start_url}
+          </div>
           <div className="mt-1 text-emerald-700">{comparison.winner.reason}</div>
         </div>
       )}
@@ -107,5 +112,5 @@ export default function ComparisonView({ comparison, sessionId }: {
         </div>
       )}
     </div>
-  )
+  );
 }

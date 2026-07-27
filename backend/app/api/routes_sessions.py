@@ -67,7 +67,7 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
             runner = state.research_runner_factory()
             await runner.run_message(session, body.content, cancel_event=cancel_event,
                                      resume_event=resume_event)
-        except Exception as exc:  # noqa: BLE001 — сессия не должна виснуть в running_tools
+        except Exception as exc:
             session.status = "failed"
             session.finished_at = datetime.now(UTC).isoformat()
             state.session_store.save(session)
