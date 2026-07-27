@@ -4,6 +4,7 @@ report, cancel, delete."""
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -14,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.api.sse import session_event_stream
 from app.schemas.research import SessionConfig, SessionRecord
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 BUSY_STATUSES = ("running_tools", "comparing")
@@ -67,11 +69,13 @@ async def post_message(session_id: str, body: UserMessage, request: Request) -> 
             runner = state.research_runner_factory()
             await runner.run_message(session, body.content, cancel_event=cancel_event,
                                      resume_event=resume_event)
-        except Exception as exc:
+        except Exception:
+            # Фоновая задача: без этого лога останется только status=failed
+            # в сессии — без причины и стека.
+            logger.exception("session %s failed", session_id)
             session.status = "failed"
             session.finished_at = datetime.now(UTC).isoformat()
             state.session_store.save(session)
-            print(f"session {session_id} failed: {exc}")
         finally:
             state.session_cancel_events.pop(session_id, None)
             state.session_resume_events.pop(session_id, None)

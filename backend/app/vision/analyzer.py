@@ -6,6 +6,8 @@ Structured outputs (schema:VisionInsight, doc 16); invalid JSON → 1 retry
 
 from __future__ import annotations
 
+import logging
+
 from jinja2 import Template
 from pydantic import ValidationError
 
@@ -13,6 +15,8 @@ from app.config import Settings
 from app.llm.ollama_client import OllamaClient
 from app.llm.parsing import extract_json
 from app.vision.schemas import VisionInsight
+
+logger = logging.getLogger(__name__)
 
 
 class VisionAnalyzer:
@@ -67,6 +71,9 @@ class VisionAnalyzer:
                 images=[image_base64],
             )
         except Exception as exc:
+            # Vision не валит run (doc 23): причина уезжает вызывающему строкой,
+            # но без лога в vision_errors теряется класс сбоя (таймаут vs OOM).
+            logger.warning("vision call failed (%s): %s", type(exc).__name__, str(exc)[:200])
             return None, str(exc)[:200]
         raw = extract_json(content)
         if raw is None:

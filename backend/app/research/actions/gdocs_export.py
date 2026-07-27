@@ -7,6 +7,8 @@ Consent (A-H4) — явный запрос пользователя («скоп�
 
 from __future__ import annotations
 
+import logging
+
 from app.research.actions.base import (
     ActionContext,
     ActionSpec,
@@ -15,6 +17,8 @@ from app.research.actions.base import (
 from app.research.actions.registry import register
 from app.research.meta_agent import ToolCall
 from app.sinks.content import build_export_content
+
+logger = logging.getLogger(__name__)
 
 
 def _execute(call: ToolCall, ctx: ActionContext) -> str:
@@ -30,6 +34,9 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
                             token_path=ctx.settings.gdocs_token)
         return f"Экспортировано в Google Docs (облако): {url}"
     except Exception as exc:
+        # Сессия не падает (сообщение уедет в чат), но класс сбоя — нет extra,
+        # протухший refresh_token или сеть — различим только по логу.
+        logger.warning("export_gdocs failed (%s): %s", type(exc).__name__, str(exc)[:200])
         return f"Google Docs недоступен ({type(exc).__name__}): {str(exc)[:200]}"
 
 

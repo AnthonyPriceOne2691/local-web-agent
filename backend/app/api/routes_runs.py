@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -11,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from app.schemas.run import RunConfig, RunRecord
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -46,6 +48,9 @@ async def start_run(config: RunConfig, request: Request) -> dict:
             orchestrator = state.orchestrator_factory()
             await orchestrator.run(record, **run_kwargs)
         except Exception as exc:
+            # Фоновая задача: traceback никто не увидит, кроме этого лога —
+            # в record попадает только короткое сообщение без стека.
+            logger.exception("run %s failed", record.id)
             record.status = "failed"
             record.error_message = (str(exc) or type(exc).__name__)[:500]
             state.run_store.save(record)

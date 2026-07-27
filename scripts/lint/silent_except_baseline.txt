@@ -2,14 +2,4 @@
 # Правило: silent-except: broad-except без raise/лога
 # Формат: <count>:<path> (path от repo-root). Ратчет вниз: файл проходит при count <= снимок;
 # файл ВНЕ снимка (новый) — hard 0.
-1:backend/app/api/routes_runs.py
-1:backend/app/api/routes_sessions.py
-3:backend/app/browser/playwright_session.py
-1:backend/app/orchestrator/capture.py
-1:backend/app/orchestrator/interaction.py
-6:backend/app/orchestrator/loop.py
-1:backend/app/research/actions/gdocs_export.py
-1:backend/app/research/runner.py
-1:backend/app/storage/sqlite_store.py
-1:backend/app/vision/analyzer.py
 3:scripts/spike/benchmark_crawl.py

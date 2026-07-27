@@ -7,11 +7,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.browser.base import BrowserSession
 from app.contracts.rules.navigation import label_is_destructive
 from app.orchestrator.attended import reobserve_in_place
 from app.schemas.run import RunRecord
 from app.schemas.snapshot import AgentAction, PageSnapshot
+
+logger = logging.getLogger(__name__)
 
 
 def _is_submit(el) -> bool:
@@ -65,6 +69,8 @@ async def act_on_element(
         else:
             await browser.click_element(idx)
     except Exception as exc:
+        logger.warning("%s on element #%s failed at %s (%s: %s)",
+                       action.action, idx, current.url, type(exc).__name__, str(exc)[:120])
         record.metadata.setdefault("action_errors", []).append(
             f"{action.action} #{idx}: {str(exc)[:120]}")
     await browser.wait(rate_ms)

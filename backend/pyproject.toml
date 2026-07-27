@@ -108,9 +108,8 @@ max-statements = 50
 # TODO(legacy, тающий список — CQG §1 baseline-ratchet): пере-снимать ВНИЗ по мере
 # правки этих модулей; новый код держится на канонных правилах без исключений.
 # Сложность (C901/PLR09xx) — разбить при следующем рефакторинге модуля.
-"app/orchestrator/loop.py" = ["C901", "PLR0912", "PLR0915", "S110", "SIM105"]
+"app/orchestrator/loop.py" = ["C901", "PLR0912", "PLR0915"]
 "app/orchestrator/vision_batch.py" = ["C901"]
-"app/orchestrator/capture.py" = ["S110"]
 "app/navigation/candidate_queue.py" = ["C901", "PLR0912"]
 "app/navigation/sitemap.py" = ["C901"]
 "app/observer/snapshot.py" = ["C901"]
@@ -119,12 +118,13 @@ max-statements = 50
 "app/vision/selection.py" = ["C901"]
 "app/research/compare_synthesizer.py" = ["C901", "PLR0912"]
 "app/research/runner.py" = ["C901"]
-# S110/S112/SIM105 = молчаливое подавление исключений (CQG §1.5 «ошибки не молчат»)
-# в 5 модулях; долг зафиксирован в delivery/active/STATUS.md — разобрать отдельной
-# поставкой (нужны осмысленные логи, а не contextlib.suppress ради зелени).
-"app/browser/playwright_session.py" = ["S110", "S112", "SIM105", "ASYNC240", "RET503"]
+# Молчаливое подавление исключений разобрано поставкой legacy-debt (2026-07-27):
+# 20 сайтов получили осмысленные логи или `# silent-ok:` с причиной. Здесь остались
+# только точки, где подавление штатное и объяснено в коде.
+# S112: перебор CMP-селекторов — «не нашёл» это штатная ветка цикла, не сбой
+# (итог перебора возвращается наверх и попадает в metadata.consent).
+"app/browser/playwright_session.py" = ["S112", "ASYNC240", "RET503"]
 "app/llm/ollama_client.py" = ["SIM105"]
-"app/storage/sqlite_store.py" = ["S110"]
 "app/sinks/gdocs.py" = ["N818"]  # GdocsUnavailable — переименование ломает публичный API
 "tests/**/*.py" = ["S","PLR2004","PLR0915","PLR0912","C901","PLC0415","B017","PT011","PT012","PT018","N806","N803","N802","E402","SIM117","PT006","E741","PLW0108","DTZ","RUF059","C408","ASYNC109","ASYNC240","N817"]
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sqlite3
 from collections.abc import Iterator
@@ -14,6 +15,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from app.schemas.run import RunRecord
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS crawl_runs (
@@ -207,8 +210,11 @@ class SqliteRunStore:
                 record = RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
                 if self.get(record.id) is None:
                     self.save(record)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Файл всё равно уезжает в legacy_json/ — без лога потеря run'а
+                # выглядела бы как «его никогда не было».
+                logger.warning("legacy run %s not imported (%s: %s) — moved to %s",
+                               path.name, type(exc).__name__, exc, backup.name)
             path.rename(backup / path.name)
 
 

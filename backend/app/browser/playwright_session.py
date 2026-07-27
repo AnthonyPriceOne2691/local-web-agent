@@ -3,9 +3,13 @@ downloads blocked (I-H4), fresh context per run."""
 
 from __future__ import annotations
 
+import contextlib
+import logging
 from pathlib import Path
 
 from app.observer.snapshot import INTERACTIVE_SELECTOR, OBSERVE_JS
+
+logger = logging.getLogger(__name__)
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -44,13 +48,15 @@ class PlaywrightSession:
         for attempt in (1, 2, 3):
             try:
                 return await self._page.evaluate(OBSERVE_JS)
-            except Exception:
+            except Exception as exc:
                 if attempt == 3:
                     raise
-                try:
+                logger.debug("OBSERVE_JS attempt %s failed (%s) — page still settling",
+                             attempt, type(exc).__name__)
+                # Ожидание — best-effort перед следующей попыткой; реальный провал
+                # вылетит из внешнего except на 3-й итерации (там `raise`).
+                with contextlib.suppress(Exception):
                     await self._page.wait_for_load_state("domcontentloaded", timeout=5000)
-                except Exception:
-                    pass
                 await self._page.wait_for_timeout(1500)
 
     def page_url(self) -> str:
@@ -113,6 +119,9 @@ class PlaywrightSession:
                     await self._page.wait_for_timeout(300)  # banner teardown settle
                     return sel
             except Exception:
+                # silent-ok: перебор CMP-селекторов (D-11) — «не нашёл/не кликнулось»
+                # это штатная ветка, а не сбой; итог перебора возвращается наверх
+                # (None = ни один не сработал) и попадает в metadata.consent.
                 continue
         return None
 
@@ -121,8 +130,11 @@ class PlaywrightSession:
             if self._persist_path and self._context is not None:
                 Path(self._persist_path).parent.mkdir(parents=True, exist_ok=True)
                 await self._context.storage_state(path=self._persist_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Не валит run, но молчание здесь стоит дорого: человек проходил
+            # challenge/логин ради этого cookie, и без лога он «просто не сохранился».
+            logger.warning("storage_state not saved to %s (%s: %s)",
+                           self._persist_path, type(exc).__name__, exc)
         if self._browser:
             await self._browser.close()
         if self._pw:

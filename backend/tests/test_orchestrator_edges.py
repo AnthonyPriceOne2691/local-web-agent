@@ -34,7 +34,7 @@ async def test_config_hard_violation_fails_before_start(tmp_path, one_pager):
 
 async def test_config_soft_note_on_public_rate(tmp_path, monkeypatch):
     """rate_limit_ms=0 на публичном хосте → soft G-H4 note, run продолжается."""
-    from app.orchestrator import loop as loop_mod
+    from app.orchestrator import discovery as discovery_mod
 
     async def no_probes(client, origin, slugs):
         return [], []
@@ -45,8 +45,9 @@ async def test_config_soft_note_on_public_rate(tmp_path, monkeypatch):
     async def no_robots(origin, *, respect):
         return RobotsPolicy(None, 0.0)
 
-    monkeypatch.setattr(loop_mod, "probe_slugs_f1", no_probes)
-    monkeypatch.setattr(loop_mod, "filter_alive", no_legal)
+    # пробы живут в orchestrator.discovery (вынесены из loop.py, ≤500 LOC)
+    monkeypatch.setattr(discovery_mod, "probe_slugs_f1", no_probes)
+    monkeypatch.setattr(discovery_mod, "filter_alive", no_legal)
     monkeypatch.setattr(RobotsPolicy, "load", no_robots)
     browser = FakeBrowserSession({"https://example.com/": page_raw(
         title="Home", text="words " * 60)})

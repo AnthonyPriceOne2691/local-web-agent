@@ -5,10 +5,9 @@ LLM выбирает только среди top-K кандидатов, contrac
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from datetime import UTC, datetime
-
-import httpx
 
 from app.browser.base import BrowserSession
 from app.browser.consent import ConsentHandler
@@ -23,13 +22,12 @@ from app.llm.synthesizer import Synthesizer
 from app.navigation.candidate_queue import build_candidates
 from app.navigation.intent import classify_intent
 from app.navigation.path_hints import PathHints
-from app.navigation.probes import filter_alive, probe_slugs_f1
-from app.navigation.sitemap import fetch_sitemap_candidates, sitemap_enabled
 from app.observer.blockers import looks_like_challenge
 from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.attended import AttendedGate, reobserve_in_place
 from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
+from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.interaction import act_on_element
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
@@ -40,6 +38,8 @@ from app.schemas.run import CrawlStep, RunRecord, Violation
 from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
 from app.storage.run_store import RunStore
 from app.vision.analyzer import VisionAnalyzer
+
+logger = logging.getLogger(__name__)
 
 # Drift auto-tighten (doc 13 § Drift detection)
 DRIFT_HARD_FOR_LOW_TEMP = 3   # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
@@ -56,20 +56,6 @@ def _now() -> str:
 
 def _is_canceled(cancel_event: asyncio.Event | None) -> bool:
     return cancel_event is not None and cancel_event.is_set()
-
-
-def _looks_like_article(snapshot: PageSnapshot, task: str) -> bool:
-    """Article-кандидат (doc 24): path-маркер ИЛИ task-слова в title + длинный текст."""
-    from urllib.parse import urlparse
-
-    from app.navigation.sitemap import CONTENT_PATH_MARKERS
-
-    path = urlparse(snapshot.url).path.lower()
-    if any(m in path for m in CONTENT_PATH_MARKERS) and len(snapshot.main_text) > 800:
-        return True
-    title = snapshot.title.casefold()
-    task_words = [w for w in task.casefold().split() if len(w) > 3]
-    return len(snapshot.main_text) > 2000 and any(w in title for w in task_words)
 
 
 class CrawlOrchestrator:
@@ -132,8 +118,10 @@ class CrawlOrchestrator:
                 self._enforcer.effective_rate_ms(cfg.rate_limit_ms, cfg.start_url),
                 int(robots.crawl_delay_s * 1000),
             )
-            alive_probes, legal_probes, probe_links = await self._probe_slugs(record.intent, origin)
-            sitemap_urls = await self._sitemap_urls(record, origin, robots)  # P2.5
+            alive_probes, legal_probes, probe_links = await probe_slugs(
+                self._hints, record.intent, origin)
+            sitemap_candidates = await sitemap_urls(  # P2.5
+                record, origin, robots.sitemaps(), self._hints)
             profile = (self._s.profile_path(origin)
                        if (cfg.persist_session or self._s.persist_session) else None)
             await self._browser.start(headless=not cfg.attended, storage_state_path=profile)
@@ -166,7 +154,7 @@ class CrawlOrchestrator:
                     current, origin = nav
                     just_visited = True
                     visited.add(current.url)
-                    if record.intent == "content_search" and _looks_like_article(current, cfg.task):
+                    if record.intent == "content_search" and looks_like_article(current, cfg.task):
                         current.priority = True  # article candidate (doc 24) → 12K excerpt
                     snapshots.append(current)
                     homepage = homepage or current
@@ -195,7 +183,7 @@ class CrawlOrchestrator:
                     snapshot=current, homepage=homepage, intent=record.intent, task=cfg.task,
                     hints=self._hints, origin=origin, visited=visited,
                     alive_probes=alive_probes, legal_probes=legal_probes,
-                    sitemap_urls=sitemap_urls, probe_links=probe_links,
+                    sitemap_urls=sitemap_candidates, probe_links=probe_links,
                     top_k=self._s.top_k_candidates,
                 )
                 if just_visited:  # G-S1: 3 страницы без новых релевантных ссылок → SYNTHESIZE
@@ -268,6 +256,7 @@ class CrawlOrchestrator:
             )
             result = await self._synthesize(record, snapshots)
         except Exception as exc:
+            logger.exception("crawl run %s crashed at %s", record.id, record.current_url)
             record.status = "failed"
             # str(httpx.ReadTimeout) пуст — без имени типа excluded[] нечитаем (M-H4)
             record.error_message = (str(exc) or type(exc).__name__)[:500]
@@ -293,35 +282,14 @@ class CrawlOrchestrator:
         try:  # markdown report (doc 05) — не валит run
             report_path = self._store.artifacts_dir(record.id) / "report.md"
             report_path.write_text(build_report(record, snapshots), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Результат в БД уже есть; без лога пропавший report.md выглядел бы
+            # как «отчёт не предусмотрен», а не как сбой записи.
+            logger.warning("report.md not written for run %s (%s: %s)",
+                           record.id, type(exc).__name__, exc)
         return record
 
     # ------------------------------------------------------------ internals
-    async def _probe_slugs(self, intent: str, origin: str) -> tuple[list[str], list[str], list[dict]]:
-        """F1 tier: интент-слуги через GET+parse (links → queue), legal — HEAD-фильтр."""
-        cache: dict[str, bool] = {}
-        async with httpx.AsyncClient() as client:
-            alive, probe_links = await probe_slugs_f1(client, origin, self._hints.slugs_for(intent))
-            legal = (
-                await filter_alive(client, origin, self._hints.legal_slugs, cache)
-                if intent == "contact"
-                else []
-            )
-        return alive, legal, probe_links
-
-    async def _sitemap_urls(self, record: RunRecord, origin: str, robots: RobotsPolicy) -> list[str]:
-        if not sitemap_enabled(record.config.use_sitemap, record.intent):
-            return []
-        async with httpx.AsyncClient() as client:
-            urls = await fetch_sitemap_candidates(
-                client, origin=origin, intent=record.intent, task=record.config.task,
-                hints=self._hints, robots_sitemaps=robots.sitemaps(),
-            )
-        if urls:
-            record.metadata["sitemap_candidates"] = len(urls)
-        return urls
-
     async def _navigate_observe(
         self, record: RunRecord, url: str, origin: str, robots: RobotsPolicy,
         *, first: bool, step_index: int,
@@ -339,9 +307,12 @@ class CrawlOrchestrator:
                 break
             except Exception as exc:
                 if attempt == 2:
+                    logger.warning("goto %s failed twice (%s: %s)",
+                                   url, type(exc).__name__, str(exc)[:150])
                     record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=url,
                                                   note=f"nav_error: {str(exc)[:150]}"))
                     return None
+                logger.debug("goto %s failed, retrying (%s)", url, type(exc).__name__)
                 await self._browser.wait(2000)
 
         ok, new_origin = guards.check_redirect(final_url, origin, first_navigation=first)  # I-H9
@@ -358,8 +329,11 @@ class CrawlOrchestrator:
         if len(raw.get("main_text") or "") < SPA_TEXT_THRESHOLD and not looks_like_challenge(raw):
             try:
                 await self._browser.wait_networkidle(10000)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Штатный best-effort: у SPA networkidle может не наступить вовсе,
+                # снапшот всё равно снимаем. Уровень debug, а не warning.
+                logger.debug("networkidle wait skipped for %s (%s)",
+                             final_url, type(exc).__name__)
             raw = await self._browser.raw_snapshot()
         snapshot = build_snapshot(raw, page_url=final_url, origin=new_origin)
         await maybe_screenshot(
@@ -378,7 +352,11 @@ class CrawlOrchestrator:
                 self._browser, mode=cfg.consent_handling, click_mode=cfg.consent_click,
                 site_click_used=self._consent_click_used,
             )
-        except Exception:
+        except Exception as exc:
+            # Cookie-баннер не убрали — скриншоты будут с оверлеем (D-11);
+            # status="failed" уедет в metadata.consent, но причину знает только лог.
+            logger.warning("consent dismissal failed on %s (%s: %s)",
+                           url, type(exc).__name__, str(exc)[:150])
             status = "failed"
         if status.startswith("clicked"):
             self._consent_click_used = True
@@ -487,5 +465,8 @@ class CrawlOrchestrator:
     async def _safe_close(self) -> None:
         try:
             await self._browser.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Закрытие идёт в finally-путях, в том числе после уже случившейся
+            # ошибки: ронять run из-за неудачного close нельзя, но молчать о
+            # висящем браузере тоже (следующий run упрётся в лок).
+            logger.warning("browser close failed (%s: %s)", type(exc).__name__, exc)

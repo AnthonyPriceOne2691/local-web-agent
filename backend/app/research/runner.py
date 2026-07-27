@@ -11,6 +11,7 @@ Phase 4: URLs в сообщении → rules fast-path (без LLM); иначе
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from datetime import UTC, datetime
@@ -36,6 +37,8 @@ from app.schemas.research import (
 from app.schemas.run import RunConfig, RunRecord
 from app.storage.run_store import RunStore
 from app.storage.session_store import SessionStore
+
+logger = logging.getLogger(__name__)
 
 COMPARABLE_STATUSES = ("completed", "partial", "not_found")  # есть result → участвует
 HOT_QUEUE_SITES = 4  # N ≥ 4 → длинный cooldown (thermal, doc 24)
@@ -208,6 +211,10 @@ class ResearchRunner:
         try:
             return await orchestrator.run(record, **kwargs)
         except Exception as exc:
+            # Один упавший сайт не валит сессию (M-H4): в excluded[] уедет короткая
+            # причина, а стек виден только здесь.
+            logger.exception("crawl_site %s failed inside session %s",
+                             config.start_url, session.id)
             record.status = "failed"
             record.error_message = (str(exc) or type(exc).__name__)[:500]
             self._runs.save(record)
