@@ -20,6 +20,25 @@ fail_fast: false
 
 repos:
   # -------------------------------------------------------------------------
+  # Валидность конфигов. Добавлено после реального случая: сломанный YAML в
+  # .github/workflows/main-guard.yml (тело issue вышло из блочного скаляра)
+  # прошёл мимо ВСЕХ гейтов и merge_guard — GitHub молча показывал workflow
+  # как «путь вместо имени» и валил каждый прогон. Гейты проверяли код, но
+  # никто не парсил сами конфиги.
+  # -------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+        exclude: ^(\.secrets\.baseline|frontend/tsconfig.*\.json)$   # JSONC / служебные
+      - id: check-merge-conflict
+      # Только валидность. Косметика (trailing-whitespace / end-of-file-fixer)
+      # сознательно НЕ включена: она тронула бы 11 доков, к теме не относящихся,
+      # а формат кода уже держат ruff-format и prettier.
+
+  # -------------------------------------------------------------------------
   # Python: ruff lint — backend/app + cli (прод-код проекта).
   # -------------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit

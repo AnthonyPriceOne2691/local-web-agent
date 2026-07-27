@@ -20,7 +20,8 @@ jobs:
     if: github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - env:
+      - name: Open issue for red main
+        env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
@@ -34,10 +35,11 @@ jobs:
             echo "issue #$existing already tracks $SHA — nothing to do"
             exit 0
           fi
+          body=$(printf '%s\n\n%s\n%s\n' \
+            "Гейты на main красные: $RUN_URL" \
+            "Слито мимо scripts/merge_guard.sh или сломано прямым коммитом (CQG 8.5)." \
+            "Починить или откатить: красный main блокирует DoD всех поставок (Delivery 10.4).")
           gh issue create --repo "$REPO" \
             --title "RED on main: $SHA" \
-            --body "Гейты на main красные: $RUN_URL
-
-Слито мимо \`scripts/merge_guard.sh\` или сломано прямым коммитом (CQG §8.5).
-Починить или откатить: красный main блокирует DoD всех поставок (Delivery §10.4)." \
+            --body "$body" \
             --label bug
