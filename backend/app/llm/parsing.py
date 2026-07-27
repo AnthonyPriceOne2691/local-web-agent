@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from app.llm.ollama_client import strip_thinking
 
 
-def extract_json(text: str) -> dict | None:
+def extract_json(text: str) -> dict[str, Any] | None:
     text = strip_thinking(text)
     decoder = json.JSONDecoder()
     idx = text.find("{")

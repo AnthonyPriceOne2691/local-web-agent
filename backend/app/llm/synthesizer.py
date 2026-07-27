@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from jinja2 import Template
 from pydantic import ValidationError
@@ -60,7 +61,7 @@ class Synthesizer:
 
     async def synthesize(
         self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
-    ) -> tuple[ExtractionResult, dict]:
+    ) -> tuple[ExtractionResult, dict[str, Any]]:
         user = self._user_tpl.render(
             task=task,
             intent=intent,

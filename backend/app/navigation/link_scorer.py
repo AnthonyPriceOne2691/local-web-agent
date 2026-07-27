@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlparse
 
 from app.navigation.path_hints import PathHints
@@ -10,7 +11,9 @@ FORBIDDEN_SUBSTR = ("/login", "/signin", "/signup", "/register", "/cart", "/chec
 LEGAL_SUBSTR = ("/privacy", "/terms", "/cookie", "/legal")
 
 
-def score_link(link: dict, *, intent: str, task: str, hints: PathHints, on_homepage: bool) -> tuple[int, str]:
+def score_link(
+    link: dict[str, Any], *, intent: str, task: str, hints: PathHints, on_homepage: bool
+) -> tuple[int, str]:
     href = link["href"].casefold()
     text = (link.get("text") or "").casefold()
     score, reasons = 0, []

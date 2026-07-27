@@ -6,6 +6,7 @@ run_id в rankings/winner проставляется кодом по url — LLM
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlparse
 
 from jinja2 import Template
@@ -77,7 +78,7 @@ class CompareSynthesizer:
         task: str,
         rubric_id: str,
         inputs: list[tuple[str, ExtractionResult]],
-    ) -> tuple[ComparisonResult, dict]:
+    ) -> tuple[ComparisonResult, dict[str, Any]]:
         user = self._user_tpl.render(
             task=task,
             rubric_id=rubric_id,
@@ -116,7 +117,7 @@ class CompareSynthesizer:
 
     def _validated(
         self,
-        raw: dict,
+        raw: dict[str, Any],
         *,
         task: str,
         rubric_id: str,

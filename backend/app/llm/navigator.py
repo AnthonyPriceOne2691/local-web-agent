@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from jinja2 import Template
 from pydantic import ValidationError
@@ -44,7 +45,7 @@ class Navigator:
         pages_left: int,
         retry_note: str = "",
         temperature: float = 0.4,
-    ) -> tuple[AgentAction | None, dict]:
+    ) -> tuple[AgentAction | None, dict[str, Any]]:
         cand_block = (
             "\n".join(
                 f"{i + 1}. {c.href}  [{c.text[:60]}] (score {c.score}, {c.reason})"

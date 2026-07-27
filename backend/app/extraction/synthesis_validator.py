@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from rapidfuzz import fuzz
 
@@ -34,7 +35,7 @@ def _visited_url_in_value(value: str, snapshots: list[PageSnapshot]) -> str | No
     return None
 
 
-def _vision_text(ins: dict) -> str:
+def _vision_text(ins: dict[str, Any]) -> str:
     """Текст vision-инсайта для S-H3b-матчинга: description + extracted + design."""
     parts = [str(ins.get("description", ""))]
     parts += [f"{e.get('key', '')} {e.get('value', '')}" for e in ins.get("extracted", [])]
@@ -116,7 +117,14 @@ class SynthesisValidator:
         if not article.title:
             article.title = source.title
 
-    def _evidence_ok(self, ev, pages: dict, all_text: str, vision_pages: dict, all_vision: str) -> bool:
+    def _evidence_ok(
+        self,
+        ev: Evidence,
+        pages: dict[str, Any],
+        all_text: str,
+        vision_pages: dict[str, str],
+        all_vision: str,
+    ) -> bool:
         """S-H3a: DOM-цитата ⊆ snapshot text; S-H3b: vision-evidence не проверяется
         против DOM. Цитата не из DOM, но найденная в vision-инсайтах →
         переклассифицируется в source=vision (модель не всегда ставит source сама)."""

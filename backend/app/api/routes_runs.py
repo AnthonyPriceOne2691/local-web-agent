@@ -6,6 +6,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -17,7 +18,7 @@ router = APIRouter()
 
 
 @router.post("/runs", status_code=202)
-async def start_run(config: RunConfig, request: Request) -> dict:
+async def start_run(config: RunConfig, request: Request) -> dict[str, Any]:
     state = request.app.state
     active = state.run_store.active_run_id()  # D-12: lock производный от БД (doc 12)
     if active is not None:
@@ -34,7 +35,7 @@ async def start_run(config: RunConfig, request: Request) -> dict:
     state.run_store.save(record)
     cancel_event = asyncio.Event()
     state.cancel_events[record.id] = cancel_event
-    run_kwargs: dict = {"cancel_event": cancel_event}
+    run_kwargs: dict[str, Any] = {"cancel_event": cancel_event}
     if config.attended:  # Phase 5: пауза на challenge → resume пользователем
         from app.orchestrator.attended import EventAttendedGate
 
@@ -64,7 +65,7 @@ async def start_run(config: RunConfig, request: Request) -> dict:
 
 
 @router.post("/runs/{run_id}/cancel", status_code=202)
-async def cancel_run(run_id: str, request: Request) -> dict:
+async def cancel_run(run_id: str, request: Request) -> dict[str, Any]:
     """FR-3.8: cooperative cancel — оркестратор останавливается на границе state."""
     state = request.app.state
     record = state.run_store.get(run_id)
@@ -83,7 +84,7 @@ async def cancel_run(run_id: str, request: Request) -> dict:
 
 
 @router.post("/runs/{run_id}/resume", status_code=202)
-async def resume_run(run_id: str, request: Request) -> dict:
+async def resume_run(run_id: str, request: Request) -> dict[str, Any]:
     """Attended (Phase 5): пользователь прошёл challenge → снять паузу waiting_user."""
     state = request.app.state
     record = state.run_store.get(run_id)
@@ -98,7 +99,7 @@ async def resume_run(run_id: str, request: Request) -> dict:
 
 
 @router.get("/runs")
-async def list_runs(request: Request, limit: int = 20) -> dict:
+async def list_runs(request: Request, limit: int = 20) -> dict[str, Any]:
     store = request.app.state.run_store
     ids = store.list_ids()[:limit]
     runs = []
@@ -119,14 +120,14 @@ async def list_runs(request: Request, limit: int = 20) -> dict:
 
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str, request: Request) -> RunRecord:
-    record = request.app.state.run_store.get(run_id)
+    record: RunRecord | None = request.app.state.run_store.get(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
     return record
 
 
 @router.delete("/runs/{run_id}")
-async def delete_run(run_id: str, request: Request) -> dict:
+async def delete_run(run_id: str, request: Request) -> dict[str, Any]:
     """Retention (doc 12): удаляет запись + artifacts. Активный run удалять нельзя."""
     store = request.app.state.run_store
     if store.active_run_id() == run_id:
@@ -162,10 +163,11 @@ async def get_step_screenshot(
 
 
 @router.get("/runs/{run_id}/result")
-async def get_result(run_id: str, request: Request) -> dict:
+async def get_result(run_id: str, request: Request) -> dict[str, Any]:
     record = request.app.state.run_store.get(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
     if record.result is None:
         raise HTTPException(status_code=404, detail="run not finished")
-    return record.result.model_dump()
+    dumped: dict[str, Any] = record.result.model_dump()
+    return dumped

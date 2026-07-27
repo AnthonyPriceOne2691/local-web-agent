@@ -11,14 +11,14 @@ import logging
 
 from app.browser.base import BrowserSession
 from app.contracts.rules.navigation import label_is_destructive
-from app.orchestrator.attended import reobserve_in_place
+from app.orchestrator.attended import AttendedGate, reobserve_in_place
 from app.schemas.run import RunRecord
-from app.schemas.snapshot import AgentAction, PageSnapshot
+from app.schemas.snapshot import AgentAction, InteractiveElement, PageSnapshot
 
 logger = logging.getLogger(__name__)
 
 
-def _is_submit(el) -> bool:
+def _is_submit(el: InteractiveElement) -> bool:
     return "submit" in (
         (getattr(el, "kind", "") or "").lower(),
         (getattr(el, "input_type", "") or "").lower(),
@@ -36,7 +36,7 @@ async def act_on_element(
     snapshots: list[PageSnapshot],
     visited: set[str],
     rate_ms: int,
-    gate=None,
+    gate: AttendedGate | None = None,
     destructive_signals: tuple[str, ...] = (),
 ) -> PageSnapshot | None:
     """Tier 1/2/3 (doc 25): click/fill по element_index, затем re-observe без goto.

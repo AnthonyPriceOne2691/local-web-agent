@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import yaml
 
@@ -19,13 +19,13 @@ _ID_WILDCARD = re.compile(r"#([\w-]+?)_?\*")  # "#sp_message_container_*" → [i
 
 
 class ConsentBrowser(Protocol):
-    async def eval_js(self, script: str): ...
+    async def eval_js(self, script: str) -> Any: ...
 
     async def click_first(self, selectors: list[str], *, timeout_ms: int) -> str | None: ...
 
 
 class ConsentHandler:
-    def __init__(self, spec: dict):
+    def __init__(self, spec: dict[str, Any]):
         detect = spec.get("detect") or {}
         self._keywords = [
             str(k).lower()

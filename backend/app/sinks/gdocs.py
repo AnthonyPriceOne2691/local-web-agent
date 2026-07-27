@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 # scopes минимально нужные для «создать документ и записать текст» (token их покрывает)
 DOCS_SCOPES = (
@@ -25,7 +26,7 @@ class GdocsUnavailable(RuntimeError):
     """google-либы не установлены, либо креды/токен отсутствуют/без refresh_token."""
 
 
-def _load_credentials(credentials_path: Path, token_path: Path):
+def _load_credentials(credentials_path: Path, token_path: Path) -> Any:
     """OAuth Credentials из credentials.json (client_id/secret) + token.json (refresh_token).
 
     Тот же формат creds/token, что использует Node `run.js` — переиспользуем как есть.
@@ -45,7 +46,7 @@ def _load_credentials(credentials_path: Path, token_path: Path):
     if not tok.get("refresh_token"):
         raise GdocsUnavailable("token.json без refresh_token — нужна повторная авторизация в Node-решении")
 
-    return Credentials(
+    return Credentials(  # type: ignore[no-untyped-call]  # google-auth без стабов
         token=tok.get("access_token"),
         refresh_token=tok["refresh_token"],
         token_uri=client.get("token_uri", "https://oauth2.googleapis.com/token"),

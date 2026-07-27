@@ -7,6 +7,7 @@ compare_results. LLM в планировании не участвует (Phase 
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -48,7 +49,7 @@ CONTENT_KEYWORDS = (
 )
 
 # per-site crawl defaults по intent (doc 21 § intents matrix, doc 24 § UC)
-CRAWL_DEFAULTS: dict[str, dict] = {
+CRAWL_DEFAULTS: dict[str, dict[str, Any]] = {
     "comparative_design": {
         "intent": "design_audit",
         "max_pages": 6,  # UC-1: 20-мин бюджет (doc 24)
@@ -74,7 +75,7 @@ RUBRIC_BY_INTENT = {
 
 class ToolCall(BaseModel):
     name: str
-    args: dict = Field(default_factory=dict)
+    args: dict[str, Any] = Field(default_factory=dict)
 
 
 def parse_urls(message: str, *, max_sites: int | None = 10) -> list[str]:

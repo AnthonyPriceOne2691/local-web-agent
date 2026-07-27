@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from typing import Any
 
 from app.config import Settings
 from app.storage.run_store import RunStore
@@ -23,11 +24,11 @@ TERMINAL_SESSION_STATUSES = ("completed", "failed")
 _PROGRESS_FIELDS = ("run_id", "status", "start_url", "pages_visited", "max_pages", "current_url")
 
 
-def format_sse(name: str, data: dict) -> str:
+def format_sse(name: str, data: dict[str, Any]) -> str:
     return f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _active_run_progress(session_id: str, runs: RunStore) -> tuple | None:
+def _active_run_progress(session_id: str, runs: RunStore) -> tuple[Any, ...] | None:
     """Прогресс активного crawl этой сессии (orchestrator чекпоинтит каждый шаг)."""
     active_id = runs.active_run_id()
     if active_id is None:
@@ -45,7 +46,7 @@ def _active_run_progress(session_id: str, runs: RunStore) -> tuple | None:
     )
 
 
-def _active_challenge(session_id: str, runs: RunStore) -> dict | None:
+def _active_challenge(session_id: str, runs: RunStore) -> dict[str, Any] | None:
     """Attended (Phase 5): активный run сессии стоит на anti-bot challenge."""
     active_id = runs.active_run_id()
     if active_id is None:
@@ -74,8 +75,8 @@ async def session_event_stream(
     """Бесконечный дифф-цикл до терминального статуса; реконнект — `?since_messages=N`."""
     seen_messages = max(0, since_messages)
     last_status: str | None = None
-    last_progress: tuple | None = None
-    last_challenge: dict | None = None
+    last_progress: tuple[Any, ...] | None = None
+    last_challenge: dict[str, Any] | None = None
     idle_s = 0.0
     while True:
         session = sessions.get(session_id)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -25,7 +25,7 @@ class VisionInsight(BaseModel):
     screen_status: ScreenStatus = "unknown"
     description: str = ""
     extracted: list[VisionExtracted] = Field(default_factory=list)
-    design: dict = Field(default_factory=dict)
+    design: dict[str, Any] = Field(default_factory=dict)
     text_not_in_dom: list[str] = Field(default_factory=list)
     confidence: Literal["high", "medium", "low"] = "medium"
     error: str | None = None

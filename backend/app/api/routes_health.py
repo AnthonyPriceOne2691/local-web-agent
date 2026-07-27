@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Request
 
 router = APIRouter()
 
 
 @router.get("/health")
-async def health(request: Request) -> dict:
+async def health(request: Request) -> dict[str, Any]:
     state = request.app.state
     ollama = await state.llm_client.health()
     required = {state.settings.nav_model, state.settings.synth_model}

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class BrowserSession(Protocol):
@@ -16,7 +16,7 @@ class BrowserSession(Protocol):
         """Navigate + settle; возвращает ФИНАЛЬНЫЙ URL (redirects — I-H9)."""
         ...
 
-    async def raw_snapshot(self) -> dict:
+    async def raw_snapshot(self) -> dict[str, Any]:
         """Результат OBSERVE_JS на текущей странице."""
         ...
 
@@ -30,7 +30,7 @@ class BrowserSession(Protocol):
 
     async def screenshot(self, path: str) -> None: ...
 
-    async def eval_js(self, script: str):
+    async def eval_js(self, script: str) -> Any:
         """Выполнить JS на странице (consent detect/hide — D-11)."""
         ...
 

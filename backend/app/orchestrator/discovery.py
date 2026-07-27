@@ -30,7 +30,7 @@ async def probe_slugs(
     hints: PathHints,
     intent: str,
     origin: str,
-) -> tuple[list[str], list[str], list[dict]]:
+) -> tuple[list[str], list[str], list[dict[str, str]]]:
     """F1 tier: интент-слуги через GET+parse (links → queue), legal — HEAD-фильтр."""
     cache: dict[str, bool] = {}
     async with httpx.AsyncClient() as client:

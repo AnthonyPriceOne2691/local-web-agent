@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -30,7 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.llm_client = OllamaClient(settings.ollama_url, timeout_s=settings.llm_timeout_s)
         app.state.run_store = SqliteRunStore(settings.runs_dir)

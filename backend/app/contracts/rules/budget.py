@@ -5,6 +5,7 @@ Config-check: fn(code, params, config) -> Violation | None (на старте ru
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlparse
 
 from app.contracts.context import ActionContext
@@ -15,19 +16,23 @@ from app.schemas.snapshot import AgentAction
 # ---------------------------------------------------------------- per-action
 
 
-def pages_budget(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def pages_budget(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     if ctx.pages_visited >= ctx.max_pages:
         return Violation(constraint_id=code, message="page budget exhausted", proposed_url=action.url)
     return None
 
 
-def hop_depth(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def hop_depth(code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext) -> Violation | None:
     if ctx.hops.get(ctx.current_url, 0) + 1 > ctx.max_depth:
         return Violation(constraint_id=code, message="hop depth exceeded", proposed_url=action.url)
     return None
 
 
-def robots_allowed(code: str, params: dict, action: AgentAction, ctx: ActionContext) -> Violation | None:
+def robots_allowed(
+    code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
+) -> Violation | None:
     if ctx.robots is not None and not ctx.robots.allowed(action.url or ""):
         return Violation(constraint_id=code, message="robots.txt disallow", proposed_url=action.url)
     return None
@@ -36,21 +41,21 @@ def robots_allowed(code: str, params: dict, action: AgentAction, ctx: ActionCont
 # -------------------------------------------------------------- config-time
 
 
-def url_scheme(code: str, params: dict, config: RunConfig) -> Violation | None:
+def url_scheme(code: str, params: dict[str, Any], config: RunConfig) -> Violation | None:
     scheme = urlparse(config.start_url).scheme.lower()
     if scheme not in params.get("allowed", ("http", "https")):
         return Violation(constraint_id=code, message=f"start_url scheme '{scheme}' not allowed")
     return None
 
 
-def non_empty(code: str, params: dict, config: RunConfig) -> Violation | None:
+def non_empty(code: str, params: dict[str, Any], config: RunConfig) -> Violation | None:
     value = str(getattr(config, params.get("field", "task"), "") or "")
     if not value.strip():
         return Violation(constraint_id=code, message=f"field '{params.get('field')}' is empty")
     return None
 
 
-def rate_limit_floor(code: str, params: dict, config: RunConfig) -> Violation | None:
+def rate_limit_floor(code: str, params: dict[str, Any], config: RunConfig) -> Violation | None:
     """G-H4: floor для публичных хостов (enforcement = clamp в effective_rate_ms);
     private/fixtures exempt. Violation — soft-лог о поднятии."""
     floor = int(params.get("min_delay", 0))
@@ -65,7 +70,7 @@ def rate_limit_floor(code: str, params: dict, config: RunConfig) -> Violation | 
     return None
 
 
-def page_timeout_ceiling(code: str, params: dict, config: RunConfig) -> Violation | None:
+def page_timeout_ceiling(code: str, params: dict[str, Any], config: RunConfig) -> Violation | None:
     """G-H6: ceiling; enforcement = clamp (enforcer.effective_timeout_ms)."""
     ceiling = int(params.get("max", 0))
     configured = int(getattr(config, "page_timeout_ms", 0) or 0)

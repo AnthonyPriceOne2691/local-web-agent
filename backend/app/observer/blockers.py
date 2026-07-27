@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.schemas.snapshot import PageStatus
 
 _CAPTCHA_SIGNALS = (
@@ -45,7 +47,7 @@ def detect_status(*, url: str, main_text: str, title: str, has_password_field: b
     return "ok"
 
 
-def looks_like_challenge(raw: dict) -> bool:
+def looks_like_challenge(raw: dict[str, Any]) -> bool:
     """Full-page блокер (captcha ИЛИ login_wall) на сыром снапшоте — чтобы OBSERVE не
     ждал SPA-networkidle: это ожидание + повторный snapshot дают блокеру проскочить
     attended-паузу (Phase 5 — captcha; Tier 2 doc 25 — login_wall)."""

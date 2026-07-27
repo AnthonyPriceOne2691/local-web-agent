@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -45,7 +45,7 @@ class CrawlStep(BaseModel):
     violations: list[Violation] = Field(default_factory=list)
     duration_ms: int = 0
     screenshot_paths: dict[str, str] = Field(default_factory=dict)
-    llm_stats: dict = Field(default_factory=dict)
+    llm_stats: dict[str, Any] = Field(default_factory=dict)
 
 
 class RunRecord(BaseModel):
@@ -59,6 +59,6 @@ class RunRecord(BaseModel):
     steps: list[CrawlStep] = Field(default_factory=list)
     result: ExtractionResult | None = None
     error_message: str = ""
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     started_at: str = ""
     finished_at: str | None = None

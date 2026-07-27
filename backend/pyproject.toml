@@ -39,19 +39,19 @@ gdocs = [  # Tier 0 sink (doc 25): экспорт в Google Docs — optional, c
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-# --- mypy (CQG §2.2). Базовый режим, но БЕЗ единой заморозки: 39 ошибок в 8 модулях
-# разобраны поставкой legacy-debt (2026-07-27), `[[tool.mypy.overrides]]` удалён.
-# Следующий шаг — strict (146 ошибок в 40 модулях, отдельная поставка): включать
-# флаг, заморозив половину базы в overrides, было бы профанацией гейта.
+# --- mypy (CQG §2.2): STRICT, без единого `[[overrides]]`. Путь сюда прошли за
+# две поставки: legacy-debt снял 39 ошибок базового режима, mypy-strict — ещё 103
+# (81 из них голые `dict`/`list` в сигнатурах). Заглушек нет: каждый `type: ignore`
+# в коде обязан нести причину, иначе его снимет warn_unused_ignores.
 [tool.mypy]
 python_version = "3.12"
+strict = true
 explicit_package_bases = true
 namespace_packages = true
-implicit_reexport = true
+implicit_reexport = true               # facade-модули с re-export
 ignore_missing_imports = true          # playwright/google-либы без стабов
 follow_imports = "silent"
-warn_redundant_casts = true
-warn_unused_ignores = false            # noqa/type: ignore чистим вместе с strict
+warn_unused_ignores = true
 exclude = ["tests/", ".venv/", "scripts/"]
 plugins = ["pydantic.mypy"]
 

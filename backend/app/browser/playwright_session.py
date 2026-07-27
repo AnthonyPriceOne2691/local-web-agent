@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.observer.snapshot import INTERACTIVE_SELECTOR, OBSERVE_JS
 
@@ -46,7 +46,7 @@ class PlaywrightSession:
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(headless=headless)
         self._persist_path = storage_state_path
-        ctx_kwargs: dict = {"viewport": DESKTOP, "accept_downloads": False}
+        ctx_kwargs: dict[str, Any] = {"viewport": DESKTOP, "accept_downloads": False}
         if storage_state_path and Path(storage_state_path).exists():
             ctx_kwargs["storage_state"] = storage_state_path  # cookie прошлой сессии (doc 24)
         self._context = await self._browser.new_context(**ctx_kwargs)
@@ -57,13 +57,14 @@ class PlaywrightSession:
         await self._active.wait_for_timeout(1000)  # settle (doc 03)
         return self._active.url
 
-    async def raw_snapshot(self) -> dict:
+    async def raw_snapshot(self) -> dict[str, Any]:
         # anti-bot challenge-страницы (Cloudflare) дёргаются редиректами → evaluate
         # падает с "Execution context was destroyed". Ретраим, дав странице осесть —
         # так OBSERVE поймает challenge-снапшот и сработает attended-пауза (doc 24)
         for attempt in (1, 2):  # две мягкие попытки, третья — ниже, уже без страховки
             try:
-                return await self._active.evaluate(OBSERVE_JS)
+                observed: dict[str, Any] = await self._active.evaluate(OBSERVE_JS)
+                return observed
             except Exception as exc:
                 logger.debug(
                     "OBSERVE_JS attempt %s failed (%s) — page still settling", attempt, type(exc).__name__
@@ -74,7 +75,8 @@ class PlaywrightSession:
                 await self._active.wait_for_timeout(1500)
         # Третья попытка: если и она падает, исключение уходит вызывающему —
         # OBSERVE без снапшота продолжать нельзя.
-        return await self._active.evaluate(OBSERVE_JS)
+        last: dict[str, Any] = await self._active.evaluate(OBSERVE_JS)
+        return last
 
     def page_url(self) -> str:
         return self._page.url if self._page else ""
@@ -88,7 +90,7 @@ class PlaywrightSession:
     async def screenshot(self, path: str) -> None:
         await self._active.screenshot(path=path, type="png", animations="disabled", caret="hide")
 
-    async def eval_js(self, script: str):
+    async def eval_js(self, script: str) -> Any:
         return await self._active.evaluate(script)
 
     async def click_element(self, index: int) -> None:

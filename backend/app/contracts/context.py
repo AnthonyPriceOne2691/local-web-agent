@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
+
+from app.schemas.run import RunRecord
+from app.schemas.snapshot import Candidate, PageSnapshot
 
 
 class RobotsLike(Protocol):
@@ -28,11 +31,19 @@ class ActionContext:
     robots: RobotsLike | None = None
     forbidden_paths: tuple[str, ...] = ()
     allow_private: bool = False
-    interactive_elements: list = field(default_factory=list)  # InteractiveElement (I-H10, doc 25)
+    interactive_elements: list[Any] = field(default_factory=list)  # InteractiveElement (I-H10, doc 25)
     attended: bool = False  # Tier 2 (doc 25): submit разрешён под подтверждением человека
 
 
-def build_action_context(record, current, candidates, visited, hops, origin, robots) -> ActionContext:
+def build_action_context(
+    record: RunRecord,
+    current: PageSnapshot,
+    candidates: list[Candidate],
+    visited: set[str],
+    hops: dict[str, int],
+    origin: str,
+    robots: RobotsLike,
+) -> ActionContext:
     """ActionContext из состояния оркестратора (вынесено из loop.py ради ≤500 LOC, doc 18)."""
     from app.observer.links import normalize_url
 

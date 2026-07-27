@@ -4,6 +4,7 @@ eval-телеметрия, keep_alive для model swap (doc 14)."""
 from __future__ import annotations
 
 import re
+from typing import Any
 
 import httpx
 
@@ -30,18 +31,18 @@ class OllamaClient:
         model: str,
         system: str,
         user: str,
-        schema: dict | None = None,
+        schema: dict[str, Any] | None = None,
         think: bool | None = None,
         temperature: float = 0.2,
         num_ctx: int = 8192,
         max_tokens: int = 1024,
         keep_alive: str | int = "10m",
         images: list[str] | None = None,
-    ) -> tuple[str, dict]:
-        user_msg: dict = {"role": "user", "content": user}
+    ) -> tuple[str, dict[str, Any]]:
+        user_msg: dict[str, Any] = {"role": "user", "content": user}
         if images:  # multimodal (doc 23): base64 PNG в images[]
             user_msg["images"] = images
-        body: dict = {
+        body: dict[str, Any] = {
             "model": model,
             "stream": False,
             "keep_alive": keep_alive,
@@ -75,7 +76,7 @@ class OllamaClient:
         except httpx.HTTPError:
             pass
 
-    async def health(self) -> dict:
+    async def health(self) -> dict[str, Any]:
         try:
             version = (await self._client.get(f"{self.base_url}/api/version", timeout=3)).json()
             tags = (await self._client.get(f"{self.base_url}/api/tags", timeout=3)).json()

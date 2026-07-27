@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -51,7 +51,7 @@ class ComparisonResult(BaseModel):
 class SessionMessage(BaseModel):
     role: Literal["user", "assistant", "system", "tool"]
     content: str = ""
-    tool_calls: list[dict] = Field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     created_at: str = ""
 
 

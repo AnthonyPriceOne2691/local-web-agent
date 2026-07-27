@@ -12,7 +12,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.schemas.research import SessionRecord
 
@@ -131,7 +131,7 @@ class SqliteSessionStore:
         return path
 
 
-def _dump_list(items: list) -> str:
+def _dump_list(items: list[Any]) -> str:
     import json
 
     return json.dumps(items, ensure_ascii=False)
