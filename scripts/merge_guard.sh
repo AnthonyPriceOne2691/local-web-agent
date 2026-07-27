@@ -97,9 +97,14 @@ command -v pre-commit >/dev/null 2>&1 && [[ -f .pre-commit-config.yaml ]] \
 # ЛОКАЛЬНЫМИ версиями инструментов; расхождение с CI-окружением видит только сам
 # CI (Delivery §10.4). Гоняется в основном клоне, а не в worktree: ему нужен git
 # remote и `gh`, а не слитое дерево.
+#
+# Проверяем прогон ИСХОДНОЙ ветки, а не целевой: на PR GitHub гоняет workflow на
+# merge-состоянии — ровно то, что нужно перед мержем. Проверять target было бы
+# вредно: красный main блокировал бы мерж собственного фикса, а следит за main
+# отдельный workflow main-guard.
 if [[ -f scripts/lint/check_ci_status.sh ]]; then
-  printf '  → ci status (%s)\n' "$TARGET"
-  if CI_REF="$TARGET" bash scripts/lint/check_ci_status.sh >/tmp/merge_guard_ci 2>&1; then
+  printf '  → ci status (%s)\n' "$SOURCE"
+  if CI_REF="$SOURCE" bash scripts/lint/check_ci_status.sh >/tmp/merge_guard_ci 2>&1; then
     printf '    %sOK%s\n' "$green" "$reset"; sed -n '1,3p' /tmp/merge_guard_ci
   else
     printf '    %sFAIL%s\n' "$red" "$reset"; sed -n '1,6p' /tmp/merge_guard_ci
