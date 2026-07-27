@@ -28,6 +28,7 @@ dev = [
   "mypy>=1.11",
   "import-linter>=2.0",   # CQG §3.6: направление зависимостей между слоями
   "pre-commit>=3.8",      # CQG §4: оркестрация гейтов
+  "detect-secrets>=1.5",  # CQG §2.7: секреты в git — механическая проверка
 ]
 gdocs = [  # Tier 0 sink (doc 25): экспорт в Google Docs — optional, cloud carve-out
   "google-api-python-client>=2.100",

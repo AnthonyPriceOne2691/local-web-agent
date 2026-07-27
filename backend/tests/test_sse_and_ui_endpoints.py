@@ -9,10 +9,11 @@ from app.schemas.research import SessionMessage, SessionRecord
 from app.schemas.run import CrawlStep, RunConfig, RunRecord
 from tests.test_api_and_store import api_client  # noqa: F401 — fixture reuse
 
-# 1×1 прозрачный PNG (минимальный валидный файл для FileResponse-теста)
+# 1×1 прозрачный PNG (минимальный валидный файл для FileResponse-теста).
+# pragma-метки — для detect-secrets: это байты картинки, а не ключ (CQG §2.7).
 PNG_BYTES = bytes.fromhex(
-    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
-    "0000000d4944415478da6364f8ffff3f0005fe02fea72d0e660000000049454e44ae426082"
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"  # pragma: allowlist secret
+    "0000000d4944415478da6364f8ffff3f0005fe02fea72d0e660000000049454e44ae426082"  # pragma: allowlist secret
 )
 
 
