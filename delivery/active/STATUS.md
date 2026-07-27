@@ -22,6 +22,7 @@
        «mypy strict (146 ошибок в 40 модулях)», и ответ был «можно сейчас начать
        делать?». Дробить типизацию по слоям = 3-4 PR ради формальности при
        суммарном диффе в 71 строку. -->
+- **canon_drift_waiver:** reason=typing-only changes: аннотации и параметризация дженериков в модулях под `implementation:`; ни один инвариант не менялся by=human:anthony at=2026-07-28
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
 ## Контекст поставки
