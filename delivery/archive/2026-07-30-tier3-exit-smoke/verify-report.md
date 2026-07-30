@@ -60,6 +60,16 @@ Negative-проба (unattended, тот же URL и задача): агент а
   `waiting_user` и выходит, окно остаётся осиротевшим. Attended-сценарии — через
   API/Chat UI. Записать в док как ограничение либо научить CLI ждать resume.
 
+## Handoff закрыт (2026-07-31)
+
+PR #6 → `quality` зелёный (`gates` + `delivery`) → `merge_guard` (6 гейтов на
+слитом состоянии) → `main` = `c395fac`, CI на main зелёный. `delivery` в CI сперва
+упал по делу: `okf_sync_gate` поймал реальный дрейф — концепты
+[action-tiers](../../../knowledge/engineering/action-tiers.md) и
+[llm-canon](../../../knowledge/engineering/llm-canon.md) описывали Tier 3 в
+code-complete виде (без `fill_form`, порядка handoff-ветки и прогрева модели).
+Обновлены по существу, а не waiver'ом (коммит `72cb441`).
+
 ## Verdict
 
 - [x] READY FOR HANDOFF — после зелёного CI на main
