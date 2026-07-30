@@ -43,7 +43,11 @@ OBSERVE_JS = (
         const label = (isField
           ? (at('aria-label') || at('placeholder') || el.value || at('name'))
           : (el.innerText || at('aria-label') || at('title'))).trim();
-        return {kind, label, input_type: itype, name: at('name'), disabled: !!el.disabled};
+        // value нужен агенту, чтобы видеть УЖЕ заполненные поля и не залипать на
+        // первом (живой прогон Tier 3: три fill в одно поле). password — никогда.
+        const value = (isField && itype !== 'password') ? String(el.value || '').slice(0, 80) : '';
+        return {kind, label, input_type: itype, name: at('name'),
+                disabled: !!el.disabled, value};
       }),
     has_password_field: !!pick('input[type=password]'),
   };
@@ -77,6 +81,7 @@ def build_snapshot(raw: dict[str, Any], *, page_url: str, origin: str) -> PageSn
             input_type=(el.get("input_type") or "")[:24],
             name=(el.get("name") or "")[:80],
             disabled=bool(el.get("disabled")),
+            value=(el.get("value") or "")[:80],
         )
         for i, el in enumerate((raw.get("interactive") or [])[:INTERACTIVE_CAP])
     ]

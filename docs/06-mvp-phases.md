@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.11** · 2026-07-20
+> Local Web Agent · Design doc · **v0.12** · 2026-07-30
 
 ## Engineering standards (все фазы)
 
@@ -217,7 +217,7 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | Phase | Объём | Exit-критерий | Статус |
 |-------|-------|---------------|--------|
 | **6** | Tier 1 click · Tier 2 login/fill/submit · persist-session · Tier 0 sinks (Google Docs + файл) · Action registry (`research/actions/`, A-H1/A-H2) | сценарий «найди статью → скопируй в Google Docs» из чата; registry: новое действие = модуль + промпт-файл | ✅ **DONE 2026-07-20** (doc 25 v0.9) |
-| **7** | Tier 3 handoff — «агент готовит, человек нажимает» (I-H12 destructive-словарь; `handoff_action` на attended-субстрате; SSE `challenge_wait` +`action`, kind=`handoff`) | референс-сценарий на фикстуре `store_checkout`: fill формы заказа → click «Оплатить заказ» → handoff-пауза → **человек жмёт сам** → «Заказ принят» в результате; unattended destructive → reject | 🛠 (doc 25 v1.0) |
+| **7** ✅ | Tier 3 handoff — «агент готовит, человек нажимает» (I-H12 destructive-словарь; `handoff_action` на attended-субстрате; SSE `challenge_wait` +`action`, kind=`handoff`) | референс-сценарий на фикстуре `store_checkout`: fill формы заказа → click «Оплатить заказ» → handoff-пауза → **человек жмёт сам** → «Заказ принят» в результате; unattended destructive → reject | ✅ **DONE 2026-07-30** — живой прогон: `order_number = WX9-1337` зафиксирован после клика человека (doc 25 v1.1) |
 
 ## Phase 5+ — Enhancements (backlog)
 
@@ -279,3 +279,4 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-19 | **v0.10: Phase 5 attended-режим** — human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим): видимый браузер, статус `waiting_user`, resume-эндпоинты, SSE `challenge_wait`, Chat UI карточка-пауза + тумблер, CLI `--attended`; D-12 lock учитывает `waiting_user`; 135 тестов. Fingerprint-спуфинг/обход детекта — вне scope навсегда (контракт no anti-bot bypass) |
 | 2026-07-19 | **v0.9: Phase 4 ✅ DONE** — `planner: llm` реализован (`research/llm_planner.py`, doc 24 v0.6: rules fast-path + LLM для диалога, M-H1..M-H3 пост-валидация) и exit-прогоны пройдены целиком из Chat UI в браузере: UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 вживую: 8906 synth-таймаут → excluded, затем добран follow-up'ом через планнер до 4/4: 88/75/65/50). Фиксы: error_message при пустом str(exc), stale excluded при re-crawl. 129 тестов |
 | 2026-07-20 | **v0.11: секция Phase 6–7 Action Framework** (объёмы/exit-критерии, дизайн в doc 25): Phase 6 ✅ DONE (Tier 0/1/2 + persist + registry, doc 25 v0.9), Phase 7 Tier 3 handoff 🛠 (I-H12 + `handoff_action`, референс `store_checkout`, doc 25 v1.0) |
+| 2026-07-30 | **v0.12: Phase 7 ✅ DONE** — Tier 3 handoff подтверждён живым exit-прогоном на фикстуре `store_checkout`: `fill_form` → выбор «Оплатить заказ» → пауза `handoff` → человек нажал → агент зафиксировал `WX9-1337`. Девять дефектов, найденных прогоном (значения полей в снапшоте, batch-fill, режимные пометки элементов, формулировка выбора, прогрев модели, окно браузера, устойчивость к закрытию, один необратимый шаг за прогон) — исправлены, doc 25 v1.1. 200 тестов |

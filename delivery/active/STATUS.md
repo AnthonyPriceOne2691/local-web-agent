@@ -3,8 +3,7 @@
 - **slug:** tier3-exit-smoke
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** tasks
-  (подфазы clarify/analyze в STATUS не выносятся — см. §2.1)
+- **phase:** handoff
 - **builder:** agent:claude-code
 - **verifier:** human:anthony     <!-- живой прогон Tier 3 может принять только человек -->
 - **human_ok_spec:** n/a          <!-- class S: mini-spec в tasks.md (§2.2) -->
@@ -16,12 +15,11 @@
        + pre-push + needs:). Серверная защита ветки — платная для приватного репо
        (Pro+), поэтому НЕ закрыты: force-push в main и обход админом. Остаток
        зафиксирован в delivery/STACK-ACCEPTANCE.md § Остатки. -->
-- **worktree:** none (S)
+- **worktree:** none (ветка fix/tier3-live-fixes)
 - **hooks:** claude    <!-- stop-on-red + protect-main, .claude/settings.json -->
 - **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
      CI их не видит; гоняется вручную при каждой правке канонов -->
-- **blockers:** живой exit-смоук требует человека у клавиатуры (Tier 3 по
-  построению: необратимую кнопку жмёт человек) — ждём окна у Антона
+- **blockers:** —
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
@@ -52,7 +50,13 @@
 
 ## Контекст поставки
 
-Phase 7 Tier 3 handoff (`docs/25-action-framework.md` v1.0) — code-complete
-(коммит `8a357a9`, 191 тест). Осталось единственное: **живой exit-прогон** по
-референс-сценарию (doc 06 § Phase 6–7) на фикстуре `store_checkout`, где
-финальную кнопку нажимает человек. Детали шагов — `tasks.md`.
+**Phase 7 ✅ закрыта живым прогоном 2026-07-30** (doc 25 v1.1, doc 06 v0.12):
+агент заполнил форму, выбрал «Оплатить заказ», встал в handoff-паузу; человек
+нажал сам; агент зафиксировал `order_number = WX9-1337`. Прогон вскрыл девять
+дефектов, которых юниты не видели (см. `verify-report.md`) — все исправлены и
+закрыты тестами (200).
+
+Остаток по скорости: заполнение формы теперь один вызов модели (~5 s на
+`qwen3:14b`); владелец попросил лёгкую nav-модель, прогретую к открытию
+браузера. Прогрев реализован (`OllamaClient.warmup` до `browser.start`),
+`qwen3:8b` качается для замера — следующая поставка.

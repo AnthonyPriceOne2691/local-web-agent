@@ -1,44 +1,64 @@
 # Verify report
 
-**Date:** 2026-07-28
-**Verifier:** human:anthony
+**Date:** 2026-07-30
+**Verifier:** human:anthony (нажимал кнопку сам — иначе Tier 3 не проверить)
 
-## Shape oracles
+## Product oracle — exit-критерий Phase 7 ✅
 
-- [x] PASS — `pre-commit run --all-files` → **20 хуков зелёные**
-- [x] PASS — **`mypy app` в режиме `strict`** → 84 модуля, 0 ошибок, 0 `[[overrides]]`
-- [x] PASS — `ruff check` + `ruff format` → чисто
-- [x] PASS — `lint-imports` → 3 контракта kept (слои не нарушены новыми импортами)
+Живой прогон на фикстуре `store_checkout` (8908), attended, `qwen3:14b`:
 
-## Behavior oracles
+```
+run 6eb9e649e8c4 · status: completed
+actions:      ['fill_form', 'click']      ← форма одним шагом; кнопка ВЫБРАНА, не нажата
+handoff_done: «Оплатить заказ» на http://127.0.0.1:8908/
+summary:      Заказ принят, номер заказа WX9-1337, сумма 4 900 ₽
+facts:        order_number = WX9-1337 · product_price = 4 900 ₽
+браузеров после завершения: 0
+```
 
-- [x] PASS — `pytest -q` → **191 passed** (столько же: правки только типовые)
+Человек нажал кнопку в видимом браузере → resume → агент прочитал исход и
+зафиксировал номер заказа фактом. `clicked_indices` необратимой кнопки не
+содержит ни в одной ветке: **агент её не нажимал**.
 
-## Product oracles
+Negative-проба (unattended, тот же URL и задача): агент автономно заполнил
+форму, кнопка помечена «do NOT click», клика нет, `action_errors` пуст.
 
-- [x] PASS — `delivery/evals/smoke/run.sh` → S1–S5 all green
+## Shape / behavior oracles
 
-## Что сделано
+- [x] PASS — `pytest -q` → **200 passed** (+9 к 191: каждый фикс закрыт тестом)
+- [x] PASS — `ruff check` + `ruff format` + `mypy app` (strict, 84 модуля)
+- [x] PASS — `check_module_size.py` → все ≤ 500 LOC
+- [x] PASS — smoke S1–S5
 
-103 ошибки `--strict` в 39 из 84 модулей, разобраны без единой заглушки:
+## Девять дефектов, найденных живым прогоном
 
-| Класс | Было | Как закрыт |
-|---|---|---|
-| `type-arg` | 81 | Голые `dict`/`list`/`tuple` в сигнатурах параметризованы. Массовые — скриптом по координатам mypy, точные типы (`dict[str, str]`, `list[dict[str, str]]`) — вручную там, где смысл известен |
-| `no-untyped-def` | 14 | Реальные типы, не `Any`-заглушки: `Fact`, `InteractiveElement`, `ContractRule`, `AsyncIterator[None]`, `StreamingResponse`, `AttendedGate` |
-| `no-any-return` | 7 | Источник `Any` — внешние SDK (playwright `evaluate`) и `app.state` FastAPI: контракт зафиксирован аннотацией переменной на границе |
-| `no-untyped-call` | 1 | `google.oauth2.Credentials` без стабов → единственный `type: ignore` **с причиной** (и `warn_unused_ignores = true`, чтобы он не пережил появление стабов) |
+Юниты их не показывали — все они про поведение реальной модели и реального DOM.
 
-Отдельно: `build_action_context` получил тип `RobotsLike` (Protocol из того же
-модуля), а не `RobotsPolicy` — иначе `contracts` начал бы импортировать
-`orchestrator` и сломал бы слои; `lint-imports` это подтверждает.
+| # | Симптом | Причина | Фикс |
+|---|---|---|---|
+| 1 | Трижды заполнял поле «Имя» | в снапшоте не было значений полей | `value` в `InteractiveElement` + `already filled` в промпте; password не собирается |
+| 2 | Каждое поле — свой вызов LLM (8.7+3.9+3.6 s) | не было batch-действия | **`fill_form`**: вся форма за одно решение; I-H11 на каждое поле пачки |
+| 3 | +1 s на каждое действие | `rate_limit_ms` применялся к DOM-действиям | `DOM_SETTLE_MS` 250 (rate limit — только для навигации) |
+| 4 | Не доходил до кнопки | submit помечался «do NOT click» **всегда** | пометки зависят от режима; handoff в attended стал достижим |
+| 5 | Не выбирал клик и с новой пометкой | «кнопку нажмёт человек» читалось как «действие не нужно» | «PICK THIS — систему передаст нажатие человеку» |
+| 6 | Первый шаг 8.7 s против 3.6 s | модель грузилась при открытом браузере | `warmup()` параллельно robots/пробам, до `browser.start()` |
+| 7 | «Пустое окно, кликать не по чему» | Chromium показывает своё стартовое окно, страница — в новом контексте | закрываем стартовые `about:blank` + `bring_to_front()` |
+| 8 | Краш при закрытом окне | `TargetClosedError` из середины ACT | `handoff_result: browser closed…`, run завершается штатно |
+| 9 | После оплаты потянулся к «Удалить корзину» | агент продолжал действовать после handoff | **один необратимый шаг за прогон**: после handoff — только фиксация исхода |
+
+По #9 отдельно: I-H12 второй раз сработал и корзину не удалил — контракт
+отработал верно, но само намерение было неправильным, поэтому инвариант закрыт
+в коде, а не оставлен на защиту.
 
 ## Spec coverage gaps
 
-- `tests/` и `scripts/` остаются вне strict (исключены конфигом) — цель поставки
-  была прод-код.
-- Один `type: ignore` (google-auth) — снимется, когда у либы появятся стабы;
-  `warn_unused_ignores = true` заставит это заметить.
+- Скорость: заполнение формы — один вызов модели (~5 s на `qwen3:14b`). Дальше
+  упирается в саму модель (~13–15 токенов/с); лёгкая nav-модель — следующий шаг
+  (владелец просил: «к моменту открытия браузера лёгкая модель прогрета»).
+- Синтез 60–120 s — доминирует в длительности прогона, тюнинг отдельной темой.
+- `agent crawl --attended` из CLI непригоден для Tier 3: CLI печатает
+  `waiting_user` и выходит, окно остаётся осиротевшим. Attended-сценарии — через
+  API/Chat UI. Записать в док как ограничение либо научить CLI ждать resume.
 
 ## Verdict
 
@@ -55,10 +75,10 @@
 | files_touched / loc_diff | 0 code (+0 process docs) / +0/-0 (net +0) |
 | commits | 0 |
 | time_to_accepted_spec | 0.5h |
-| rework_after_done | 10 commit(s) after first phase: handoff |
+| rework_after_done | 18 commit(s) after first phase: handoff |
 | harness_hardened | no |
-| implement_retries | 1 — массовая параметризация потребовала второго прохода: скрипт вставил `Any`, но не импорты |
-| verify_fails_before_green | 0 |
+| implement_retries | 5 — каждый живой прогон вскрывал следующий дефект (значения полей → batch → пометки → формулировка → инвариант после handoff) |
+| verify_fails_before_green | 0 (CI); живых прогонов до успеха — 6 |
 | est_token_or_cost | n/a |
 
 MANUAL-поля заполняет агент/человек на handoff. Если `verify_fails_before_green >= 2` при `harness_hardened: no` — по §9.2 добавь oracle/breaker/hook в этой же поставке.

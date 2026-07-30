@@ -60,6 +60,8 @@ async def plan_validated(
                 pages_left=pages_left,
                 retry_note=retry_note,
                 temperature=temperature,
+                attended=record.config.attended,
+                destructive_signals=enforcer.destructive_signals,
             )
             replans_used = attempt
             if action is None:  # I-H7 invalid schema
@@ -73,7 +75,11 @@ async def plan_validated(
                 _mark_recovered(violations, replans_used, drift)
                 return action, violations, llm_stats
             # click→I-H10, fill→I-H11, иначе navigate-shield (doc 25)
-            _validate = {"click": enforcer.validate_click, "fill": enforcer.validate_fill}
+            _validate = {
+                "click": enforcer.validate_click,
+                "fill": enforcer.validate_fill,
+                "fill_form": enforcer.validate_fill,  # I-H11 по каждому полю пачки
+            }
             hard, softs = _validate.get(action.action, enforcer.validate_navigate)(action, ctx)
             violations.extend(softs)
             if hard is None:

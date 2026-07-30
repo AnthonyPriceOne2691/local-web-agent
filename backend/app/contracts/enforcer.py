@@ -118,13 +118,28 @@ class ContractEnforcer:
     def validate_fill(
         self, action: AgentAction, ctx: ActionContext
     ) -> tuple[Violation | None, list[Violation]]:
-        """I-H11 fill-safety: только fill-правила (текстовые поля, не password)."""
-        for rule in self._fill_hard:
-            violation = ACTION_CHECKS[rule.check](rule.code, rule.params, action, ctx)
-            if violation is not None:
-                violation.severity = "hard"
-                violation.recovered = False
-                return violation, []
+        """I-H11 fill-safety: только fill-правила (текстовые поля, не password).
+
+        `fill_form` проверяется поле-за-полем: небезопасная цель в пачке отклоняет
+        всю пачку — иначе password можно было бы протащить прицепом.
+        """
+        targets = (
+            [
+                action.model_copy(
+                    update={"action": "fill", "element_index": f.element_index, "value": f.value}
+                )
+                for f in action.fields
+            ]
+            if action.action == "fill_form"
+            else [action]
+        )
+        for target in targets:
+            for rule in self._fill_hard:
+                violation = ACTION_CHECKS[rule.check](rule.code, rule.params, target, ctx)
+                if violation is not None:
+                    violation.severity = "hard"
+                    violation.recovered = False
+                    return violation, []
         return None, []
 
     # ------------------------------------------------------------ recovery

@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from app.contracts.context import ActionContext
 from app.observer.links import is_private_host, normalize_url, same_site
 from app.schemas.run import Violation
-from app.schemas.snapshot import AgentAction
+from app.schemas.snapshot import AgentAction, InteractiveElement
 
 
 def url_in_allowed_domains(
@@ -84,9 +84,12 @@ def intent_conditional_paths(
 
 
 def label_is_destructive(label: str | None, signals: tuple[str, ...]) -> bool:
-    """Tier 3 сигнал (doc 25): label кнопки матчит destructive-словарь (casefold substring)."""
-    lab = (label or "").casefold()
-    return bool(lab) and any(s in lab for s in signals)
+    """Tier 3 сигнал (doc 25): label кнопки матчит destructive-словарь.
+
+    Тонкая обёртка над `InteractiveElement.label_matches` — сама логика живёт на
+    модели, чтобы её мог использовать и промпт навигатора (см. там же).
+    """
+    return InteractiveElement(index=0, label=label or "").label_matches(signals)
 
 
 def click_not_destructive(
