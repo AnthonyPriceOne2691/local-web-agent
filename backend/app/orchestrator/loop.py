@@ -8,6 +8,7 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 from app.browser.base import BrowserSession
 from app.browser.consent import ConsentHandler
@@ -28,7 +29,7 @@ from app.orchestrator.attended import AttendedGate, reobserve_in_place
 from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
 from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
-from app.orchestrator.interaction import act_on_element
+from app.orchestrator.interaction import REPEAT_LIMITS, act_on_element, action_signature
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
 from app.orchestrator.vision_batch import run_vision_batch
@@ -115,6 +116,10 @@ class CrawlOrchestrator:
             record.metadata["config_notes"] = [v.message for v in config_violations]
 
         try:
+            # Греем nav-модель параллельно сетевой подготовке: иначе первое решение
+            # агента оплачивает загрузку весов уже при открытом браузере (8.7 s против
+            # 3.6 s у последующих — замер живого прогона Tier 3).
+            warmup = asyncio.create_task(self._llm.warmup(self._s.nav_model))
             robots = await RobotsPolicy.load(origin, respect=cfg.respect_robots)
             rate_ms = max(
                 self._enforcer.effective_rate_ms(cfg.rate_limit_ms, cfg.start_url),
@@ -127,6 +132,7 @@ class CrawlOrchestrator:
             profile = (
                 self._s.profile_path(origin) if (cfg.persist_session or self._s.persist_session) else None
             )
+            await warmup  # к открытию браузера модель уже в памяти
             await self._browser.start(headless=not cfg.attended, storage_state_path=profile)
 
             current: PageSnapshot | None = None
@@ -134,6 +140,7 @@ class CrawlOrchestrator:
             extract_streak = 0
             step_index = 0
             stale_pages = 0  # G-S1 early stop
+            repeats: dict[tuple[Any, ...], int] = {}  # анти-залипание на элементе
             seen_relevant: set[str] = set()
             just_visited = False
 
@@ -264,6 +271,35 @@ class CrawlOrchestrator:
                     if extract_streak >= 2 or pages_left <= 0:  # loop guard, policy #11
                         break
                     continue
+                if action.action in ("fill_form", "click", "fill"):
+                    # Анти-залипание: повтор того же действия по тем же целям.
+                    # fill/fill_form тем же значением второй раз бессмыслен, click
+                    # («показать ещё», пагинация) законно повторяется.
+                    signature = action_signature(action)
+                    repeats[signature] = repeats.get(signature, 0) + 1
+                    if repeats[signature] > REPEAT_LIMITS.get(action.action, 2):
+                        record.metadata["action_loop_guard"] = (
+                            f"{action.action} повторён {repeats[signature]}× — остановка ACT"
+                        )
+                        break
+                if action.action == "fill_form" and action.fields:  # Tier 2 batch (doc 25)
+                    current = await act_on_element(
+                        self._browser,
+                        record,
+                        action,
+                        current,
+                        origin=origin,
+                        step_index=step_index,
+                        snapshots=snapshots,
+                        visited=visited,
+                        gate=attended_gate,
+                        destructive_signals=self._enforcer.destructive_signals,
+                    )
+                    if current is None:
+                        break
+                    homepage = homepage or current
+                    just_visited = True
+                    continue
                 if action.action in ("click", "fill") and action.element_index is not None:  # doc 25
                     current = await act_on_element(
                         self._browser,
@@ -274,11 +310,16 @@ class CrawlOrchestrator:
                         step_index=step_index,
                         snapshots=snapshots,
                         visited=visited,
-                        rate_ms=rate_ms,
                         gate=attended_gate,
                         destructive_signals=self._enforcer.destructive_signals,
                     )  # I-H12
                     if current is None:  # Tier 2 submit не подтверждён человеком
+                        break
+                    if record.metadata.get("handoff_done"):
+                        # Tier 3: необратимый шаг сделан человеком — дальше только
+                        # зафиксировать исход. Иначе агент искал следующую кнопку и
+                        # на живом прогоне потянулся к «Удалить корзину».
+                        current.priority = True
                         break
                     homepage = homepage or current
                     just_visited = True

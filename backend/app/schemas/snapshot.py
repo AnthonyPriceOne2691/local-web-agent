@@ -43,6 +43,18 @@ class InteractiveElement(BaseModel):
     label: str = ""
     input_type: str = ""  # для <input>: тип поля (submit/password → Tier 2, doc 25)
     name: str = ""
+    value: str = ""  # текущее содержимое поля (password не собирается никогда)
+
+    def label_matches(self, signals: tuple[str, ...]) -> bool:
+        """Совпадает ли label с одним из сигналов (casefold substring).
+
+        Живёт на модели, а не в contracts: пометку нужно знать и enforcer'у
+        (I-H12), и промпту навигатора, а `app.llm` импортировать `app.contracts`
+        не может — import-linter ловит обратное направление слоёв.
+        """
+        label = (self.label or "").casefold()
+        return bool(label) and any(s in label for s in signals)
+
     disabled: bool = False
 
 
@@ -61,14 +73,24 @@ class PageSnapshot(BaseModel):
     priority: bool = False
 
 
+class FillField(BaseModel):
+    """Одно поле формы для `fill_form` (Tier 2, doc 25)."""
+
+    element_index: int
+    value: str = ""
+
+
 class AgentAction(BaseModel):
     """LLM action schema (doc 04). Также используется как JSON Schema для
     structured outputs Ollama (doc 16)."""
 
-    action: Literal["navigate", "extract_now", "click", "fill", "stop"]
+    action: Literal["navigate", "extract_now", "click", "fill", "fill_form", "stop"]
     url: str | None = None
     element_index: int | None = None  # click/fill: индекс ∈ interactive_elements (doc 25)
     value: str = ""  # fill: текст в текстовое поле (Tier 2, doc 25)
+    # fill_form: вся форма за ОДНО решение LLM. Пополевой fill стоил вызова модели
+    # на каждое поле (живой прогон: 7.5 + 3.8 + 3.6 s на три поля).
+    fields: list[FillField] = Field(default_factory=list)
     reasoning: str = ""
     confidence: Literal["high", "medium", "low"] = "medium"
 

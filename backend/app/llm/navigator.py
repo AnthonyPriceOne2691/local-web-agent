@@ -12,17 +12,51 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.llm.ollama_client import OllamaClient, supports_think
 from app.llm.parsing import extract_json
-from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
+from app.schemas.snapshot import AgentAction, Candidate, InteractiveElement, PageSnapshot
 
 
-def _interactive_block(snapshot: PageSnapshot, cap: int = 30) -> str:
-    """Нумерованные интерактивные элементы для click (doc 25 Tier 1). submit/password/
-    disabled помечены небезопасными — enforcer их всё равно заблокирует (I-H10)."""
+def _element_tag(el: InteractiveElement, *, attended: bool, destructive: tuple[str, ...]) -> str:
+    """Пометка элемента для агента — по режиму, а не «запрещено всегда».
+
+    До этого submit помечался «do NOT click» безусловно (наследие Tier 1), из-за
+    чего в attended-режиме агент не мог дойти до кнопки заказа и по кругу
+    перезаполнял форму: клик по ней был единственным запрещённым шагом.
+    """
+    if el.disabled:
+        return "  ⚠ disabled"
+    if el.kind == "password" or el.input_type == "password":
+        return "  ⚠ never click or fill (login is human-only)"
+    # Формулировка важна: «человек нажмёт» модель читала как «мне действие не
+    # нужно» и переставала его выбирать. Просим ВЫБРАТЬ шаг; передача человеку —
+    # дело системы, а не решение агента.
+    if attended and el.label_matches(destructive):
+        return "  → PICK THIS to complete the task; the system hands the final press to a human"
+    is_submit = el.kind == "submit" or el.input_type == "submit"
+    if is_submit:
+        return (
+            "  → PICK THIS to submit when the task asks; the system asks the human first"
+            if attended
+            else "  ⚠ do NOT click (submit needs attended mode)"
+        )
+    return ""
+
+
+def _interactive_block(
+    snapshot: PageSnapshot,
+    cap: int = 30,
+    *,
+    attended: bool = False,
+    destructive: tuple[str, ...] = (),
+) -> str:
+    """Нумерованные интерактивные элементы для click/fill (doc 25). Пометки зависят
+    от режима: в attended submit и необратимая кнопка разрешены агенту как ВЫБОР —
+    подтверждение (Tier 2) и передачу человеку (Tier 3) обеспечивает система."""
     lines = []
     for el in snapshot.interactive_elements[:cap]:
-        unsafe = el.kind in ("submit", "password") or el.input_type in ("submit", "password") or el.disabled
-        tag = "  ⚠ do NOT click (submit/login/disabled)" if unsafe else ""
-        lines.append(f"{el.index}. [{el.kind}] {el.label[:50]}{tag}")
+        # заполненность поля: без неё агент повторно вписывает одно и то же
+        filled = f'  (already filled: "{el.value[:40]}")' if el.value else ""
+        tag = _element_tag(el, attended=attended, destructive=destructive)
+        lines.append(f"{el.index}. [{el.kind}] {el.label[:50]}{filled}{tag}")
     return "\n".join(lines) or "(none)"
 
 
@@ -45,6 +79,8 @@ class Navigator:
         pages_left: int,
         retry_note: str = "",
         temperature: float = 0.4,
+        attended: bool = False,
+        destructive_signals: tuple[str, ...] = (),
     ) -> tuple[AgentAction | None, dict[str, Any]]:
         cand_block = (
             "\n".join(
@@ -62,7 +98,9 @@ class Navigator:
             main_text=snapshot.main_text[:3000],
             visited_json=json.dumps(sorted(visited), ensure_ascii=False),
             candidates_block=cand_block,
-            interactive_block=_interactive_block(snapshot),
+            interactive_block=_interactive_block(
+                snapshot, attended=attended, destructive=destructive_signals
+            ),
         )
         if retry_note:
             user += f"\n\nPREVIOUS ATTEMPT REJECTED: {retry_note}. Choose strictly from the candidate list."

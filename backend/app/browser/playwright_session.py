@@ -51,6 +51,17 @@ class PlaywrightSession:
             ctx_kwargs["storage_state"] = storage_state_path  # cookie прошлой сессии (doc 24)
         self._context = await self._browser.new_context(**ctx_kwargs)
         self._page = await self._context.new_page()
+        if not headless:
+            # Chromium при launch показывает своё стартовое окно (about:blank), а наша
+            # страница живёт в новом контексте — то есть в ДРУГОМ окне. Человек в
+            # attended-режиме смотрел на пустое окно и не понимал, где форма.
+            for ctx in self._browser.contexts:
+                if ctx is self._context:
+                    continue
+                for page in ctx.pages:
+                    if page.url in ("about:blank", ""):
+                        await page.close()
+            await self._page.bring_to_front()
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         await self._active.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)

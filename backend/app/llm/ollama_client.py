@@ -3,6 +3,7 @@ eval-телеметрия, keep_alive для model swap (doc 14)."""
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -10,6 +11,9 @@ import httpx
 
 THINK_MODEL_HINTS = ("qwen3", "r1", "gpt-oss", "magistral")
 _THINK_RE = re.compile(r"<think>.*?</think>", re.S)
+
+
+logger = logging.getLogger(__name__)
 
 
 def supports_think(model: str) -> bool:
@@ -69,6 +73,21 @@ class OllamaClient:
             if k in data
         }
         return content, stats
+
+    async def warmup(self, model: str, keep_alive: str | int = "10m") -> None:
+        """Загрузить модель в память заранее (пустой prompt = только load).
+
+        Первое решение агента иначе оплачивает загрузку весов: замер живого
+        прогона — 8.7 s против 3.6 s у последующих. Греем параллельно с robots и
+        slug-пробами, чтобы к открытию браузера модель уже была готова.
+        """
+        try:
+            await self._client.post(
+                f"{self.base_url}/api/generate",
+                json={"model": model, "prompt": "", "keep_alive": keep_alive},
+            )
+        except httpx.HTTPError as exc:  # прогрев — best-effort, run не зависит от него
+            logger.debug("warmup of %s skipped (%s)", model, type(exc).__name__)
 
     async def unload(self, model: str) -> None:
         try:

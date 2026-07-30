@@ -140,12 +140,16 @@ class FakeOllama:
         self._replies = list(replies)
         self.calls: list[dict] = []
         self.unloaded: list[str] = []
+        self.warmed: list[str] = []
 
     async def chat(self, **kwargs) -> tuple[str, dict]:
         self.calls.append(kwargs)
         reply = self._replies.pop(0) if self._replies else '{"action": "stop", "reasoning": "out of replies"}'
         content = json.dumps(reply, ensure_ascii=False) if isinstance(reply, dict) else reply
         return content, {"eval_count": 42}
+
+    async def warmup(self, model: str, keep_alive: str | int = "10m") -> None:
+        self.warmed.append(model)  # прогрев модели до открытия браузера
 
     async def unload(self, model: str) -> None:
         self.unloaded.append(model)
