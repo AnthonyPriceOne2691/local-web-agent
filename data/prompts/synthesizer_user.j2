@@ -8,7 +8,9 @@ ARTICLE MODE (content_search): the task is about finding the best article. In ad
 "article": {"url": "...", "title": "...", "word_count": approx int, "headings": ["..."], "main_text_excerpt": "ONE short key quote, max 400 chars — the full text is attached automatically by the system, do NOT retype the article", "published_date": "YYYY-MM-DD or null", "page_type_confidence": "high|medium|low"}
 "article_candidates_considered": [{"url": "...", "rejected_reason": "..."}] — other article pages you saw and why they lost.
 Pick the single most complete task-relevant article among the pages.
-{% endif %}{% if intent == "design_audit" %}
+{% if summary_cap %}
+The "article" block IS the answer here — do NOT restate its contents as "facts". Add a fact only for something the task asks about beyond the article itself. Retelling article sections as facts costs generation time and adds nothing.
+{% endif %}{% endif %}{% if intent == "design_audit" %}
 DESIGN MODE (design_audit): also add "design_tokens": {"primary_colors": ["#hex", ...], "fonts": ["..."], "notes": "layout/structure observations"} — build it from the VISION blocks and page structure.
 {% endif %}
 PAGES ({{ pages_count }}):
