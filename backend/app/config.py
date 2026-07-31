@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # § Маршрутизация nav-решений; замер 2026-07-31). Пусто = всё на nav_model.
     nav_light_model: str = "qwen3:8b"
     synth_model: str = "qwen3:14b"
+    # Рассуждение на синтезе. Замер 2026-07-31: 66 % выхода синтеза — мысли, а
+    # 87–97 % времени синтеза — генерация, поэтому это главный рычаг скорости.
+    # Дефолт не меняем без замера качества (число фактов / evidence / not_found).
+    synth_think: bool = True
     nav_num_ctx: int = 8192
     synth_num_ctx: int = 16384
     nav_max_tokens: int = 400
