@@ -122,12 +122,27 @@ body {
 @utility glass-hover {
   transition:
     background 180ms ease,
-    border-color 180ms ease,
-    transform 180ms ease;
+    border-color 180ms ease;
 
   &:hover {
     background: var(--glass-fill-strong);
     border-color: color-mix(in oklab, var(--color-accent) 35%, var(--glass-edge));
+  }
+}
+
+/* Кликабельная строка/таб, у которой в покое нет фона. Кромка держится всегда —
+   прозрачная, — и по наведению меняется только её цвет.
+   Иначе `hover:glass-quiet` добавлял border на 1px, бокс становился больше, и
+   элемент дёргался под курсором (замечено владельцем на списке чатов). */
+@utility glass-slot {
+  border: 1px solid transparent;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
+
+  &:hover {
+    background: var(--glass-fill-quiet);
+    border-color: var(--glass-edge);
   }
 }
 

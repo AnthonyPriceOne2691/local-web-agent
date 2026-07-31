@@ -47,7 +47,7 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
                 onClick={() => onSelect(s.session_id)}
                 aria-current={selected ? 'true' : undefined}
                 className={`focus-ring block w-full rounded-2xl px-3 py-2.5 text-left transition
-                  ${selected ? 'glass' : 'hover:glass-quiet'}`}
+                  ${selected ? 'glass' : 'glass-slot'}`}
               >
                 <span className="block truncate pr-6 text-[13px] font-medium">
                   {s.title || 'Untitled chat'}

@@ -98,7 +98,7 @@ function Tab({
       disabled={disabled}
       aria-pressed={active}
       className={`focus-ring rounded-full px-3.5 py-1.5 text-[12px] font-medium transition disabled:opacity-40
-        ${active ? 'glass text-ink' : 'text-soft hover:glass-quiet'}`}
+        ${active ? 'glass text-ink' : 'text-soft glass-slot'}`}
     >
       {label}
     </button>
