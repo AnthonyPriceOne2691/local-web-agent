@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def _execute(call: ToolCall, ctx: ActionContext) -> str:
     r = ctx.run_store.get(call.args.get("run_id") or "")
     if r is None or r.result is None:
-        return f"export_gdocs: у run {call.args.get('run_id')} нет результата"
+        return "There's nothing to copy for that site yet."
     title, body = build_export_content(r.result, title_override=call.args.get("title"))
     try:
         from app.sinks.gdocs import export_to_doc  # ленивый: optional extra `gdocs`
@@ -32,12 +32,12 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
         url = export_to_doc(
             title, body, credentials_path=ctx.settings.gdocs_credentials, token_path=ctx.settings.gdocs_token
         )
-        return f"Экспортировано в Google Docs (облако): {url}"
+        return f"Copied it to Google Docs: {url}"
     except Exception as exc:
         # Сессия не падает (сообщение уедет в чат), но класс сбоя — нет extra,
         # протухший refresh_token или сеть — различим только по логу.
         logger.warning("export_gdocs failed (%s): %s", type(exc).__name__, str(exc)[:200])
-        return f"Google Docs недоступен ({type(exc).__name__}): {str(exc)[:200]}"
+        return f"Google Docs didn't accept it — {str(exc)[:180]}"
 
 
 SPEC = register(
@@ -48,6 +48,6 @@ SPEC = register(
         cloud=True,
         enforce=enforce_run_id_in_session,
         execute=_execute,
-        note=lambda call: f"export_gdocs run={call.args.get('run_id')} → Google Docs (облако)",
+        note=lambda call: "Copying the write-up to Google Docs — this one leaves the machine",
     )
 )

@@ -115,7 +115,7 @@ async def test_tier2_action_skipped_without_confirmation(tmp_path, monkeypatch):
 
     session = await runner.run_message(session, "сделай опасное")
     assert executed == []  # A-H2: не исполнено
-    assert any(m.role == "tool" and "требует подтверждения" in m.content for m in session.messages)
+    assert any(m.role == "tool" and "needs your go-ahead" in m.content for m in session.messages)
     assert session.status == "completed"  # сессия не падает
 
 

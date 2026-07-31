@@ -21,8 +21,8 @@ from app.storage.run_store import RunStore
 
 MAX_HISTORY_MESSAGES = 8
 FALLBACK_REPLY = (
-    "Не понял задачу. Пришли URL сайтов и что по ним исследовать — "
-    "или задай вопрос по уже готовым результатам этой сессии."
+    "I didn't follow that. Paste the links you want looked at and say what to look for — "
+    "or ask me about the sites already in this chat."
 )
 
 

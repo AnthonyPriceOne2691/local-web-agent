@@ -30,6 +30,6 @@ SPEC = register(
         reversible=True,
         enforce=enforce_run_id_in_session,
         execute=_execute,
-        note=lambda call: f"get_run_result {call.args.get('run_id')}",
+        note=lambda call: "Looking again at what that site said",
     )
 )

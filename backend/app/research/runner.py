@@ -29,6 +29,9 @@ from app.research.meta_agent import (
     parse_urls,
     strip_urls,
 )
+from app.research.phrasing import action_name as _action_name
+from app.research.phrasing import exclusion_reason
+from app.research.phrasing import site_name as _site_name
 from app.research.report import build_comparison_report
 from app.schemas.research import (
     ComparisonResult,
@@ -87,13 +90,13 @@ class ResearchRunner:
         if len(found) > cap:  # не глотаем лишние URL молча (честность перед пользователем)
             self._note(
                 session,
-                f"В сообщении {len(found)} URL — беру первые {cap} "
-                f"(лимит max_sites={cap}); отброшено {len(found) - cap}",
+                f"You gave {len(found)} links — I can take {cap} at a time, "
+                f"so I'll work through the first {cap} and skip the rest.",
             )
         if not urls:
             if self._planner is not None:  # Phase 4: свободный диалог → LLM-план
                 return await self._run_llm_plan(session, message, cancel_event, started)
-            return self._finish(session, "failed", "no URLs found in message")
+            return self._finish(session, "failed", "I need at least one web address to work with.")
         intent = classify_research_intent(message, len(urls))
         session.research_intent = intent
         task = strip_urls(message) or message
@@ -108,14 +111,15 @@ class ResearchRunner:
         crawled: list[RunRecord] = []
         for i, call in enumerate(plan):
             if actions.get(call.name) is None:  # M-H1/A-H1
-                return self._finish(session, "failed", f"unknown tool '{call.name}'")
+                return self._finish(session, "failed", f"I don't know how to do “{_action_name(call.name)}”.")
             if call.name == "crawl_site":
                 if self._session_expired(started):
-                    self._note(session, "session time budget exhausted — comparing partial set")
+                    self._note(session, "Out of time for this chat — comparing what I managed to read.")
                     break
                 if cancel_event is not None and cancel_event.is_set():
                     break
-                self._note(session, f"crawl_site {call.args['url']} ({len(crawled) + 1}/{len(urls)})")  # M-S1
+                site = _site_name(call.args["url"])
+                self._note(session, f"Reading {site} — site {len(crawled) + 1} of {len(urls)}")  # M-S1
                 record = await self._crawl_site(session, call, cancel_event)
                 crawled.append(record)
                 session.run_ids.append(record.id)
@@ -134,7 +138,7 @@ class ResearchRunner:
     ) -> SessionRecord:
         """План от LLM-планнера (M-* уже enforced в нём); пустой план → reply."""
         if self._planner is None:  # вызывается только когда планнер сконфигурирован
-            return self._finish(session, "failed", "no planner configured")
+            return self._finish(session, "failed", "I can only follow links you paste for now.")
         decision = await self._planner.plan(session, message, run_store=self._runs)
         if not decision.plan:
             return self._finish(session, "completed", decision.reply)
@@ -147,15 +151,15 @@ class ResearchRunner:
         compare_call: ToolCall | None = None
         for call in decision.plan:
             if cancel_event is not None and cancel_event.is_set():
-                return self._finish(session, "failed", "canceled by user")
+                return self._finish(session, "failed", "Stopped at your request.")
             spec = actions.get(call.name)
             if spec is None:  # A-H1: планнер такое уже отбросил — двойная защита
                 continue
             if call.name == "crawl_site":
                 if self._session_expired(started):
-                    self._note(session, "session time budget exhausted")
+                    self._note(session, "Out of time for this chat.")
                     break
-                self._note(session, f"crawl_site {call.args['url']}")  # M-S1
+                self._note(session, f"Reading {_site_name(call.args['url'])}")  # M-S1
                 record = await self._crawl_site(session, call, cancel_event)
                 crawled.append(record)
                 session.run_ids.append(record.id)
@@ -165,7 +169,10 @@ class ResearchRunner:
             elif call.name == "compare_results":
                 compare_call = call  # enforced: максимум один, последним
             elif spec.tier >= 2:  # A-H2/A-H3: без подтверждения не исполняем
-                self._note(session, f"{call.name}: Tier {spec.tier} требует подтверждения — пропущено")
+                self._note(
+                    session,
+                    f"Skipped “{_action_name(call.name)}” — it needs your go-ahead first.",
+                )
             elif spec.execute is not None:  # reply-block действия — через реестр
                 self._note(session, spec.note(call) if spec.note else call.name)  # M-S1
                 reply_blocks.append(spec.execute(call, self._action_ctx(session)))
@@ -255,7 +262,7 @@ class ResearchRunner:
         excluded = [
             ExcludedSite(
                 start_url=r.config.start_url,
-                reason=f"{r.status}: {r.metadata.get('blocked_by') or r.error_message or 'no result'}",
+                reason=exclusion_reason(r.status, r.metadata.get("blocked_by"), r.error_message),
             )
             # сайт, перекраленный успешно (re-crawl через LLM-план), не excluded
             for r in crawled
@@ -265,19 +272,21 @@ class ResearchRunner:
 
         if not survivors:  # 0 выживших (doc 24 § Partial failure)
             return self._finish(
-                session, "failed", "all sites failed: " + "; ".join(e.reason for e in excluded)
+                session, "failed", "None of the sites worked out: " + "; ".join(e.reason for e in excluded)
             )
         if compare_call is None or len(survivors) < 2:  # M-H4: single-site ответ
             first_result = survivors[0].result
             reply = (first_result.summary if first_result else "") or "done"
             if excluded:
-                reply += "\n\nExcluded: " + "; ".join(f"{e.start_url} ({e.reason})" for e in excluded)
+                reply += "\n\nLeft out: " + "; ".join(
+                    f"{_site_name(e.start_url)} — {e.reason}" for e in excluded
+                )
             return self._finish(session, "completed", reply)
 
         session.status = "comparing"
         self._sessions.save(session)
         if cancel_event is not None and cancel_event.is_set():
-            return self._finish(session, "failed", "canceled before compare")
+            return self._finish(session, "failed", "Stopped before I could compare the sites.")
         comparison, _ = await self._compare.compare(
             task=task,
             rubric_id=compare_call.args.get("rubric", "generic_merge"),
@@ -319,12 +328,14 @@ class ResearchRunner:
     def _chat_reply(comparison: ComparisonResult, report_name: str) -> str:
         lines = []
         if comparison.winner:
-            lines.append(f"Winner: {comparison.winner.label} — {comparison.winner.reason}")
+            lines.append(f"Best of the bunch: {comparison.winner.label} — {comparison.winner.reason}")
         if comparison.rankings:
-            lines.append("Rankings: " + " · ".join(f"{r.url} ({r.score})" for r in comparison.rankings))
+            scores = " · ".join(f"{_site_name(r.url)} {r.score}/100" for r in comparison.rankings)
+            lines.append(f"How they scored: {scores}")
         if comparison.narrative:
             lines.append(comparison.narrative[:600])
         if comparison.excluded:
-            lines.append("Excluded: " + "; ".join(f"{e.start_url} ({e.reason})" for e in comparison.excluded))
-        lines.append(f"Full report: artifacts/{comparison.session_id}/{report_name}")
+            left_out = "; ".join(f"{_site_name(e.start_url)} — {e.reason}" for e in comparison.excluded)
+            lines.append(f"Left out: {left_out}")
+        lines.append(f"The full write-up is saved as {report_name}.")
         return "\n\n".join(lines)

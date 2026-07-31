@@ -108,7 +108,9 @@ async def test_uc1_happy_path_sequential_compare_report(tmp_path):
     roles = [m.role for m in session.messages]
     assert roles[0] == "user" and roles.count("tool") == 2  # M-S1 прогресс
     assert roles[-1] == "assistant"
-    assert "Winner: a.com" in session.messages[-1].content
+    # Формулировки ответа — пользовательский текст (doc 17 § Wording), поэтому
+    # тест держит их дословно: смена слов должна быть осознанной, не случайной.
+    assert "Best of the bunch: a.com" in session.messages[-1].content
     # состояние в store идентично
     assert session_store.get(session.id).status == "completed"
 
@@ -120,7 +122,7 @@ async def test_url_count_over_cap_warns_and_truncates(tmp_path):
     urls = " ".join(f"https://s{i}.com" for i in range(12))
     session = await runner.run_message(session, f"сравни дизайн: {urls}")
     assert len(visits) == 10  # M-H2: обойдены только первые 10, а не молча все 12
-    assert any("отброшено 2" in m.content for m in session.messages if m.role == "tool")
+    assert any("I can take 10 at a time" in m.content for m in session.messages if m.role == "tool")
 
 
 async def test_partial_failure_excluded_and_partial_status(tmp_path):
@@ -135,7 +137,7 @@ async def test_partial_failure_excluded_and_partial_status(tmp_path):
     assert comparison.status == "partial"  # excluded есть
     assert [e.start_url for e in comparison.excluded] == ["https://c.com"]
     assert "captcha" in comparison.excluded[0].reason
-    assert "Excluded" in session.messages[-1].content
+    assert "Left out: c.com" in session.messages[-1].content
 
 
 async def test_single_survivor_answers_without_compare(tmp_path):
@@ -148,7 +150,8 @@ async def test_single_survivor_answers_without_compare(tmp_path):
     assert session.comparison_result is None
     assert llm.calls == []  # compare не вызывался
     reply = session.messages[-1].content
-    assert "summary of https://a.com" in reply and "https://b.com" in reply
+    # Сайт в ответе называется хостом, а не полным URL (doc 17 § Wording)
+    assert "summary of https://a.com" in reply and "b.com" in reply
 
 
 async def test_all_failed_session_failed(tmp_path):

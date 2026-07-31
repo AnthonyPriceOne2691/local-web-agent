@@ -1,70 +1,70 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { sessionState } from '../copy';
 import type { ChallengeWait, CrawlProgress, SessionRecord } from '../types';
 
 import ChallengeCard from './ChallengeCard';
 import Composer from './Composer';
 import Message from './Message';
-import ProgressCard, { Spinner } from './ProgressCard';
-import StatusBadge from './StatusBadge';
+import ProgressCard from './ProgressCard';
+import StatusPill from './StatusPill';
 import WelcomeScreen from './WelcomeScreen';
 
 interface Props {
   session: SessionRecord | null;
   progress: CrawlProgress | null;
   challenge: ChallengeWait | null;
-  banner: string;
+  error: string;
   sending: boolean;
-  attended: boolean;
+  busy: boolean;
+  watchBrowser: boolean;
   onSend: (content: string) => void;
-  onCancel: () => void;
+  onStop: () => void;
   onResume: () => void;
-  onToggleAttended: (value: boolean) => void;
+  onDismissError: () => void;
+  onToggleWatchBrowser: (value: boolean) => void;
 }
 
 export default function Chat({
   session,
   progress,
   challenge,
-  banner,
+  error,
   sending,
-  attended,
+  busy,
+  watchBrowser,
   onSend,
-  onCancel,
+  onStop,
   onResume,
-  onToggleAttended,
+  onDismissError,
+  onToggleWatchBrowser,
 }: Props) {
   const [draft, setDraft] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const busy = session != null && ['running_tools', 'comparing'].includes(session.status);
+  const state = session ? sessionState(session.status) : null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session?.messages.length, progress?.pages_visited, challenge]);
 
-  const send = (content: string) => {
-    setDraft('');
-    onSend(content);
-  };
-
   return (
-    <main className="flex-1 flex flex-col min-w-0">
-      <header className="h-12 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-4">
-        <h1 className="flex-1 truncate text-sm font-semibold">
-          {session ? session.title || 'Untitled session' : 'New research chat'}
+    <main className="glass-panel flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-glass)]">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--glass-edge)] px-5">
+        <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight">
+          {session ? session.title || 'Untitled chat' : 'New research chat'}
         </h1>
-        {session && <StatusBadge status={session.status} />}
+        {state && <StatusPill label={state.text} tone={state.tone} live={state.tone === 'busy'} />}
         {busy && (
           <button
-            onClick={onCancel}
-            className="rounded-md border border-red-300 text-red-600 hover:bg-red-50 px-2.5 py-1 text-xs font-medium"
+            onClick={onStop}
+            className="glass-quiet glass-hover focus-ring rounded-full px-3 py-1.5 text-xs font-medium text-[var(--color-rose-warm)]"
           >
-            Cancel
+            Stop
           </button>
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="scroll-slim flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-5">
         {!session && <WelcomeScreen onPick={setDraft} />}
         {session?.messages.map((m, i) => (
           <Message key={i} message={m} />
@@ -72,28 +72,42 @@ export default function Chat({
         {challenge && <ChallengeCard challenge={challenge} onResume={onResume} />}
         {progress && !challenge && <ProgressCard progress={progress} />}
         {session?.status === 'comparing' && (
-          <div className="flex items-center gap-2 text-sm text-violet-600">
-            <Spinner /> Comparing results…
-          </div>
+          <p className="text-soft flex items-center gap-2 px-1 text-[13px]">
+            <span className="size-1.5 animate-pulse rounded-full bg-[var(--color-accent)]" />
+            Weighing the sites against each other…
+          </p>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {banner && (
-        <div className="mx-4 mb-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2">
-          {banner}
+      {error && (
+        <div className="glass mx-5 mb-3 flex items-start gap-3 rounded-2xl px-4 py-3">
+          <span aria-hidden className="text-[var(--color-rose-warm)]">
+            ⚠
+          </span>
+          <p className="flex-1 text-[13px]">{error}</p>
+          <button
+            onClick={onDismissError}
+            aria-label="Dismiss this message"
+            className="text-faint focus-ring rounded-full px-1 text-xs"
+          >
+            ✕
+          </button>
         </div>
       )}
 
       <Composer
         busy={busy}
         sending={sending}
-        attended={attended}
+        watchBrowser={watchBrowser}
         hasSession={session != null}
         draft={draft}
         onDraftChange={setDraft}
-        onSend={send}
-        onToggleAttended={onToggleAttended}
+        onSend={(text) => {
+          setDraft('');
+          onSend(text);
+        }}
+        onToggleWatchBrowser={onToggleWatchBrowser}
       />
     </main>
   );

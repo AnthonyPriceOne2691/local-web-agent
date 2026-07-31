@@ -1,1 +1,251 @@
 @import 'tailwindcss';
+
+/* ============================================================================
+   Liquid glass — визуальный язык интерфейса (doc 17).
+
+   Одна идея: содержимое живёт на полупрозрачных слоях, которые размывают то, что
+   под ними, и держат тонкую светящуюся кромку. Глубина создаётся размытием и
+   светом, а не тенями и рамками.
+
+   Рецепт стекла собран здесь в утилиты (`.glass`, `.glass-panel`, …), а не
+   размазан по компонентам восемью классами на каждый блок: иначе поверхности
+   разъезжаются, а поправить их разом невозможно.
+   ============================================================================ */
+
+@theme {
+  --font-sans:
+    ui-sans-serif, -apple-system, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* Акцент один на весь интерфейс: рассеянный индиго-фиолет. Второй акцент
+     (мята) — только для «готово», третий (янтарь) — только для «нужен человек». */
+  --color-accent: oklch(58% 0.19 285);
+  --color-accent-soft: oklch(72% 0.12 285);
+  --color-mint: oklch(70% 0.14 165);
+  --color-amber-warm: oklch(76% 0.14 75);
+  --color-rose-warm: oklch(64% 0.19 15);
+
+  --radius-glass: 1.25rem;
+  --blur-glass: 32px;
+}
+
+:root {
+  color-scheme: light dark;
+
+  /* Токены стекла. Светлая тема: заливка ниже, чем кажется нужным, зато кромка
+     двойная — светлая изнутри и тёмная снаружи. Без внешней линии стекло на
+     светлом фоне не читается вовсе (первый скриншот это и показал). */
+  --glass-fill: rgb(255 255 255 / 0.55);
+  --glass-fill-strong: rgb(255 255 255 / 0.72);
+  --glass-fill-quiet: rgb(255 255 255 / 0.32);
+  --glass-edge: rgb(255 255 255 / 0.7);
+  --glass-shadow:
+    0 1px 1px -0.5px rgb(30 25 60 / 0.08), 0 4px 8px -3px rgb(30 25 60 / 0.1),
+    0 20px 44px -20px rgb(30 25 60 / 0.28), 0 0 0 0.5px rgb(30 25 60 / 0.07);
+  --glass-inner: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
+
+  --ink: oklch(24% 0.03 285);
+  --ink-soft: oklch(45% 0.025 285);
+  --ink-faint: oklch(58% 0.02 285);
+
+  /* Полотно под стеклом. Насыщенность здесь не украшение: слой размывает то, что
+     под ним, и на бледном фоне размывать нечего — стекло выглядит белой плашкой. */
+  --canvas:
+    radial-gradient(90% 90% at 10% 0%, oklch(84% 0.11 285) 0%, transparent 60%),
+    radial-gradient(80% 80% at 95% 5%, oklch(86% 0.1 205) 0%, transparent 55%),
+    radial-gradient(100% 100% at 70% 100%, oklch(88% 0.09 330) 0%, transparent 60%),
+    radial-gradient(70% 70% at 25% 95%, oklch(90% 0.05 200) 0%, transparent 55%),
+    linear-gradient(160deg, oklch(94% 0.03 285) 0%, oklch(91% 0.04 255) 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --glass-fill: rgb(255 255 255 / 0.08);
+    --glass-fill-strong: rgb(255 255 255 / 0.13);
+    --glass-fill-quiet: rgb(255 255 255 / 0.05);
+    --glass-edge: rgb(255 255 255 / 0.16);
+    --glass-shadow: 0 20px 56px -24px rgb(0 0 0 / 0.7), 0 0 0 0.5px rgb(255 255 255 / 0.06);
+    --glass-inner: inset 0 1px 0 0 rgb(255 255 255 / 0.12);
+
+    --ink: oklch(96% 0.01 285);
+    --ink-soft: oklch(80% 0.015 285);
+    --ink-faint: oklch(65% 0.02 285);
+
+    --canvas:
+      radial-gradient(90% 90% at 10% 0%, oklch(42% 0.14 285) 0%, transparent 60%),
+      radial-gradient(80% 80% at 95% 5%, oklch(38% 0.12 205) 0%, transparent 55%),
+      radial-gradient(100% 100% at 70% 100%, oklch(36% 0.12 330) 0%, transparent 60%),
+      radial-gradient(70% 70% at 25% 95%, oklch(32% 0.07 205) 0%, transparent 55%),
+      linear-gradient(160deg, oklch(16% 0.03 285) 0%, oklch(12% 0.03 255) 100%);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- поверхности ---------------------------------------------------------- */
+
+@utility glass {
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--blur-glass)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(180%);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+}
+
+@utility glass-panel {
+  background: var(--glass-fill-strong);
+  backdrop-filter: blur(var(--blur-glass)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(180%);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+}
+
+/* Тихая поверхность: для вложенных блоков внутри стекла — второй слой того же
+   рецепта читался бы как грязь, поэтому у него меньше заливки и нет тени. */
+@utility glass-quiet {
+  background: var(--glass-fill-quiet);
+  border: 1px solid var(--glass-edge);
+}
+
+@utility glass-hover {
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+
+  &:hover {
+    background: var(--glass-fill-strong);
+    border-color: color-mix(in oklab, var(--color-accent) 35%, var(--glass-edge));
+  }
+}
+
+/* --- текст ---------------------------------------------------------------- */
+
+@utility text-ink {
+  color: var(--ink);
+}
+@utility text-soft {
+  color: var(--ink-soft);
+}
+@utility text-faint {
+  color: var(--ink-faint);
+}
+
+/* --- фокус: видимый всегда, а не только «на клавиатуре по вкусу браузера» -- */
+
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+/* --- акцентная поверхность и кнопка на её основе -------------------------- */
+
+/* Поверхность без интерактивных состояний: для пузыря сообщения. Раньше пузырь
+   переиспользовал стиль кнопки и вместе с ним получал подсветку по hover и сдвиг
+   по нажатию — сообщение не должно реагировать на клик. */
+@utility accent-surface {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-accent) 92%, white) 0%,
+    var(--color-accent) 100%
+  );
+  color: white;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 60%, white);
+  box-shadow:
+    0 10px 24px -12px color-mix(in oklab, var(--color-accent) 70%, transparent),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.35);
+}
+
+@utility btn-accent {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-accent) 92%, white) 0%,
+    var(--color-accent) 100%
+  );
+  color: white;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 60%, white);
+  box-shadow:
+    0 10px 24px -12px color-mix(in oklab, var(--color-accent) 70%, transparent),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.35);
+  transition:
+    filter 160ms ease,
+    transform 160ms ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.07);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    filter: grayscale(0.6) opacity(0.5);
+    box-shadow: none;
+  }
+}
+
+/* --- скроллбар: тонкий, чтобы не резать стеклянные панели ----------------- */
+
+@utility scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ink-faint) 45%, transparent) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--ink-faint) 35%, transparent);
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* --- движение ------------------------------------------------------------- */
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@utility shimmer-bar {
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

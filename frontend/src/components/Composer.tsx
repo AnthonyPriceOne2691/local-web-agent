@@ -3,25 +3,25 @@ import { useState } from 'react';
 interface Props {
   busy: boolean;
   sending: boolean;
-  attended: boolean;
+  watchBrowser: boolean;
   hasSession: boolean;
   draft: string;
   onDraftChange: (value: string) => void;
   onSend: (content: string) => void;
-  onToggleAttended: (value: boolean) => void;
+  onToggleWatchBrowser: (value: boolean) => void;
 }
 
-/** Ввод сообщения + тумблер attended. Черновик живёт выше (Chat), чтобы кнопки
- *  примеров из welcome-экрана могли его заполнить. */
+/** Ввод сообщения. Черновик живёт выше (Chat), чтобы примеры с приветственного
+ *  экрана могли его заполнить. */
 export default function Composer({
   busy,
   sending,
-  attended,
+  watchBrowser,
   hasSession,
   draft,
   onDraftChange,
   onSend,
-  onToggleAttended,
+  onToggleWatchBrowser,
 }: Props) {
   const [rows, setRows] = useState(1);
 
@@ -37,8 +37,8 @@ export default function Composer({
   };
 
   return (
-    <footer className="shrink-0 border-t border-slate-200 bg-white p-3">
-      <div className="flex gap-2 items-end">
+    <footer className="shrink-0 border-t border-[var(--glass-edge)] px-5 py-4">
+      <div className="flex items-end gap-2">
         <textarea
           value={draft}
           onChange={(e) => update(e.target.value)}
@@ -49,32 +49,36 @@ export default function Composer({
             }
           }}
           rows={rows}
+          aria-label="Your links and question"
           placeholder={
-            busy ? 'Session is running — wait or cancel…' : 'URLs + task… (Enter to send)'
+            busy
+              ? 'The agent is working — wait for it, or press Stop'
+              : 'Paste links and say what you need. Enter sends, Shift+Enter adds a line.'
           }
           disabled={busy}
-          className="flex-1 resize-none rounded-lg border border-slate-300 focus:border-blue-500 focus:outline-none px-3 py-2 text-sm disabled:bg-slate-50"
+          className="glass-quiet focus-ring text-ink placeholder:text-faint flex-1 resize-none rounded-2xl px-4 py-3 text-[14px] outline-none disabled:opacity-60"
         />
         <button
           onClick={submit}
           disabled={busy || sending || !draft.trim()}
-          className="rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white px-4 py-2 text-sm font-medium"
+          className="btn-accent focus-ring rounded-2xl px-5 py-3 text-[14px] font-medium"
         >
-          Send
+          {sending ? 'Sending…' : 'Send'}
         </button>
       </div>
-      <label
-        className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 select-none w-fit"
-        title="Видимый браузер: на anti-bot проверке пауза — пройди её сам, дальше агент продолжит"
-      >
+
+      <label className="text-faint mt-2.5 flex w-fit cursor-pointer items-center gap-2 text-[11px] select-none">
         <input
           type="checkbox"
-          checked={attended}
+          checked={watchBrowser}
           disabled={hasSession || busy}
-          onChange={(e) => onToggleAttended(e.target.checked)}
-          className="accent-blue-600"
+          onChange={(e) => onToggleWatchBrowser(e.target.checked)}
+          className="focus-ring size-3.5 accent-[var(--color-accent)]"
         />
-        Attended-режим (пройти проверки вручную) — задаётся при старте новой сессии
+        <span>
+          Show me the browser — I&apos;ll handle logins and “are you a robot” checks myself
+          {hasSession && ' (pick this before the first message)'}
+        </span>
       </label>
     </footer>
   );

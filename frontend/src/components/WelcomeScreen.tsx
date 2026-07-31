@@ -1,36 +1,55 @@
+/** Пустой экран должен объяснять не устройство агента, а что человеку сделать.
+ *  Прежние подписи («UC-1 · design compare») были кодами из дизайн-доков. */
 const EXAMPLES = [
   {
-    label: 'UC-1 · design compare',
-    text: 'Вот 4 сайта: https://a.com, https://b.com, https://c.com, https://d.com — пройди по каждому и опиши дизайн, чем они отличаются друг от друга.',
+    title: 'Compare how competitors look',
+    text: 'Take a look at https://example.com, https://example.org and https://example.net — describe how each site looks and what makes them different.',
   },
   {
-    label: 'UC-2 · content compare',
-    text: 'Конкуренты: https://x.com, https://y.com, https://z.com — найди статью про ставки на футбол и скажи, у кого самая полная и почему.',
+    title: 'Find who covers a topic best',
+    text: 'Here are three blogs: https://example.com, https://example.org, https://example.net — find the article about football betting on each and tell me whose is the most thorough, and why.',
+  },
+  {
+    title: 'Dig out contact details',
+    text: 'Find the editorial contact email on https://example.com — quote the page it came from.',
   },
 ];
 
-/** Пустое состояние чата: что умеет агент + готовые примеры задач. */
 export default function WelcomeScreen({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="max-w-lg mx-auto mt-16 text-center">
-      <div className="text-4xl mb-3">🔍</div>
-      <h2 className="text-lg font-semibold mb-1">Paste URLs and describe the task</h2>
-      <p className="text-sm text-slate-500 mb-6">
-        The agent crawls each site sequentially (Playwright + local Ollama), then compares the
-        results. Everything stays on this machine.
-      </p>
-      <div className="space-y-2 text-left">
+    /* Центрируем по вертикали: на первом скриншоте блок висел под шапкой, а под
+       ним оставалась половина экрана пустоты. */
+    <div className="mx-auto flex h-full max-w-xl flex-col justify-center py-6">
+      <div className="text-center">
+        <h2 className="text-[22px] font-semibold tracking-tight">
+          Paste a few links, say what you need
+        </h2>
+        <p className="text-soft mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed">
+          The agent opens each site in a real browser, reads its way to the answer and quotes where
+          it found it. Everything runs on this Mac — no site data and no page text leaves the
+          machine.
+        </p>
+      </div>
+
+      <div className="mt-6 space-y-2">
         {EXAMPLES.map((ex) => (
           <button
-            key={ex.label}
+            key={ex.title}
             onClick={() => onPick(ex.text)}
-            className="w-full rounded-lg border border-slate-200 bg-white hover:border-blue-400 px-3 py-2 text-xs text-slate-600"
+            className="glass-quiet glass-hover focus-ring block w-full rounded-2xl px-4 py-3 text-left"
           >
-            <span className="font-semibold text-slate-800">{ex.label}</span>
-            <span className="block mt-0.5 line-clamp-2">{ex.text}</span>
+            <span className="block text-[13px] font-medium">{ex.title}</span>
+            <span className="text-faint mt-1 block line-clamp-2 text-[12px] leading-relaxed">
+              {ex.text}
+            </span>
           </button>
         ))}
       </div>
+
+      <p className="text-faint mt-5 text-center text-[11.5px] leading-relaxed">
+        It can also act on a page — fill a form, sign in, place an order. Anything that can&apos;t
+        be undone stops and waits for you to press the button yourself.
+      </p>
     </div>
   );
 }

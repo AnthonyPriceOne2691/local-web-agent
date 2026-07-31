@@ -1,6 +1,6 @@
 # 17 — UI Screens (CLI + Future Web)
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-19
+> Local Web Agent · Design doc · **v0.5** · 2026-08-01
 
 ## MVP: CLI (Phase 1–3) → Chat UI (Phase 4, primary UX)
 
@@ -120,37 +120,89 @@ Side panel: linked runs, screenshot thumbs, per-site reports.
 
 **Стек (факт):** React 19 + Vite 7 + TypeScript + Tailwind CSS v4 (`frontend/`). Prod: `npm run build` → `frontend/dist`, FastAPI монтирует на `/` (same-origin, CORS не нужен). Dev: `npm run dev` (5173) c proxy `/sessions|/runs|/health` → 8001.
 
-### Layout (три колонки)
+### Layout (три стеклянных слоя над градиентным полотном)
 
 ```
-┌─ Sidebar ─────┬─ Chat ────────────────────────┬─ Side panel ──────────┐
-│ + New chat    │ header: title·status·Cancel   │ tabs: Runs|Comparison │
-│ session list  │ messages (user/assistant/⚙)   │ Runs: RunCard         │
-│  (status,     │ CrawlProgress bar (SSE)       │  status·intent·pages  │
-│   runs count, │ "Comparing…" spinner          │  steps timeline       │
-│   delete ✕)   │ composer (Enter=send)         │  screenshot thumbs    │
-│               │ welcome: UC-1/UC-2 примеры    │ Comparison: winner,   │
-│               │                               │  rankings bars,       │
-│               │                               │  dimensions table,    │
-│               │                               │  narrative, excluded, │
-│               │                               │  Export report.md     │
+┌─ Sidebar ─────┬─ Chat ────────────────────────┬─ Inspector ───────────┐
+│ + New chat    │ header: title·state·Stop      │ tabs: Sites visited │ │
+│ chat list     │ messages (user/agent/quiet)   │       What we found   │
+│  (state,      │ progress card (SSE)           │ site cards:           │
+│   N sites,    │ pause card (needs you)        │  state·goal·pages     │
+│   relative    │ composer (Enter=send)         │  «How it got there»   │
+│   time, ✕)    │ welcome: три примера задач    │  screenshots          │
+│               │                               │ verdict: best·scores· │
+│               │                               │  side by side·in short│
 └───────────────┴───────────────────────────────┴───────────────────────┘
 ```
+
+### Визуальный язык: liquid glass (v0.5)
+
+- **Слои, а не рамки.** Контент живёт на полупрозрачных поверхностях с размытием
+  (`backdrop-filter: blur + saturate`), тонкой светлой кромкой изнутри и мягкой
+  тенью. Глубина = размытие + свет.
+- **Полотно должно быть насыщенным.** Первый прогон был бледным (oklch 93–97 %) —
+  стекло выглядело белой плашкой: слою нечего размывать. Итог: четыре цветных
+  пятна + диагональный градиент, в тёмной теме те же координаты, темнее и глубже.
+- **На светлой теме нужна внешняя тёмная линия** (`0 0 0 0.5px`) — иначе панель
+  сливается с фоном. Проверено скриншотами, не на глаз в коде.
+- **Рецепт стекла — утилиты в `index.css`** (`glass`, `glass-panel`, `glass-quiet`,
+  `glass-hover`, `btn-accent`, `accent-surface`, `focus-ring`, `scroll-slim`), а не
+  восемь классов на каждый блок: иначе поверхности разъезжаются.
+- **Один акцент** (индиго-фиолет) + мята «готово» + янтарь «нужен человек» + роза
+  «сломалось». Тон берётся из смысла статуса, а не из его названия.
+- **Тёмная тема полноценная** (`prefers-color-scheme`), движение уважает
+  `prefers-reduced-motion`, фон не анимирован (дёргающийся фон мешает читать).
+
+### Словарь: интерфейс не говорит на языке кода (v0.5)
+
+Требование владельца: только English и никакой внутренней лексики.
+
+| Было (лексика кода) | Стало (язык пользователя) |
+|---|---|
+| `running_tools` · `comparing` · `not_found` | Visiting sites · Comparing sites · Nothing found |
+| `Runs (3)` · `intent` | Sites visited · 3 · «Looking for an article» |
+| `extract_now` · `OBSERVE` · `SYNTHESIZE` | Pulled the answer from this page · Read the page · Wrote up the findings |
+| `Dimensions · content_completeness` | Side by side · «Compared on how complete the content is» |
+| `winner` · `rankings` · `narrative` | Best of the bunch · How they scored · In short |
+| `3/10 pages` · `loading <id>…` | 3 of 10 pages read · Loading what the agent saw… |
+| `HTTP 409 run_in_progress` | «Another research run is still going. Wait for it, or stop it first.» |
+
+- **Фронт:** `copy.ts` — единственное место перевода. Неизвестное значение падает
+  в `humanizeKey` (snake_case → фраза), а не выходит наружу ключом.
+- **Бэкенд:** `research/phrasing.py` — текст, который сочиняет сервер (заметки о
+  шагах, ответы в чат, причины исключения сайта). Парсить строки на клиенте было
+  бы хаком: текст правится там, где написан.
+- Тесты держат формулировки дословно (`test_research_runner`, `test_file_sink`,
+  `test_actions_registry`): смена слов должна быть осознанной.
 
 ### Компоненты (`frontend/src/`)
 
 | Файл | Ответственность |
 |------|-----------------|
-| `App.tsx` | state-holder: sessions/current/runs/progress; SSE attach/detach; send/cancel/delete |
-| `api.ts` | REST-клиент + `subscribeSessionEvents` (EventSource, дедуп реплея по `message.index`) |
-| `types.ts` | зеркала Pydantic-схем (SessionRecord, RunRecord, ComparisonResult, SSE events) |
-| `components/Sidebar.tsx` | список сессий, New chat, delete |
-| `components/Chat.tsx` | лента, ProgressCard, composer, welcome-примеры UC-1/UC-2 |
-| `components/Message.tsx` | user/assistant баблы; tool-notes (M-S1) компактной строкой ⚙ |
-| `components/SidePanel.tsx` | табы Runs / Comparison |
-| `components/RunCard.tsx` | статус, steps timeline, скриншот-тумбы (`/runs/{id}/steps/{pos}/screenshot`) |
-| `components/ComparisonView.tsx` | winner, rankings, dimensions-таблица, narrative, excluded, экспорт `report.md` |
-| `components/StatusBadge.tsx` | цветовые статусы session/run |
+| `App.tsx` | только композиция экрана (три слоя) |
+| `useSession.ts` | состояние чата + действия пользователя (`makeActions`) |
+| `useSessionStream.ts` | SSE-подписка: единственное место с ресурсом времени жизни |
+| `copy.ts` | человеческие формулировки: статусы, шаги, интенты, ошибки, счётчики |
+| `api.ts` | REST-клиент + `subscribeSessionEvents` (дедуп реплея по `message.index`) |
+| `types.ts` | зеркала Pydantic-схем |
+| `components/Sidebar.tsx` | список чатов; удаление — подтверждением в интерфейсе |
+| `components/Chat.tsx` | лента, прогресс, пауза, ошибка, composer |
+| `components/Message.tsx` | пузыри user/agent; шаги агента — тихой строкой |
+| `components/Inspector.tsx` | табы Sites visited / What we found |
+| `components/RunCard.tsx` | состояние, цель, «How it got there», скриншоты |
+| `components/ComparisonView.tsx` | best · scores · side by side · in short · left out |
+| `components/StatusPill.tsx` | статус тоном по смыслу, точка «живёт» только когда идёт работа |
+| `components/ProgressCard.tsx`, `ChallengeCard.tsx`, `Composer.tsx`, `WelcomeScreen.tsx` | прогресс, пауза, ввод, пустой экран |
+
+### Доступность (v0.5)
+
+- Строки чатов — настоящие `button` с `focus-visible`-кольцом (были кликабельные
+  `div`, недостижимые с клавиатуры).
+- Удаление — подтверждение внутри интерфейса вместо системного `confirm()`.
+- У иконок-кнопок `aria-label`; у раскрывающихся карточек `aria-expanded`; у табов
+  `aria-pressed`; у поля ввода — `aria-label`.
+- Автотестов UI нет — это названо честно в поставке; проверка визуала —
+  скриншотами light/dark на живом API.
 
 ### Поведение
 
@@ -174,4 +226,5 @@ Side panel: linked runs, screenshot thumbs, per-site reports.
 | 2026-07-05 | **v0.2:** design audit flow; --vision progress; report/design CLI; Web UI vision badges |
 | 2026-07-05 | **v0.3:** Flow 5 Research Chat primary UX; Phase 4 (doc 24) |
 | 2026-07-05 | **v0.3.1 (review):** Cancel run в Run detail (FR-3.8) |
+| 2026-08-01 | **v0.5 (liquid glass + человеческий язык):** визуальный язык переписан на стеклянные слои над насыщенным полотном (§ Визуальный язык) — бледный фон первой версии не давал стеклу читаться, на светлой теме добавлена внешняя линия кромки; введён словарь формулировок (§ Словарь): `copy.ts` на фронте и `research/phrasing.py` на бэкенде, интерфейс больше не говорит `running_tools`/`extract_now`/`Dimensions`/`rubric`; язык только English (русские строки убраны из паузы, тумблера, примеров, а также из ответов бэкенда и заметок реестра действий); `App.tsx` → `useSession` + `useSessionStream` + `makeActions`; доступность: строки чатов стали кнопками с фокус-кольцом, системный `confirm()` заменён подтверждением в интерфейсе, добавлены `aria-*`; `SidePanel` → `Inspector`, `StatusBadge` → `StatusPill` |
 | 2026-07-19 | **v0.4 (Phase 4 impl):** Chat UI реализован — React 19 + Vite 7 + TS + Tailwind v4 в `frontend/`; трёхколоночный layout (sidebar / chat+SSE progress / side panel Runs+Comparison со скриншотами и экспортом report.md); prod = статика из FastAPI, dev = Vite proxy; черновые экраны New Crawl/Settings заменены фактической структурой (single-site — через тот же чат) |

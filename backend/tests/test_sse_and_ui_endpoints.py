@@ -49,7 +49,7 @@ async def test_events_stream_replays_terminal_session(api_client):  # noqa: F811
         created_at="t",
         messages=[
             SessionMessage(role="user", content="compare a b", created_at="t"),
-            SessionMessage(role="tool", content="crawl_site http://a (1/2)", created_at="t"),
+            SessionMessage(role="tool", content="Reading a — site 1 of 2", created_at="t"),
             SessionMessage(role="assistant", content="Winner: a", created_at="t"),
         ],
     )
