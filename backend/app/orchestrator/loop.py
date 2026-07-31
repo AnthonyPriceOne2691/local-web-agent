@@ -16,6 +16,7 @@ from app.config import Settings
 from app.contracts import guards
 from app.contracts.enforcer import ContractEnforcer
 from app.extraction.synthesis_validator import SynthesisValidator
+from app.llm.model_router import NavRouting
 from app.llm.navigator import Navigator
 from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
@@ -82,6 +83,7 @@ class CrawlOrchestrator:
         self._enforcer = enforcer or ContractEnforcer.load(settings.contracts_dir)
         self._synth_validator = SynthesisValidator.load(settings.contracts_dir)
         self._consent = ConsentHandler.load(settings.navigation_dir)
+        self._routing = NavRouting.load(settings)  # лёгкая/тяжёлая nav-модель (doc 16)
         self._consent_click_used = False  # 1 попытка click на сайт (D-11)
         self._vision = VisionAnalyzer(llm_client, settings)
 
@@ -119,7 +121,7 @@ class CrawlOrchestrator:
             # Греем nav-модель параллельно сетевой подготовке: иначе первое решение
             # агента оплачивает загрузку весов уже при открытом браузере (8.7 s против
             # 3.6 s у последующих — замер живого прогона Tier 3).
-            warmup = asyncio.create_task(self._llm.warmup(self._s.nav_model))
+            warmup = asyncio.create_task(self._llm.warmup(self._routing.first_step_model(cfg.task)))
             robots = await RobotsPolicy.load(origin, respect=cfg.respect_robots)
             rate_ms = max(
                 self._enforcer.effective_rate_ms(cfg.rate_limit_ms, cfg.start_url),
@@ -241,6 +243,7 @@ class CrawlOrchestrator:
                     robots,
                     navigator=self._navigator,
                     enforcer=self._enforcer,
+                    routing=self._routing,
                 )
                 violations_total += len(step_violations)
 
@@ -478,7 +481,7 @@ class CrawlOrchestrator:
             return ExtractionResult(status="failed", summary="no pages observed")
         record.steps.append(CrawlStep(index=len(record.steps) + 1, state=State.SYNTHESIZE))
         self._store.save(record)
-        await self._llm.unload(self._s.nav_model)  # swap nav → synth (doc 14)
+        await self._llm.unload_many(self._s.nav_model, self._s.nav_light_model)  # nav → synth
         result, stats = await self._synthesizer.synthesize(
             task=record.config.task, snapshots=snapshots, intent=record.intent
         )
