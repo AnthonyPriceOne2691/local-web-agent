@@ -1,45 +1,32 @@
 # Active delivery status
 
-- **slug:** ui-liquid-glass
+- **slug:** next-up
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-  <!-- Класс S, хотя файлов много: изменение живёт целиком в одном слое
-       (`frontend/src`), бэкенд и контракты не тронуты, деплоя нет, откат =
-       revert одного коммита. Если по ходу потребуется правка API или схем —
-       поставка переклассифицируется в M со спекой, а не «дотянется» тихо. -->
-- **phase:** verify
+- **phase:** specify
 - **builder:** agent:claude-code
-- **verifier:** human:anthony     <!-- визуал и формулировки принимает владелец: это вкус, не гейт -->
-- **human_ok_spec:** n/a          <!-- class S: mini-spec в tasks.md (§2.2) -->
+- **verifier:** human:anthony
+- **human_ok_spec:** n/a
 - **human_ok_plan:** n/a
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present
-  <!-- Фронт закрыт не юнитами, а гейтами сборки (tsc), eslint-ратчетом и
-       визуальной проверкой скриншотами. Названо честно: автотестов UI нет. -->
 - **ci-oracles:** tooling
-  <!-- CI есть (.github/workflows/quality.yml); гейт мержа в репо (scripts/merge_guard.sh
-       + pre-push + needs:). Серверная защита ветки — платная для приватного репо
-       (Pro+), поэтому НЕ закрыты: force-push в main и обход админом. Остаток
-       зафиксирован в delivery/STACK-ACCEPTANCE.md § Остатки. -->
-- **worktree:** none (ветка `feat/ui-liquid-glass`)
-- **hooks:** claude    <!-- stop-on-red + protect-main, .claude/settings.json -->
-- **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
-     CI их не видит; гоняется вручную при каждой правке канонов -->
-- **blockers:** —
-- **waivers:** max_files_touched=32 max_loc_diff=880
-  reason=«визуал и словарь — один неделимый реворк одного слоя (`frontend/src` плюс
-  строки, которые сочиняет бэкенд); дробление дало бы два искусственных PR по одним
-  и тем же файлам и промежуточное состояние с полупереведённым интерфейсом.
-  Фактически 31 файл / +832 нетто» by=human:anthony date=2026-08-01
+  <!-- CI есть; гейт мержа в репо (merge_guard + pre-push). Серверная защита ветки
+       платная для приватного репо, поэтому force-push в main и обход админом не
+       закрыты — остаток в delivery/STACK-ACCEPTANCE.md § Остатки. -->
+- **worktree:** none
+- **hooks:** claude
+- **stack-selftest:** external (Prepare/)
+- **blockers:** приоритет не выбран — слот открыт по остатку, а не решён
+- **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
 ## Предыдущие поставки
 
 `legacy-debt` (M) · `ci-red` (S) · `mypy-strict` (M) · `tier3-exit-smoke` (S) ·
 `nav-model-split` (S) · `synth-speed` (S) · `session-throughput` (S, закрыта
-**частично** — итог и перенесённые хвосты в
-`delivery/archive/2026-08-01-session-throughput/tasks.md`). Все слиты через
-`merge_guard`; CI на main зелёный.
+**частично**) · `ui-liquid-glass` (S) — все слиты через `merge_guard`; CI на main
+зелёный. Артефакты в `delivery/archive/`.
 
 ## Backlog гейтов
 
@@ -49,8 +36,8 @@
 - [x] **mypy-заглушки** сняты; **mypy → strict** ✅ (86 модулей).
 - [x] **Diff-coverage** ✅ прогнан на реальном диффе кода (PR #7).
 - [ ] **Сложность функций** (`C901`/`PLR09xx`, 10 модулей) — рефакторинг оркестратора.
-- [ ] **UI-рефактор** (`App.tsx` → хук-контроллер, `ComparisonView`) — закрывается
-      этой поставкой.
+- [x] **UI-рефактор** ✅ (поставка `ui-liquid-glass`): `App.tsx` → композиция,
+      логика в `useSession` + `useSessionStream`.
 
 ## Хвосты из session-throughput (перенесены, не потеряны)
 
@@ -62,12 +49,14 @@
 
 ## Контекст поставки
 
-Владелец: «взгляни на UI как опытный UI/UX, переделай визуал под жидкое стекло, а
-все текстовые поля с технической информацией перепиши по-человечески; язык — только
-английский».
+Слот открыт без выбранного приоритета. Что лежит на столе, по весу:
 
-Исходное состояние честно: интерфейс работает, но выглядит как дефолтный Tailwind
-(плоские slate/blue плашки, тёмный сайдбар рядом со светлыми панелями), тексты
-двуязычные (RU в паузах, тумблере, примерах), а наружу торчит внутренняя лексика
-проекта — `runs`, `intent`, `running_tools`, `extract_now`, `Dimensions`, `rubric`,
-`loading <id>…`. Человеку, который не писал этот бэкенд, половина подписей непрозрачна.
+1. **Real-site калибровка** — все числа проекта получены на локальных фикстурах, а
+   реальная работа идёт по публичным сайтам. Живой прогон Tier 3 показал цену этого
+   разрыва: девять дефектов, которых юниты не видели.
+2. **Качество результата вместо скорости** — рубрики, язык narrative, полнота
+   evidence. Скорость упёрлась в локальную генерацию 8–13 ток/с, и это свойство
+   железа, а не кода.
+3. **Хвосты из session-throughput**: `think:false` без схемы на `compare` (≈ 7 %
+   сессии), нужен ли cooldown 30 s при N ≥ 4, неверный `article.word_count`.
+4. **Сложность функций** (`C901`/`PLR09xx`, 10 модулей) — последний пункт долга гейтов.
