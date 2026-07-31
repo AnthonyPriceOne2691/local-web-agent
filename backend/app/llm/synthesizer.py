@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
 from app.llm.parsing import extract_json
-from app.schemas.extraction import ExtractionResult
+from app.schemas.extraction import ExtractionResult, SynthesisOutput
 from app.schemas.snapshot import PageSnapshot
 
 PAGE_TEXT_CAP = 1000  # doc 20 synthesis bundle
@@ -59,20 +59,38 @@ class Synthesizer:
         self._system = (prompts / "synthesizer_system.txt").read_text(encoding="utf-8")
         self._user_tpl = Template((prompts / "synthesizer_user.j2").read_text(encoding="utf-8"))
 
+    def _mode(self, intent: str) -> tuple[bool, dict[str, Any] | None, int]:
+        """Режим синтеза по интенту: (think, schema, summary_cap) — doc 16.
+
+        Канон (`think: true`, без схемы) остаётся там, где ответ по природе
+        длинный: замер показал, что быстрый путь на `content_search` бимодален
+        (350 ↔ 1265 токенов при одной конфигурации), а на извлечении —
+        детерминирован и втрое дешевле. `format` + thinking несовместимы, поэтому
+        схема появляется только в паре с выключенным рассуждением.
+        """
+        reasoning = self._s.synth_reasoning_intents.strip()
+        canon = reasoning == "*" or intent in {i.strip() for i in reasoning.split(",") if i.strip()}
+        if canon:
+            return True, None, 0
+        return False, SynthesisOutput.model_json_schema(), self._s.synth_summary_cap
+
     async def synthesize(
         self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
     ) -> tuple[ExtractionResult, dict[str, Any]]:
+        think, schema, cap = self._mode(intent)
         user = self._user_tpl.render(
             task=task,
             intent=intent,
             pages_count=len(snapshots),
             pages_block=build_pages_block(snapshots, intent),
+            summary_cap=cap,
         )
         content, stats = await self._client.chat(
             model=self._s.synth_model,
             system=self._system,
             user=user,
-            think=True if supports_think(self._s.synth_model) else None,
+            schema=schema,
+            think=think if supports_think(self._s.synth_model) else None,
             temperature=0.2,
             num_ctx=self._s.synth_num_ctx,
             max_tokens=self._s.synth_max_tokens,
@@ -84,7 +102,8 @@ class Synthesizer:
                 model=self._s.synth_model,
                 system=self._system,
                 user=user + "\n\nYour previous reply was not valid JSON. Respond with the JSON object only.",
-                think=True if supports_think(self._s.synth_model) else None,
+                schema=schema,
+                think=think if supports_think(self._s.synth_model) else None,
                 temperature=0.2,
                 num_ctx=self._s.synth_num_ctx,
                 max_tokens=self._s.synth_max_tokens,

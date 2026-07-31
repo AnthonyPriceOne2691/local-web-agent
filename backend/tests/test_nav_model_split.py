@@ -163,8 +163,12 @@ def _form_site() -> FakeBrowserSession:
 
 
 def _nav_models(llm: FakeOllama) -> list[str]:
-    """Модели, которыми принимались решения навигатора (без синтеза)."""
-    return [c["model"] for c in llm.calls if c.get("schema") is not None]
+    """Модели, которыми принимались решения навигатора (без синтеза).
+
+    Различаем по схеме: у навигатора это `AgentAction`. «Есть схема» больше не
+    признак nav-вызова — быстрый синтез тоже ходит со схемой (doc 16).
+    """
+    return [c["model"] for c in llm.calls if (c.get("schema") or {}).get("title") == "AgentAction"]
 
 
 async def test_loop_uses_light_model_for_form_task(tmp_path):

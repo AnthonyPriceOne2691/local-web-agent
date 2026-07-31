@@ -3,7 +3,7 @@
 - **slug:** synth-speed
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** specify
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony     <!-- качество синтеза (факты/evidence) принимает владелец -->
 - **human_ok_spec:** n/a          <!-- class S: mini-spec в tasks.md (§2.2) -->
@@ -19,8 +19,8 @@
 - **hooks:** claude    <!-- stop-on-red + protect-main, .claude/settings.json -->
 - **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
      CI их не видит; гоняется вручную при каждой правке канонов -->
-- **blockers:** приоритет и scope ещё не подтверждены владельцем — поставка
-  открыта на `specify` как следующий по весу лаг, а не как принятое решение
+- **blockers:** — (приоритет подтверждён владельцем 2026-07-31)
+- **worktree-note:** ветка `feat/synth-speed`
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 

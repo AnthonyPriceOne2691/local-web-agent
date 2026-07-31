@@ -1,6 +1,6 @@
 # 20 — Context & Token Budget
 
-> Local Web Agent · Design doc · **v0.2.1** · 2026-07-05
+> Local Web Agent · Design doc · **v0.3** · 2026-07-31
 
 ## Назначение
 
@@ -114,6 +114,16 @@ Before Phase 2 exit, re-run PLAN latency with:
 
 Reserve `max_tokens: 4096` for synthesis — thinking block may consume ~1500 before JSON.
 
+**Замер 2026-07-31 — где на самом деле лежит время синтеза.** Разложение 21
+синтез-шага: **87–97 % времени = генерация** (`eval_duration`), вход (511–1316
+prompt-токенов) стоит 3–7 s из 37–174 s. Практический вывод для этого документа:
+**урезание входных cap'ов почти не влияет на скорость** — оно влияет только на
+полноту фактов. Резать надо выход, и на извлекающих интентах это делает быстрый
+синтез (doc 16 § Быстрый синтез: мысли занимали 48–73 % выхода, `−68 %` токенов
+при идентичном ответе). Cap'ы входа (`PAGE_TEXT_CAP` 1000 / `PRIORITY_TEXT_CAP`
+4000 / `ARTICLE_TEXT_CAP` 12000) остаются как есть — они про качество, не про
+латентность.
+
 Ollama ≥ 0.9: `think: true` → рассуждения приходят отдельным полем `message.thinking`, JSON — в `content` (doc 16). `strip_thinking()` — fallback при утечке `<think>`. Empty content → retry once → `status: partial` with raw text in error log.
 
 ---
@@ -126,3 +136,4 @@ Ollama ≥ 0.9: `think: true` → рассуждения приходят отд
 | 2026-07-05 | SYNTHESIZE: vision_insights text budget per profile (doc 23) |
 | 2026-07-05 | **v0.2 (review):** non-Latin токен-поправка (3 chars/token, prompt_eval_count калибровка, тихая обрезка num_ctx); COMPARE budget для N>3 (excerpt cap 8K или num_ctx 24576); think-param вместо strip_thinking |
 | 2026-07-05 | **v0.2.1 (review-2):** PLAN budget — top-10 candidates (было 15), итог ~3150 tokens |
+| 2026-07-31 | **v0.3 (замер синтеза):** § R1 thinking tokens дополнена разложением времени — 87–97 % синтеза это генерация, вход стоит 3–7 s из 37–174 s. Следствие: урезание входных cap'ов не ускоряет синтез (они про полноту фактов), рычаг — выход (doc 16 § Быстрый синтез) |

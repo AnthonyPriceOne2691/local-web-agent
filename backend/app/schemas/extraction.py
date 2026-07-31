@@ -57,6 +57,24 @@ class ArticleCandidate(BaseModel):
     rejected_reason: str = ""
 
 
+class SynthesisOutput(BaseModel):
+    """Только то, что пишет модель, — схема для constrained decoding (doc 16).
+
+    Отдельно от `ExtractionResult` сознательно: в результате есть поля, которые
+    заполняет код (`run_id`, `task`, `duration_seconds`, `generated_at`). Отдать
+    их схеме — значит попросить модель их выдумать. Опциональные блоки
+    (`article`, `design_tokens`) остаются опциональными: они появляются только в
+    ARTICLE/DESIGN MODE по указанию промпта.
+    """
+
+    summary: str = ""
+    facts: list[Fact] = Field(default_factory=list)
+    not_found: list[NotFound] = Field(default_factory=list)
+    article: Article | None = None
+    article_candidates_considered: list[ArticleCandidate] = Field(default_factory=list)
+    design_tokens: dict[str, Any] = Field(default_factory=dict)
+
+
 class ExtractionResult(BaseModel):
     schema_version: int = 1
     run_id: str = ""

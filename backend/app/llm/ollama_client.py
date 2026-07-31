@@ -66,12 +66,18 @@ class OllamaClient:
             r = await self._client.post(f"{self.base_url}/api/chat", json=body)
         r.raise_for_status()
         data = r.json()
-        content = data.get("message", {}).get("content", "")
+        message = data.get("message", {})
+        content = message.get("content", "")
         stats: dict[str, Any] = {
             k: data[k]
             for k in ("eval_count", "prompt_eval_count", "eval_duration", "total_duration")
             if k in data
         }
+        # 87–97 % времени синтеза уходит на генерацию (замер 2026-07-31), а при
+        # think:true бо́льшая часть выхода — рассуждение, которое в ответ не попадает.
+        # Без этих двух чисел не видно, что именно резать: мысли или сам ответ.
+        stats["thinking_chars"] = len(message.get("thinking") or "")
+        stats["content_chars"] = len(content)
         # Модель — часть телеметрии шага: с маршрутизацией лёгкая/тяжёлая (doc 16)
         # иначе не видно, кто принял решение, и замер нечем подтвердить.
         stats["model"] = model
