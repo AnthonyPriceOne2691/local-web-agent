@@ -52,6 +52,20 @@ class ComparisonResult(BaseModel):
     llm_stats: dict[str, Any] = Field(default_factory=dict)
 
 
+class ComparisonOutput(BaseModel):
+    """Только то, что пишет модель в compare — схема для constrained decoding.
+
+    Отдельно от `ComparisonResult` по той же причине, что `SynthesisOutput`:
+    `session_id`, `excluded`, `generated_at`, `llm_stats` заполняет код, и отдать
+    их схеме = попросить модель их выдумать.
+    """
+
+    winner: Winner | None = None  # design_diff-рубрика законно оставляет пустым
+    rankings: list[Ranking] = Field(default_factory=list)
+    dimensions: list[Dimension] = Field(default_factory=list)
+    narrative: str = ""
+
+
 class SessionMessage(BaseModel):
     role: Literal["user", "assistant", "system", "tool"]
     content: str = ""
