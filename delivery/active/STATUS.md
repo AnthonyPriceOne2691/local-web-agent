@@ -26,7 +26,11 @@
 - **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
      CI их не видит; гоняется вручную при каждой правке канонов -->
 - **blockers:** —
-- **waivers:** —
+- **waivers:** breakers files=31/25 loc=832/800
+  reason=«визуал и словарь — один неделимый реворк одного слоя (`frontend/src` +
+  строки, которые сочиняет бэкенд); дробление дало бы два искусственных PR по одним
+  и тем же файлам и промежуточное состояние с полупереведённым интерфейсом»
+  by=human:anthony date=2026-08-01
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
 ## Предыдущие поставки
