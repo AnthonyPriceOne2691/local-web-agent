@@ -26,16 +26,16 @@ from app.navigation.path_hints import PathHints
 from app.observer.blockers import looks_like_challenge
 from app.observer.links import normalize_url, origin_of
 from app.observer.snapshot import build_snapshot
-from app.orchestrator.attended import AttendedGate, reobserve_in_place
+from app.orchestrator.attended import AttendedGate, pause_with_window, reobserve_in_place
 from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
 from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.interaction import REPEAT_LIMITS, act_on_element, action_signature
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.states import State
+from app.orchestrator.synthesize import run_synthesis
 from app.orchestrator.vision_batch import run_vision_batch
 from app.reporting.markdown import build_report
-from app.schemas.extraction import ExtractionResult
 from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import PageSnapshot
 from app.storage.run_store import RunStore
@@ -135,7 +135,10 @@ class CrawlOrchestrator:
                 self._s.profile_path(origin) if (cfg.persist_session or self._s.persist_session) else None
             )
             await warmup  # к открытию браузера модель уже в памяти
-            await self._browser.start(headless=not cfg.attended, storage_state_path=profile)
+            # Окно сразу — только для задач-действий: перезапуск в видимый режим
+            # потерял бы заполненную форму (doc 24 § Видимость окна).
+            headed = cfg.attended and self._routing.expects_human_action(cfg.task)
+            await self._browser.start(headless=not headed, storage_state_path=profile)
 
             current: PageSnapshot | None = None
             next_url: str | None = normalize_url(cfg.start_url)
@@ -179,8 +182,10 @@ class CrawlOrchestrator:
                     if current.status in ("captcha", "login_wall"):  # blocker (doc 04)
                         # attended: и captcha (человек проходит проверку), и login_wall
                         # (человек логинится в видимом браузере — Tier 2, doc 25; паролей не храним)
-                        if attended_gate is not None and await attended_gate.try_clear(
-                            record, current, snapshots, visited
+                        if attended_gate is not None and await pause_with_window(
+                            self._browser,
+                            attended_gate.try_clear(record, current, snapshots, visited),
+                            hide_after=True,  # cookie получен — дальше окно не нужно
                         ):
                             current = await reobserve_in_place(  # без goto → CF не re-challenge
                                 self._browser,
@@ -347,7 +352,14 @@ class CrawlOrchestrator:
                 close_browser=self._safe_close,
                 cancel_event=cancel_event,
             )
-            result = await self._synthesize(record, snapshots)
+            result = await run_synthesis(
+                record,
+                snapshots,
+                synthesizer=self._synthesizer,
+                llm=self._llm,
+                store=self._store,
+                settings=self._s,
+            )
         except Exception as exc:
             logger.exception("crawl run %s crashed at %s", record.id, record.current_url)
             record.status = "failed"
@@ -475,18 +487,6 @@ class CrawlOrchestrator:
             self._consent_click_used = True
         if status != "none":
             record.metadata.setdefault("consent", {})[url] = status
-
-    async def _synthesize(self, record: RunRecord, snapshots: list[PageSnapshot]) -> ExtractionResult:
-        if not snapshots:
-            return ExtractionResult(status="failed", summary="no pages observed")
-        record.steps.append(CrawlStep(index=len(record.steps) + 1, state=State.SYNTHESIZE))
-        self._store.save(record)
-        await self._llm.unload_many(self._s.nav_model, self._s.nav_light_model)  # nav → synth
-        result, stats = await self._synthesizer.synthesize(
-            task=record.config.task, snapshots=snapshots, intent=record.intent
-        )
-        record.steps[-1].llm_stats = stats
-        return result
 
     async def _safe_close(self) -> None:
         try:

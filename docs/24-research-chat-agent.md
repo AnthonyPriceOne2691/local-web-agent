@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.11** · 2026-07-20
+> Local Web Agent · Design doc · **v0.12** · 2026-08-01
 
 ## Назначение
 
@@ -240,9 +240,33 @@ When crawl finds candidate article page:
 |-----|-----------|
 | Детект challenge | `observer/blockers.detect_status` → `captcha` (сигналы `cloudflare` / `checking your browser` / `cf-browser-verification` …) |
 | attended off (default) | как Phase 2: `captcha` → `blocked` сразу |
-| attended on | run → `waiting_user`, `metadata.challenge = {url, kind}`; браузер видимый (`headless=False`); ждём resume до `attended_wait_timeout_s` (300 s) |
+| attended on | run → `waiting_user`, `metadata.challenge = {url, kind}`; окно показывается **на паузу** (см. § Видимость окна); ждём resume до `attended_wait_timeout_s` (300 s) |
 | resume | пользователь прошёл проверку → `POST /sessions/{id}/resume` (или `/runs/{id}/resume`) → challenge-снапшот выброшен, страница переобсёрвивается (DOM настоящий), `cf_clearance`-cookie живёт в контексте run'а |
 | timeout | не дождались → `blocked_by=captcha`, `challenge_timeout=True` → сайт в `excluded[]` (M-H4) |
+
+### Видимость окна ≠ «человек доступен» (v0.12)
+
+`attended` означает только одно: **человек за клавиатурой и может помочь**. Оно
+больше не означает «видимое окно на весь прогон». Требование владельца по итогу
+real-site прогона: без надобности браузер перед глазами не висит.
+
+| Ситуация | Окно |
+|---|---|
+| прогон без пауз (исследование) | **не показывается вовсе** — headless от начала до конца |
+| challenge / login-стена | показывается перед паузой, **прячется после resume** (cookie уже получен) |
+| подтверждение submit (Tier 2), необратимый шаг (Tier 3) | показывается перед паузой и **остаётся** — человек продолжает работать со страницей |
+| задача-действие («заполни форму», «оформи заказ») | показывается **сразу**: перезапуск в видимый режим потерял бы заполненную форму |
+| unattended | никогда |
+
+- Механика: `BrowserSession.reveal()` / `conceal()`. Видимость — свойство запуска
+  Chromium, на живом браузере её не переключить, поэтому это **честный перезапуск**
+  с переносом cookie через `storage_state` и повторным открытием того же URL, а не
+  «скрытие окна». `reveal()` возвращает `True`, если страница была переоткрыта —
+  вызывающий обязан учесть, что состояние страницы потеряно.
+- Признак задачи-действия — тот же словарь `action_keywords`
+  (`data/navigation/nav_model_routing.yaml`), что и для выбора nav-модели: одна
+  формулировка задачи, один словарь, два следствия.
+- Координация паузы и окна — `attended.pause_with_window(...)`, рядом с самой паузой.
 
 **Реализация:** `orchestrator/attended.py` (`AttendedGate` Protocol + `EventAttendedGate` — пауза/resume/сброс, вынесено из loop.py ради ≤500 LOC); одна развилка на границе OBSERVE в `loop.py`; `EventAttendedGate` создаётся в `routes_runs` / `ResearchRunner` из `resume_event` (по образцу cancel_event). **D-12:** `active_run_id`/`startup_sweep` считают `waiting_user` занятым слотом (браузер открыт, лок держится; после рестарта — zombie → failed).
 
@@ -434,3 +458,4 @@ Separate from crawl ABC — membership + пер-action enforce в Action registr
 | 2026-07-20 | **v0.10 (Tier 0 sink в планнере):** новый tool LLM-планнера `export_gdocs` (run_id из сессии, M-H3) → `runner._export_gdocs` экспортирует результат run'а в Google Doc (`sinks/gdocs`, doc 25 v0.8). Consent = явный запрос пользователя; облако помечается M-S1 tool-нотой. Пользователь: «скопируй статью в Google Docs» → агент экспортирует |
 | 2026-07-20 | **v0.11 (Action registry):** § Tool registry / § Planner / § Contracts — `KNOWN_TOOLS`/`PLANNER_TOOLS` заменены реестром `research/actions/` (doc 25 v0.9, A-H1/A-H2): membership + пер-action enforce через реестр в обоих путях; блок tools meta-промпта из `data/prompts/tools/` (`{TOOLS_BLOCK}`); reply-block действия исполняются execute-хуками (`run_details`/`list_runs`/`gdocs_export`/`file_export`). Новый tool `export_file` — локальный markdown-экспорт в artifacts сессии (без consent) |
 | 2026-07-19 | **v0.6 (Phase 4 ✅ DONE):** § Planner — `planner: llm` реализован (`research/llm_planner.py` + `data/prompts/meta_planner_*`): rules fast-path при URL в сообщении, LLM для диалога без URL; пост-валидация M-H1..M-H3 (URL только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply); `get_run_result`/`list_session_runs` возвращены для LLM-пути, `compare_results` принимает run_ids прошлых runs (re-compare/re-crawl без потери сессии). Проверено на реальной модели из Chat UI: follow-up ответ из comparison-контекста; re-crawl упавшего сайта по фразе без URL + re-compare 4/4. Excluded-семантика уточнена: перекраленный успешно URL не остаётся в excluded[] |
+| 2026-08-01 | **v0.12 (real-site прогон):** новая секция **§ Видимость окна ≠ «человек доступен»** — `attended` больше не означает `headless=False` на весь прогон: окно показывается только на паузу и прячется после resume там, где это безопасно (challenge/login); для задач-действий открывается сразу, потому что перезапуск потерял бы заполненную форму. Механика `reveal()`/`conceal()` — честный перезапуск с переносом cookie, а не «скрытие окна»; признак задачи-действия берётся из общего словаря `action_keywords` |

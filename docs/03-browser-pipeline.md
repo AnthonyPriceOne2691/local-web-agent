@@ -1,6 +1,6 @@
 # 03 — Browser Pipeline
 
-> Local Web Agent · Design doc · **v0.7** · 2026-07-05
+> Local Web Agent · Design doc · **v0.8** · 2026-08-01
 
 ## Назначение
 
@@ -185,6 +185,18 @@ Fetch outcomes:
 
 MVP User-agent string: `LocalWebAgent/0.1 (personal research tool; +https://localhost)`
 
+> **Реализация (real-site прогон 2026-08-01):** robots.txt запрашивает **наш**
+> httpx-клиент с этим самым UA, а `urllib.robotparser` используется только как
+> парсер директив. Причина: `RobotFileParser.read()` ходит через `urllib` с
+> дефолтным `Python-urllib/3.x`, реальные сайты отвечают на такой UA **403**, а
+> stdlib трактует 401/403 как `disallow_all`. В результате `docs.astro.build`, у
+> которого в robots.txt написано `Allow: /`, давал `robots_disallow` и ноль
+> страниц — агент сообщал «сайт просил не ходить», хотя сайт просил обратное.
+> Контракт выше («4xx → allow») теперь выполняется буквально, включая 401/403:
+> правил нам не выдали — значит запрета нет. Настоящий `Disallow` уважается
+> по-прежнему; на фикстурах (`127.0.0.1`) robots не запрашивается вовсе, поэтому
+> дефект был невидим для юнитов.
+
 > **UA policy (зафиксировать):** robots.txt проверяем для `LocalWebAgent` **и** `*` (строже из двух). Сами запросы: Playwright ходит с дефолтным Chromium UA (иначе ломаются SPA), F1 `httpx` — browser-like UA (SEOLB). Это стандартная практика, не «bypass»: мы не обходим блокировки, а выглядим как обычный браузер пользователя.
 
 ## Error handling
@@ -237,3 +249,4 @@ Not in Phase 1 MVP (Playwright-only).
 | 2026-07-05 | **v0.5:** vision analysis → doc 23 (Phase 2); removed Phase 3 stub |
 | 2026-07-05 | **v0.6 (review):** canonical URL normalization rules (tracking params, tldextract); redirect policy I-H9; robots Crawl-delay + Sitemap discovery + UA policy; SPA fallback capture (форс-скриншот при пустом DOM для vision R2); версия шапки синхронизирована с changelog |
 | 2026-07-05 | **v0.7 (review-2):** landing-domain adopt на step 0 (переезд домена не убивает run); robots fetch 4xx/5xx семантика; trafilatura для article main-text (content_search, Phase 0 spike-решение) |
+| 2026-08-01 | **v0.8 (real-site прогон):** § robots.txt integration — чтение robots нашим httpx-клиентом с UA `LocalWebAgent/0.1`; контракт «4xx → allow» выполняется буквально, включая 401/403 (stdlib трактовал их как `disallow_all` и давал ложный `robots_disallow` на сайте с `Allow: /`); stdlib остаётся парсером директив |

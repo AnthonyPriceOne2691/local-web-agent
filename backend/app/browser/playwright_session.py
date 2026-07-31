@@ -25,6 +25,7 @@ class PlaywrightSession:
         self._page: Page | None = None
         self._context: BrowserContext | None = None
         self._persist_path: str | None = None
+        self._headless = True
 
     @property
     def _active(self) -> Page:
@@ -44,6 +45,7 @@ class PlaywrightSession:
         # attended-режим (Phase 5): headless=False — видимое окно, чтобы человек
         # прошёл anti-bot challenge сам; cf_clearance-cookie живёт в контексте run'а
         self._pw = await async_playwright().start()
+        self._headless = headless
         self._browser = await self._pw.chromium.launch(headless=headless)
         self._persist_path = storage_state_path
         ctx_kwargs: dict[str, Any] = {"viewport": DESKTOP, "accept_downloads": False}
@@ -52,15 +54,7 @@ class PlaywrightSession:
         self._context = await self._browser.new_context(**ctx_kwargs)
         self._page = await self._context.new_page()
         if not headless:
-            # Chromium при launch показывает своё стартовое окно (about:blank), а наша
-            # страница живёт в новом контексте — то есть в ДРУГОМ окне. Человек в
-            # attended-режиме смотрел на пустое окно и не понимал, где форма.
-            for ctx in self._browser.contexts:
-                if ctx is self._context:
-                    continue
-                for page in ctx.pages:
-                    if page.url in ("about:blank", ""):
-                        await page.close()
+            await self._close_blank_windows()
             await self._page.bring_to_front()
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
@@ -154,6 +148,63 @@ class PlaywrightSession:
                 # (None = ни один не сработал) и попадает в metadata.consent.
                 continue
         return None
+
+    async def reveal(self) -> bool:
+        """Показать окно (перезапуск headed с переносом cookie). True — страница переоткрыта."""
+        if not self._headless:
+            await self._active.bring_to_front()  # уже видимо — просто поднять
+            return False
+        return await self._relaunch(headless=False)
+
+    async def conceal(self) -> None:
+        """Убрать окно: участие человека больше не нужно."""
+        if self._headless:
+            return
+        await self._relaunch(headless=True)
+
+    async def _relaunch(self, *, headless: bool) -> bool:
+        """Пересобрать сессию в другом режиме видимости, сохранив cookie и URL.
+
+        Playwright задаёт headless при запуске браузера, менять его на живом
+        Chromium нельзя — поэтому это честный перезапуск, а не «скрытие окна».
+        Cookie переносим через storage_state (тот же механизм, что persist_session),
+        и страницу открываем заново на том же URL. Состояние страницы при этом
+        теряется — вызывающий получает True и решает, что с этим делать.
+        """
+        if self._pw is None or self._browser is None or self._context is None:
+            raise RuntimeError("browser session is not started — call start() first")
+        url = self._page.url if self._page else ""
+        state = await self._context.storage_state()  # cookie в память, без файла
+        await self._browser.close()
+
+        self._headless = headless
+        self._browser = await self._pw.chromium.launch(headless=headless)
+        ctx_kwargs: dict[str, Any] = {
+            "viewport": DESKTOP,
+            "accept_downloads": False,
+            "storage_state": state,
+        }
+        self._context = await self._browser.new_context(**ctx_kwargs)
+        self._page = await self._context.new_page()
+        if not headless:
+            await self._close_blank_windows()
+            await self._page.bring_to_front()
+        if url.startswith(("http://", "https://")):
+            await self._page.goto(url, wait_until="domcontentloaded")
+            await self._page.wait_for_timeout(500)
+        return True
+
+    async def _close_blank_windows(self) -> None:
+        """Chromium показывает своё стартовое `about:blank` окно отдельно от контекста —
+        человек смотрел в пустое окно и не понимал, где страница."""
+        if self._browser is None:
+            return
+        for ctx in self._browser.contexts:
+            if ctx is self._context:
+                continue
+            for page in ctx.pages:
+                if page.url in ("about:blank", ""):
+                    await page.close()
 
     async def close(self) -> None:
         try:  # сохранить cookie сессии по домену (persist_session, doc 24) — не валит run

@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.navigation.matching import any_keyword
 from app.schemas.research import ResearchIntent
 
 URL_RE = re.compile(r"https?://[^\s,;\"'<>()\[\]]+", re.IGNORECASE)
@@ -98,9 +99,11 @@ def classify_research_intent(message: str, n_urls: int) -> ResearchIntent:
     if n_urls <= 1:
         return "single_site"
     text = message.casefold()
-    if any(k in text for k in DESIGN_KEYWORDS):
+    # Совпадение с НАЧАЛА слова: короткое `ui` иначе ловится внутри `guide` и
+    # `build`, и контентная задача уезжала в рубрику дизайна (real-site прогон).
+    if any_keyword(text, DESIGN_KEYWORDS):
         return "comparative_design"
-    if any(k in text for k in CONTENT_KEYWORDS):
+    if any_keyword(text, CONTENT_KEYWORDS):
         return "comparative_content"
     return "multi_site_research"
 
