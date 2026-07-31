@@ -1,6 +1,9 @@
+import { useState } from 'react';
+
+import { relativeTime, sessionState, siteCount } from '../copy';
 import type { SessionListItem } from '../types';
 
-import StatusBadge from './StatusBadge';
+import StatusPill from './StatusPill';
 
 interface Props {
   sessions: SessionListItem[];
@@ -11,53 +14,95 @@ interface Props {
 }
 
 export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete }: Props) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
   return (
-    <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col">
-      <div className="p-3 border-b border-slate-700 flex items-center justify-between">
-        <div>
-          <div className="font-semibold text-sm">Local Web Agent</div>
-          <div className="text-[11px] text-slate-400">research chat · local only</div>
+    <aside className="glass-panel flex w-64 shrink-0 flex-col overflow-hidden rounded-[var(--radius-glass)]">
+      <div className="flex items-start gap-2 px-4 pt-4 pb-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-semibold tracking-tight">Local Web Agent</div>
+          <div className="text-faint mt-0.5 text-[11px]">Research that never leaves this Mac</div>
         </div>
         <button
           onClick={onNew}
-          title="New chat"
-          className="rounded-md bg-blue-600 hover:bg-blue-500 px-2.5 py-1.5 text-sm font-medium"
+          aria-label="Start a new chat"
+          className="btn-accent focus-ring grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none"
         >
           +
         </button>
       </div>
-      <nav className="flex-1 overflow-y-auto py-1">
+
+      <nav className="scroll-slim flex-1 overflow-y-auto px-2 pb-2">
         {sessions.length === 0 && (
-          <div className="px-3 py-4 text-xs text-slate-500">No sessions yet</div>
+          <p className="text-faint px-2 py-6 text-center text-xs">
+            No chats yet. Paste a few links and ask a question.
+          </p>
         )}
-        {sessions.map((s) => (
-          <div
-            key={s.session_id}
-            onClick={() => onSelect(s.session_id)}
-            className={`group mx-1.5 my-0.5 rounded-md px-2 py-2 cursor-pointer text-sm
-              ${s.session_id === currentId ? 'bg-slate-700' : 'hover:bg-slate-800'}`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="flex-1 truncate">{s.title || 'Untitled session'}</span>
+        {sessions.map((s) => {
+          const state = sessionState(s.status);
+          const selected = s.session_id === currentId;
+          return (
+            <div key={s.session_id} className="group relative">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm(`Delete session "${s.title || s.session_id}"?`))
-                    onDelete(s.session_id);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 text-xs px-1"
-                title="Delete session"
+                onClick={() => onSelect(s.session_id)}
+                aria-current={selected ? 'true' : undefined}
+                className={`focus-ring block w-full rounded-2xl px-3 py-2.5 text-left transition
+                  ${selected ? 'glass' : 'glass-slot'}`}
+              >
+                <span className="block truncate pr-6 text-[13px] font-medium">
+                  {s.title || 'Untitled chat'}
+                </span>
+                <span className="mt-1.5 flex items-center gap-2">
+                  <StatusPill label={state.text} tone={state.tone} live={state.tone === 'busy'} />
+                  <span className="text-faint truncate text-[11px]">
+                    {siteCount(s.runs)} · {relativeTime(s.created_at)}
+                  </span>
+                </span>
+              </button>
+              <button
+                onClick={() => setConfirming(s.session_id)}
+                aria-label={`Delete chat ${s.title || 'Untitled chat'}`}
+                className="text-faint focus-ring absolute top-2.5 right-2 rounded-full px-1.5 py-0.5 text-xs opacity-0 transition group-hover:opacity-100 hover:text-[var(--color-rose-warm)]"
               >
                 ✕
               </button>
+              {confirming === s.session_id && (
+                <ConfirmDelete
+                  onCancel={() => setConfirming(null)}
+                  onConfirm={() => {
+                    setConfirming(null);
+                    onDelete(s.session_id);
+                  }}
+                />
+              )}
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
-              <StatusBadge status={s.status} />
-              <span>{s.runs} runs</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
     </aside>
+  );
+}
+
+/** Подтверждение живёт в интерфейсе, а не в системном `confirm()`: тот блокирует
+ *  поток, выглядит чужеродно и не стилизуется. */
+function ConfirmDelete({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="glass mx-1 mt-1 rounded-2xl px-3 py-2.5">
+      <p className="text-[12px]">Delete this chat and everything it found?</p>
+      <div className="mt-2 flex gap-1.5">
+        <button
+          onClick={onConfirm}
+          className="focus-ring rounded-full bg-[var(--color-rose-warm)] px-3 py-1 text-[11px] font-medium text-white"
+        >
+          Delete
+        </button>
+        <button
+          onClick={onCancel}
+          className="glass-quiet focus-ring text-soft rounded-full px-3 py-1 text-[11px] font-medium"
+        >
+          Keep it
+        </button>
+      </div>
+    </div>
   );
 }

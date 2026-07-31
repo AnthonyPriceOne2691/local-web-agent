@@ -297,7 +297,9 @@ async def test_runner_llm_export_gdocs(tmp_path, monkeypatch):
     assert "docs.google.com/document/d/ABC" in reply
     assert "A is blue" in captured["text"]  # контент из результата run'а
     # M-S1 + прозрачность consent: облачное действие помечено tool-нотой
-    assert any(m.role == "tool" and "Google Docs (облако)" in m.content for m in session.messages)
+    assert any(  # облако помечено словами, а не пометкой в скобках
+        m.role == "tool" and "leaves the machine" in m.content for m in session.messages
+    )
 
 
 async def test_runner_rules_fast_path_skips_llm(tmp_path):
@@ -340,7 +342,7 @@ async def test_runner_no_planner_keeps_phase3_behavior(tmp_path):
 
     session = await runner.run_message(session, "нет урлов")
     assert session.status == "failed"
-    assert "no URLs" in session.messages[-1].content
+    assert "at least one web address" in session.messages[-1].content
 
 
 class _InstantOrchestrator:

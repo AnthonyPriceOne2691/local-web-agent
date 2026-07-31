@@ -21,9 +21,9 @@ from app.sinks.file import export_to_file
 def _execute(call: ToolCall, ctx: ActionContext) -> str:
     r = ctx.run_store.get(call.args.get("run_id") or "")
     if r is None or r.result is None:
-        return f"export_file: у run {call.args.get('run_id')} нет результата"
+        return "There's nothing to save for that site yet."
     if ctx.session_store is None:
-        return "export_file: недоступно вне сессии"
+        return "Saving to a file only works inside a chat."
     title, body = build_export_content(r.result, title_override=call.args.get("title"))
     path = export_to_file(
         title,
@@ -31,7 +31,7 @@ def _execute(call: ToolCall, ctx: ActionContext) -> str:
         out_dir=ctx.session_store.artifacts_dir(ctx.session.id),
         filename=call.args.get("filename"),
     )
-    return f"Сохранено в файл: {path}"
+    return f"Saved it as {path.name} — full path: {path}"
 
 
 SPEC = register(
@@ -41,6 +41,6 @@ SPEC = register(
         reversible=True,
         enforce=enforce_run_id_in_session,
         execute=_execute,
-        note=lambda call: f"export_file run={call.args.get('run_id')}",
+        note=lambda call: "Saving the write-up to a file",
     )
 )

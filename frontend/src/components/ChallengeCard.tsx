@@ -1,39 +1,8 @@
+import { pauseCopy, siteName } from '../copy';
 import type { ChallengeWait } from '../types';
 
-/** Тексты паузы по виду ожидания (doc 24/25). Таблица вместо вложенных тернарников:
- *  добавить пятый вид = добавить строку, а не ещё один уровень `? :`. */
-const COPY: Record<string, { title: string; button: string; body: (c: ChallengeWait) => string }> =
-  {
-    // Tier 3: агент подготовил необратимый шаг, но кнопку жмёт ЧЕЛОВЕК
-    handoff: {
-      title: 'Финальный шаг — за тобой',
-      button: '✓ Готово — продолжить',
-      body: (c) =>
-        `Я подготовил необратимый шаг${c.action ? `: ${c.action}` : ''}. Такую кнопку агент не нажимает — нажми её сам в открытом браузере (или не нажимай, если передумал), потом вернись и нажми «Готово».`,
-    },
-    // Tier 2: подтверждение в чате, submit нажмёт агент
-    confirm_submit: {
-      title: 'Подтвердите действие',
-      button: '✓ Подтвердить отправку',
-      body: (c) =>
-        `Агент хочет отправить форму${c.action ? ` (${c.action})` : ' на этой странице'}. Проверь в открытом браузере и подтверди — тогда агент нажмёт submit.`,
-    },
-    login_wall: {
-      title: 'Нужен вход',
-      button: '✓ Я вошёл — продолжить',
-      body: () =>
-        'Сайт требует входа. Я открыл браузер — залогинься сам в появившемся окне (пароль остаётся у тебя, агент его не видит и не хранит), потом нажми «Продолжить».',
-    },
-  };
-
-/** anti-bot проверка — дефолт: kind приходит с бэкенда и может быть любым. */
-const CAPTCHA = {
-  title: 'Нужна проверка',
-  button: '✓ Я прошёл — продолжить',
-  body: (c: ChallengeWait) =>
-    `Сайт показал anti-bot проверку (${c.kind}). Я открыл браузер — пройди её в появившемся окне, потом нажми «Продолжить».`,
-};
-
+/** Пауза, когда без человека дальше нельзя. Формулировки — в `copy.ts`: карточка
+ *  отвечает за вид, а не за слова. */
 export default function ChallengeCard({
   challenge,
   onResume,
@@ -41,17 +10,22 @@ export default function ChallengeCard({
   challenge: ChallengeWait;
   onResume: () => void;
 }) {
-  const host = new URL(challenge.start_url).host;
-  const copy = COPY[challenge.kind] ?? CAPTCHA;
+  const copy = pauseCopy(challenge.kind, challenge.action);
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
-      <div className="font-semibold mb-1">
-        ⏸ {copy.title} — {host}
+    <div className="glass rounded-3xl border-[color-mix(in_oklab,var(--color-amber-warm)_45%,var(--glass-edge))] px-4 py-3.5">
+      <div className="flex items-center gap-2">
+        <span aria-hidden className="text-[var(--color-amber-warm)]">
+          ⏸
+        </span>
+        <h2 className="text-[14px] font-semibold">{copy.title}</h2>
+        <span className="text-faint ml-auto shrink-0 text-[11px]">
+          {siteName(challenge.start_url)}
+        </span>
       </div>
-      <p className="text-xs text-amber-800 mb-2.5">{copy.body(challenge)}</p>
+      <p className="text-soft mt-2 text-[13px] leading-relaxed">{copy.body}</p>
       <button
         onClick={onResume}
-        className="rounded-md bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-xs font-medium"
+        className="btn-accent focus-ring mt-3 rounded-full px-4 py-2 text-[13px] font-medium"
       >
         {copy.button}
       </button>

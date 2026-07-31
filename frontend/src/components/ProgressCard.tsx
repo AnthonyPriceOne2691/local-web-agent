@@ -1,27 +1,26 @@
+import { pagesRead, siteName } from '../copy';
 import type { CrawlProgress } from '../types';
 
-export function Spinner() {
-  return (
-    <span className="inline-block size-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-  );
-}
-
+/** Что происходит прямо сейчас: имя сайта, сколько страниц прочитано, и где агент
+ *  находится. Раньше здесь стояли сырые URL и `3/10 pages`. */
 export default function ProgressCard({ progress }: { progress: CrawlProgress }) {
   const pct = Math.min(100, Math.round((progress.pages_visited / progress.max_pages) * 100));
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-      <div className="flex items-center gap-2 mb-1.5">
-        <Spinner />
-        <span className="font-medium truncate">Crawling {progress.start_url}</span>
-        <span className="ml-auto tabular-nums">
-          {progress.pages_visited}/{progress.max_pages} pages
+    <div className="glass rounded-3xl px-4 py-3.5">
+      <div className="flex items-baseline gap-2">
+        <span className="text-[13px] font-medium">Reading {siteName(progress.start_url)}</span>
+        <span className="text-faint ml-auto shrink-0 text-[11px] tabular-nums">
+          {pagesRead(progress.pages_visited, progress.max_pages)}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden">
-        <div className="h-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
+      <div className="glass-quiet shimmer-bar mt-2.5 h-1.5 rounded-full">
+        <div
+          className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
       </div>
       {progress.current_url && (
-        <div className="mt-1 truncate text-blue-600">{progress.current_url}</div>
+        <p className="text-faint mt-2 truncate text-[11px]">On {progress.current_url}</p>
       )}
     </div>
   );

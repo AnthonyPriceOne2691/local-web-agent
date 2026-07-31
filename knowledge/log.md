@@ -1,5 +1,14 @@
 # Knowledge Bundle Update Log
 
+## 2026-08-01 (поставка ui-liquid-glass)
+* **Canon change** — [action registry](/engineering/action-registry.md): `note`-хук
+  объявлен текстом для человека, а не логом. Он виден в ленте чата, поэтому пишется
+  человеческим английским без `run=<id>` и внутренних имён действий. Основание:
+  реворк UI обнаружил, что заметки реестра выходили наружу как
+  `export_gdocs run=run-a → Google Docs (облако)`.
+* **Note (no canon change)**: правила формулировок целиком — doc 17 v0.5 § Словарь
+  (`copy.ts` на фронте, `research/phrasing.py` на бэкенде). Инварианты тиров и
+  реестра не менялись — поменялся только язык, которым интерфейс о них говорит.
 ## 2026-07-31 (поставка session-throughput, закрыта частично)
 * **Canon change** — [LLM canon](/engineering/llm-canon.md): добавлено правило
   «схема под constrained decoding обязана быть плоской». Основание — замер стадии

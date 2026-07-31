@@ -98,7 +98,9 @@ async def test_runner_llm_export_file(tmp_path):
     text = saved.read_text(encoding="utf-8")
     assert "A is blue" in text and text.startswith("# Research: http://a.example")
     assert str(saved) in session.messages[-1].content  # путь в ответе
-    assert any(m.role == "tool" and "export_file run=run-a" in m.content for m in session.messages)  # M-S1
+    assert any(  # M-S1: заметка человеческая, без run=<id>
+        m.role == "tool" and "Saving the write-up to a file" in m.content for m in session.messages
+    )
 
 
 async def test_planner_enforces_export_file_run_id(tmp_path):

@@ -4,7 +4,7 @@ export default function Message({ message }: { message: SessionMessage }) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-blue-600 text-white px-3.5 py-2 text-sm whitespace-pre-wrap break-words">
+        <div className="accent-surface max-w-[75%] rounded-3xl rounded-br-lg px-4 py-2.5 text-[14px] leading-relaxed break-words whitespace-pre-wrap">
           {message.content}
         </div>
       </div>
@@ -13,17 +13,21 @@ export default function Message({ message }: { message: SessionMessage }) {
   if (message.role === 'assistant') {
     return (
       <div className="flex">
-        <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white border border-slate-200 px-3.5 py-2 text-sm whitespace-pre-wrap break-words shadow-sm">
+        <div className="glass max-w-[85%] rounded-3xl rounded-bl-lg px-4 py-3 text-[14px] leading-relaxed break-words whitespace-pre-wrap">
           {message.content}
         </div>
       </div>
     );
   }
-  // tool / system notes (M-S1) — компактная строка
+  /* Шаги агента: тихая строка, а не сообщение — это фон работы, не разговор.
+     Раньше здесь стоял моношрифт и значок ⚙, из-за чего служебные заметки
+     выглядели важнее ответов. */
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono px-1">
-      <span>⚙</span>
+    <p className="text-faint flex items-baseline gap-2 px-1 text-[11.5px]">
+      <span aria-hidden className="text-[var(--color-accent-soft)]">
+        ·
+      </span>
       <span className="truncate">{message.content}</span>
-    </div>
+    </p>
   );
 }
