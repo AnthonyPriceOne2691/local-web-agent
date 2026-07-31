@@ -1,6 +1,6 @@
 # 16 — Prompts Library
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-31  
+> Local Web Agent · Design doc · **v0.7** · 2026-07-31  
 > **Канон LLM parameters** — этот документ. Doc 07 зеркалит.
 
 **Не храним тексты промптов в design docs.** Только: какие файлы, за что отвечают, variables, ссылка на output schema. Рабочие тексты — в `data/prompts/` при реализации (итерация через Phase 0/1 spike).
@@ -53,9 +53,16 @@ synthesis:     # SYNTHESIZE → qwen3:14b single-model (D-3 closed; fallback dee
   temperature: 0.2
   max_tokens: 4096
   stream: false
+  # Два режима по интенту — § Быстрый синтез (замер 2026-07-31):
+  reasoning_intents: [content_search, design_audit]   # канон ниже; `*` = только канон
+  # канон (длинный ответ по природе):
   format: none                      # НЕ json: не душить thinking
   think: true                       # Ollama ≥0.9; thinking → message.thinking
   strip_thinking: fallback          # только при утечке <think> в content
+  # быстрый путь (извлечение):
+  fast_think: false
+  fast_format: schema:SynthesisOutput   # запрет format×thinking снят: мыслей нет
+  fast_summary_cap: 500                 # + правило «извлекай названные значения»
 
 vision:        # VISION batch → qwen2.5vl:7b (doc 23)
   model: qwen2.5vl:7b
@@ -86,6 +93,36 @@ compare:       # COMPARE → deepseek-r1:14b (doc 24)
 ```
 
 Все pass'ы: `keep_alive: 0` на последнем запросе перед model swap (doc 14 § Swap mechanics).
+
+---
+
+## Быстрый синтез (schema-constrained, без рассуждения)
+
+Замер 2026-07-31 разложил время синтеза: **87–97 % — генерация** (`eval_duration`),
+вход 511–1316 токенов стоит 3–7 s. Значит резать надо выход, а не вход; при
+`think: true` мысли занимают **48–73 %** выхода и до пользователя не доходят.
+
+Два режима по интенту, оба измерены:
+
+| Интент | Режим | Замер |
+|---|---|---|
+| извлечение (`contact`, `pricing`, `generic`, …) | `think: false` + `format: schema:SynthesisOutput` + бюджет `summary` | `contact`: **138 токенов против 427 (−68 %)** при том же факте и значении, 4 прогона из 4 идентичны до токена; action-кейс: 679 против 788 и **качество выше канона** — вернулись `product_name`/`product_price`/`delivery_time` |
+| `content_search`, `design_audit` | **канон**: `think: true`, без `format` | попытка ускорить дала **бимодальный** выход: 350 ↔ 1265 токенов при одной конфигурации (то есть −65 % или +25 % — как повезёт). Блок `article` при этом всегда корректен, страдает не качество, а предсказуемость |
+
+- **Запрет `format` × thinking остаётся в силе** (см. врезку выше) — но он перестаёт
+  действовать, когда рассуждение выключено. Именно поэтому схема доступна только в
+  быстром пути; включить её вместе с `think: true` нельзя.
+- **Схема описывает только то, что пишет модель** (`SynthesisOutput`: summary /
+  facts / not_found + опциональные article-блоки). Отдавать `ExtractionResult`
+  целиком нельзя: там есть поля кода (`run_id`, `task`, `duration_seconds`) — схема
+  попросила бы модель их выдумать.
+- **Бюджет несёт правило «извлекай названные значения»**, и оно обязательно: схема
+  без него дала эхо ввода (`order_form_filled: Да`) вместо содержимого страницы.
+  Это же наблюдение — предупреждение о метриках: **число фактов не годится как
+  критерий качества**, оно было одинаковым при явной деградации.
+- Ручка `reasoning_intents: "*"` выключает быстрый путь целиком (аварийная).
+- **Не измерено и потому не тронуто:** финальный `compare` в сессии (вход 24K при
+  N>3, ответ по природе длинный) — остаётся каноничным до отдельного замера.
 
 ---
 
@@ -217,5 +254,6 @@ Image: Ollama `images[]`, not in Jinja template.
 | 2026-07-05 | **v0.3:** removed prompt body text from design; outlines + variables only |
 | 2026-07-05 | **v0.4 (review):** structured outputs (JSON Schema в `format`) для nav/meta/vision; конфликт `format:json`×`strip_thinking` у R1 устранён → `think:true` + отдельное поле thinking; vision fallback → gemma3:12b; compare num_ctx 24576 при N>3; правило языка ответа |
 | 2026-07-05 | **v0.4.1 (review-2):** navigator links = top-10 candidates (было 15 — рассинхрон с docs 04/21) |
+| 2026-07-31 | **v0.7 (замер синтеза):** новая секция **§ Быстрый синтез** — на извлекающих интентах синтез идёт `think: false` + `format: schema:SynthesisOutput` + бюджет `summary` (−68 % токенов при идентичном ответе; на action-кейсе качество выше канона), на `content_search`/`design_audit` остаётся канон (быстрый путь там бимодален: 350 ↔ 1265 токенов). Запрет `format`×thinking уточнён: он снимается при выключенном рассуждении. Добавлено предупреждение «число фактов не критерий качества» (одинаковое количество скрывало деградацию). `compare` не измерен и не тронут |
 | 2026-07-31 | **v0.6 (замер лёгкой nav-модели):** новая секция **§ Маршрутизация nav-решений** — `light_model: qwen3:8b` берёт только решения, замкнутые на текущей странице (заполнить/нажать), выбор ссылки по смыслу и синтез остаются на `qwen3:14b`; таблица условий + эскалация на тяжёлую после hard-violation; словарь `action_keywords` → `data/navigation/nav_model_routing.yaml`; в `llm_stats` добавлена `model`. Основание: 8b вдвое быстрее на DOM-решениях и в 3 прогонах из 3 хуже на выборе статьи (`G-H2` + хоп в 404) |
 | 2026-07-18 | **v0.5 (Phase 2 exit-бенчмарк):** synthesizer_system — vision-aware: evidence получил поле `source: dom\|vision`, правило «факт только из VISION-блока → source: vision»; добавлены prod-промпты `vision_system.txt` + `vision_user.j2` (doc 23); **канон nav/synth → `qwen3:14b` single-model** (D-2/D-3 closed по бенчмарку doc 06 v0.6; пара qwen2.5+r1 — fallback) |

@@ -59,34 +59,38 @@ class Synthesizer:
         self._system = (prompts / "synthesizer_system.txt").read_text(encoding="utf-8")
         self._user_tpl = Template((prompts / "synthesizer_user.j2").read_text(encoding="utf-8"))
 
-    def _schema(self) -> dict[str, Any] | None:
-        """JSON Schema для synthesis — только когда рассуждение выключено.
+    def _mode(self, intent: str) -> tuple[bool, dict[str, Any] | None, int]:
+        """Режим синтеза по интенту: (think, schema, summary_cap) — doc 16.
 
-        `format` + thinking несовместимы (doc 16): constrained decoding душит
-        рассуждение. Поэтому схема включается лишь вместе с `synth_think: false`,
-        и тогда она режет прозу и снимает retry-ветку невалидного JSON.
+        Канон (`think: true`, без схемы) остаётся там, где ответ по природе
+        длинный: замер показал, что быстрый путь на `content_search` бимодален
+        (350 ↔ 1265 токенов при одной конфигурации), а на извлечении —
+        детерминирован и втрое дешевле. `format` + thinking несовместимы, поэтому
+        схема появляется только в паре с выключенным рассуждением.
         """
-        if not self._s.synth_schema or self._s.synth_think:
-            return None
-        schema: dict[str, Any] = SynthesisOutput.model_json_schema()
-        return schema
+        reasoning = self._s.synth_reasoning_intents.strip()
+        canon = reasoning == "*" or intent in {i.strip() for i in reasoning.split(",") if i.strip()}
+        if canon:
+            return True, None, 0
+        return False, SynthesisOutput.model_json_schema(), self._s.synth_summary_cap
 
     async def synthesize(
         self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
     ) -> tuple[ExtractionResult, dict[str, Any]]:
+        think, schema, cap = self._mode(intent)
         user = self._user_tpl.render(
             task=task,
             intent=intent,
             pages_count=len(snapshots),
             pages_block=build_pages_block(snapshots, intent),
-            summary_cap=self._s.synth_summary_cap,
+            summary_cap=cap,
         )
         content, stats = await self._client.chat(
             model=self._s.synth_model,
             system=self._system,
             user=user,
-            schema=self._schema(),
-            think=self._s.synth_think if supports_think(self._s.synth_model) else None,
+            schema=schema,
+            think=think if supports_think(self._s.synth_model) else None,
             temperature=0.2,
             num_ctx=self._s.synth_num_ctx,
             max_tokens=self._s.synth_max_tokens,
@@ -98,8 +102,8 @@ class Synthesizer:
                 model=self._s.synth_model,
                 system=self._system,
                 user=user + "\n\nYour previous reply was not valid JSON. Respond with the JSON object only.",
-                schema=self._schema(),
-                think=self._s.synth_think if supports_think(self._s.synth_model) else None,
+                schema=schema,
+                think=think if supports_think(self._s.synth_model) else None,
                 temperature=0.2,
                 num_ctx=self._s.synth_num_ctx,
                 max_tokens=self._s.synth_max_tokens,

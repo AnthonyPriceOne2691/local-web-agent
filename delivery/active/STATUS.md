@@ -3,7 +3,7 @@
 - **slug:** synth-speed
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** tasks
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony     <!-- качество синтеза (факты/evidence) принимает владелец -->
 - **human_ok_spec:** n/a          <!-- class S: mini-spec в tasks.md (§2.2) -->
