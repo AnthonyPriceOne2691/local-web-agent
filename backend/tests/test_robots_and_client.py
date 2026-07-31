@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import urllib.robotparser
-
 import httpx
 
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
@@ -16,16 +14,70 @@ Sitemap: https://x.com/custom-map.xml
 """
 
 
-async def test_robots_fetch_allow_delay_sitemaps(monkeypatch):
-    def fake_read(self):
-        self.parse(ROBOTS_TXT.splitlines())
+def _robots_transport(status: int, body: str = "", *, boom: bool = False):
+    """Ответ сервера на GET /robots.txt — мы читаем его своим клиентом, не urllib."""
 
-    monkeypatch.setattr(urllib.robotparser.RobotFileParser, "read", fake_read)
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/robots.txt"
+        # UA обязателен и честный: именно из-за дефолтного urllib-UA сайты отвечали 403
+        assert "LocalWebAgent" in request.headers["user-agent"]
+        if boom:
+            raise httpx.ConnectError("network down", request=request)
+        return httpx.Response(status, text=body)
+
+    return httpx.MockTransport(handler)
+
+
+def _patch_robots_fetch(monkeypatch, transport: httpx.MockTransport) -> None:
+    original = httpx.AsyncClient
+
+    def factory(*args, **kwargs):
+        kwargs["transport"] = transport
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr("app.orchestrator.robots.httpx.AsyncClient", factory)
+
+
+async def test_robots_fetch_allow_delay_sitemaps(monkeypatch):
+    _patch_robots_fetch(monkeypatch, _robots_transport(200, ROBOTS_TXT))
     policy = await RobotsPolicy.load("https://x.com", respect=True)
     assert policy.allowed("https://x.com/public") is True
     assert policy.allowed("https://x.com/private/page") is False
     assert policy.crawl_delay_s == 10.0  # cap 10 s (doc 03)
     assert policy.sitemaps() == ["https://x.com/custom-map.xml"]
+
+
+async def test_robots_403_is_not_a_prohibition(monkeypatch):
+    """403 на robots.txt — правил нам не выдали, а не «нельзя ничего».
+
+    Найдено real-site прогоном 2026-08-01: `RobotFileParser.read()` ходит с
+    дефолтным urllib-UA, docs.astro.build отвечает на него 403, а stdlib трактует
+    401/403 как disallow_all — агент сообщал `robots_disallow` про сайт, у которого
+    в robots.txt написано `Allow: /`.
+    """
+    _patch_robots_fetch(monkeypatch, _robots_transport(403, "nope"))
+    policy = await RobotsPolicy.load("https://docs.example", respect=True)
+    assert policy.allowed("https://docs.example/en/getting-started/") is True
+    assert policy.sitemaps() == []
+
+
+async def test_robots_404_allows(monkeypatch):
+    _patch_robots_fetch(monkeypatch, _robots_transport(404))
+    policy = await RobotsPolicy.load("https://x.com", respect=True)
+    assert policy.allowed("https://x.com/anything") is True
+
+
+async def test_robots_5xx_proceeds_with_log(monkeypatch):
+    _patch_robots_fetch(monkeypatch, _robots_transport(503))
+    policy = await RobotsPolicy.load("https://x.com", respect=True)
+    assert policy.allowed("https://x.com/anything") is True  # doc 03: 5xx → allow + log
+
+
+async def test_robots_disallow_is_still_respected(monkeypatch):
+    """Инвариант проекта не размывается: настоящий Disallow работает."""
+    _patch_robots_fetch(monkeypatch, _robots_transport(200, "User-agent: *\nDisallow: /\n"))
+    policy = await RobotsPolicy.load("https://closed.example", respect=True)
+    assert policy.allowed("https://closed.example/") is False
 
 
 async def test_robots_localhost_and_disabled():
@@ -37,12 +89,9 @@ async def test_robots_localhost_and_disabled():
 
 
 async def test_robots_fetch_error_proceeds(monkeypatch):
-    def broken_read(self):
-        raise OSError("network down")
-
-    monkeypatch.setattr(urllib.robotparser.RobotFileParser, "read", broken_read)
+    _patch_robots_fetch(monkeypatch, _robots_transport(200, boom=True))
     policy = await RobotsPolicy.load("https://x.com", respect=True)
-    assert policy.allowed("https://x.com/anything") is True  # 5xx/сбой → allow + log
+    assert policy.allowed("https://x.com/anything") is True  # сбой сети → allow + log
 
 
 # ---------------------------------------------------------------- Ollama client
