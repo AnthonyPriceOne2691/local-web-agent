@@ -58,3 +58,30 @@ def test_intent_bilingual(hints):
     assert classify_intent("Какая цена тарифа Pro", hints) == "pricing"
     assert classify_intent("Опиши дизайн и цвета сайта", hints) == "design_audit"
     assert classify_intent("Что-то совсем другое", hints) == "generic"
+
+
+def test_keyword_matches_word_start_not_any_substring(hints):
+    """`ui` из дизайн-словаря не должен ловиться внутри `guide` / `build`.
+
+    Найдено real-site прогоном 2026-08-01: задача «find the getting started guide,
+    whose is the most thorough» по сайтам вида `docs.astro.build` классифицировалась
+    как сравнение дизайна, и в сравнение уезжала рубрика `design_diff` — таблица
+    заполнялась цветами и типографикой вместо полноты содержания.
+    """
+    assert classify_intent("Find the getting started guide", hints) != "design_audit"
+    assert classify_intent("Read the docs on astro.build", hints) != "design_audit"
+    # стем по-прежнему работает: «дизайна» совпадает с «дизайн»
+    assert classify_intent("Опиши особенности дизайна сайта", hints) == "design_audit"
+
+
+def test_research_intent_content_task_is_not_design():
+    from app.research.meta_agent import classify_research_intent
+
+    content = (
+        "Compare these three: https://docs.astro.build https://gohugo.io "
+        "https://www.11ty.dev — find the getting started guide on each and tell me "
+        "whose is the most thorough, and why."
+    )
+    assert classify_research_intent(content, 3) == "comparative_content"
+    design = "Take a look at a.com and b.com — describe the design and layout of each"
+    assert classify_research_intent(design, 2) == "comparative_design"

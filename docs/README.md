@@ -9,7 +9,7 @@
 | [00-project-overview.md](00-project-overview.md) | ✅ **v0.4** | Two-layer arch; Research Chat UX; action-capable (Phase 6) |
 | [01-requirements.md](01-requirements.md) | ✅ **v0.5.3** | FR/NFR incl. FR-6/FR-7 (actions); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
-| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.7** | Playwright; URL norm; redirect/landing policy; trafilatura |
+| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.8** | Playwright pipeline; robots своим UA; SPA fallback |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.10** | **Phases 0–4 DONE**; Phase 5 attended-режим |
@@ -26,7 +26,7 @@
 | [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.7** | + content_search, sitemap P2.5, RU keywords |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
-| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.10** | Phase 4 DONE; Phase 5 attended; Phase 6 actions + export_gdocs планнер-tool |
+| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.12** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions |
 | [25-action-framework.md](25-action-framework.md) | 🛠 **v0.8** | Действия: Tier 1 click, Tier 2 login+fill+submit, persist, Tier 0 Google Docs (sink+планнер) ✅ (Phase 6) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).

@@ -10,6 +10,8 @@ doc 18) и держит orchestrator тонким: одна развилка н�
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Awaitable
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -19,6 +21,25 @@ from app.orchestrator.states import State
 from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import PageSnapshot
 from app.storage.run_store import RunStore
+
+logger = logging.getLogger(__name__)
+
+
+async def pause_with_window(browser: BrowserSession, pause: Awaitable[bool], *, hide_after: bool) -> bool:
+    """Показать окно человеку, дождаться его, при возможности снова спрятать.
+
+    Требование владельца после real-site прогона: без надобности окно перед глазами
+    не висит (doc 24 § Видимость окна). Для challenge и логина прятать безопасно —
+    cookie уже получен; для submit и Tier 3 окно остаётся, потому что человек
+    продолжает работать со страницей.
+    """
+    if await browser.reveal():
+        logger.info("browser window revealed for the human (page reopened)")
+    try:
+        return await pause
+    finally:
+        if hide_after:
+            await browser.conceal()
 
 
 class AttendedGate(Protocol):

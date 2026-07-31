@@ -75,6 +75,8 @@ class FakeBrowserSession:
         self.visited_log: list[str] = []
         self.screenshots: list[str] = []
         self.closed = False
+        self.revealed = 0  # сколько раз окно показывали человеку
+        self.concealed = 0
         # consent (D-11): очередь ответов detect-скрипта и результат click
         self.consent_js_detects: list[bool] = []
         self.consent_click_result: str | None = None
@@ -128,6 +130,13 @@ class FakeBrowserSession:
 
     async def fill_element(self, index: int, value: str) -> None:  # Tier 2 fill (doc 25)
         self.filled.append((index, value))
+
+    async def reveal(self) -> bool:
+        self.revealed += 1
+        return False  # фейк ничего не перезапускает: страница не теряется
+
+    async def conceal(self) -> None:
+        self.concealed += 1
 
     async def close(self) -> None:
         self.closed = True

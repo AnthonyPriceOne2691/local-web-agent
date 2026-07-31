@@ -10,6 +10,7 @@ generated:
 resource: docs/24-research-chat-agent.md
 implementation:
   - backend/app/orchestrator/attended.py
+  - backend/app/browser/playwright_session.py
 ---
 
 # Purpose
@@ -22,7 +23,14 @@ implementation:
 # Canonical rules
 
 - Пауза = статус run `waiting_user` + `metadata.challenge` (`kind`, `url`,
-  опц. `action`). Браузер при `attended` запускается видимым (`headless=False`).
+  опц. `action`).
+- **`attended` = «человек доступен», а НЕ «видимое окно на весь прогон».** Окно
+  показывается только на паузу и прячется после resume там, где это безопасно
+  (challenge/login — cookie уже получен). Прогон без паузы окна не показывает
+  вовсе. Исключение: задача-действие («заполни форму», «оформи заказ») открывает
+  окно сразу, потому что перезапуск в видимый режим потерял бы заполненную форму.
+  Механика — `reveal()`/`conceal()`: честный перезапуск Chromium с переносом
+  cookie, а не «скрытие окна» (видимость задаётся при запуске браузера).
 - Снятие паузы — только человеком: `POST /runs/{id}/resume` или
   `POST /sessions/{id}/resume` (в Chat UI — кнопка на карточке).
 - После resume читаем **уже открытую** страницу (`reobserve_in_place`), без
