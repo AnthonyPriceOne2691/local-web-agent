@@ -46,6 +46,10 @@ class ComparisonResult(BaseModel):
     dimensions: list[Dimension] = Field(default_factory=list)
     narrative: str = ""
     generated_at: str = ""
+    # Телеметрия compare-вызова (model / eval_count / thinking_chars / …). Раньше
+    # выбрасывалась в runner'е, поэтому самый дорогой вызов сессии был единственным
+    # неизмеренным: разложить длительность сессии по стадиям было нечем.
+    llm_stats: dict[str, Any] = Field(default_factory=dict)
 
 
 class SessionMessage(BaseModel):
