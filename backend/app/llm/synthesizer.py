@@ -9,8 +9,8 @@ from jinja2 import Template
 from pydantic import ValidationError
 
 from app.config import Settings
+from app.llm.json_chat import chat_json
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
-from app.llm.parsing import extract_json
 from app.schemas.extraction import ExtractionResult, SynthesisOutput
 from app.schemas.snapshot import PageSnapshot
 
@@ -85,32 +85,17 @@ class Synthesizer:
             pages_block=build_pages_block(snapshots, intent),
             summary_cap=cap,
         )
-        content, stats = await self._client.chat(
+        raw, content, stats = await chat_json(
+            self._client,
             model=self._s.synth_model,
             system=self._system,
             user=user,
+            retry_note="Your previous reply was not valid JSON. Respond with the JSON object only.",
             schema=schema,
             think=think if supports_think(self._s.synth_model) else None,
-            temperature=0.2,
             num_ctx=self._s.synth_num_ctx,
             max_tokens=self._s.synth_max_tokens,
-            keep_alive=0,  # swap discipline (doc 14)
         )
-        raw = extract_json(content)
-        if raw is None:  # recovery: 1 retry (doc 05 § Validation)
-            content, stats2 = await self._client.chat(
-                model=self._s.synth_model,
-                system=self._system,
-                user=user + "\n\nYour previous reply was not valid JSON. Respond with the JSON object only.",
-                schema=schema,
-                think=think if supports_think(self._s.synth_model) else None,
-                temperature=0.2,
-                num_ctx=self._s.synth_num_ctx,
-                max_tokens=self._s.synth_max_tokens,
-                keep_alive=0,
-            )
-            stats = stats2
-            raw = extract_json(content)
         if raw is None:
             return (
                 ExtractionResult(status="partial", summary=strip_thinking(content)[:500]),
