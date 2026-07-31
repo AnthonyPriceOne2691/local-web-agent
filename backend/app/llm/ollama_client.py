@@ -67,11 +67,14 @@ class OllamaClient:
         r.raise_for_status()
         data = r.json()
         content = data.get("message", {}).get("content", "")
-        stats = {
+        stats: dict[str, Any] = {
             k: data[k]
             for k in ("eval_count", "prompt_eval_count", "eval_duration", "total_duration")
             if k in data
         }
+        # Модель — часть телеметрии шага: с маршрутизацией лёгкая/тяжёлая (doc 16)
+        # иначе не видно, кто принял решение, и замер нечем подтвердить.
+        stats["model"] = model
         return content, stats
 
     async def warmup(self, model: str, keep_alive: str | int = "10m") -> None:
@@ -88,6 +91,16 @@ class OllamaClient:
             )
         except httpx.HTTPError as exc:  # прогрев — best-effort, run не зависит от него
             logger.debug("warmup of %s skipped (%s)", model, type(exc).__name__)
+
+    async def unload_many(self, *models: str) -> None:
+        """Выгрузить несколько моделей (пустые и дубли пропускаются).
+
+        Нужно на swap nav → synth: с маршрутизацией (doc 16) в памяти могут
+        оказаться обе nav-модели, и лёгкая держала бы свои ~5 GB, пока синтез
+        работает на 16K ctx. Дисциплина RAM на 32 GB это не прощает.
+        """
+        for model in dict.fromkeys(m for m in models if m):
+            await self.unload(model)
 
     async def unload(self, model: str) -> None:
         try:

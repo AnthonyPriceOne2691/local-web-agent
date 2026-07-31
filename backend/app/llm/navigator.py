@@ -81,7 +81,10 @@ class Navigator:
         temperature: float = 0.4,
         attended: bool = False,
         destructive_signals: tuple[str, ...] = (),
+        model: str = "",
     ) -> tuple[AgentAction | None, dict[str, Any]]:
+        """`model` пустой → канонная nav-модель. Иначе решает переданная модель
+        (маршрутизация лёгкая/тяжёлая — `llm.model_router`, doc 16)."""
         cand_block = (
             "\n".join(
                 f"{i + 1}. {c.href}  [{c.text[:60]}] (score {c.score}, {c.reason})"
@@ -104,12 +107,13 @@ class Navigator:
         )
         if retry_note:
             user += f"\n\nPREVIOUS ATTEMPT REJECTED: {retry_note}. Choose strictly from the candidate list."
+        chosen = model or self._s.nav_model
         content, stats = await self._client.chat(
-            model=self._s.nav_model,
+            model=chosen,
             system=self._system,
             user=user,
             schema=AgentAction.model_json_schema(),
-            think=False if supports_think(self._s.nav_model) else None,
+            think=False if supports_think(chosen) else None,
             temperature=temperature,  # 0.4; drift auto-tighten → 0.2 (doc 13)
             num_ctx=self._s.nav_num_ctx,
             max_tokens=self._s.nav_max_tokens,

@@ -1,11 +1,11 @@
 # Active delivery status
 
-- **slug:** nav-model-split
+- **slug:** tier3-exit-smoke
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** verify
+- **phase:** handoff
 - **builder:** agent:claude-code
-- **verifier:** human:anthony     <!-- решение «модель X на класс решений Y» принимает владелец -->
+- **verifier:** human:anthony     <!-- живой прогон Tier 3 может принять только человек -->
 - **human_ok_spec:** n/a          <!-- class S: mini-spec в tasks.md (§2.2) -->
 - **human_ok_plan:** n/a
 - **shape-oracles:** cqg-deployed
@@ -15,7 +15,7 @@
        + pre-push + needs:). Серверная защита ветки — платная для приватного репо
        (Pro+), поэтому НЕ закрыты: force-push в main и обход админом. Остаток
        зафиксирован в delivery/STACK-ACCEPTANCE.md § Остатки. -->
-- **worktree:** none (ветка feat/nav-model-split)
+- **worktree:** none (ветка fix/tier3-live-fixes)
 - **hooks:** claude    <!-- stop-on-red + protect-main, .claude/settings.json -->
 - **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
      CI их не видит; гоняется вручную при каждой правке канонов -->
@@ -25,15 +25,15 @@
 
 ## Предыдущие поставки
 
-`legacy-debt` (M) · `ci-red` (S) · `mypy-strict` (M) · `tier3-exit-smoke` (S) —
-завершены и слиты через `merge_guard`; артефакты в `delivery/archive/`.
-CI на main зелёный (`gates` + `delivery`), `main-guard` отрабатывает `skipped`.
+`legacy-debt` (M) · `ci-red` (S) · `mypy-strict` (M) — завершены и слиты через
+`merge_guard`; артефакты в `delivery/archive/`. CI на main зелёный
+(`gates` + `delivery`), `main-guard` отрабатывает `skipped`.
 
 ## Backlog гейтов (обновлён 2026-07-28)
 
 Долг назван явно, чтобы не выглядел покрытым (подробности — `delivery/STACK-ACCEPTANCE.md`):
 
-- [x] **secrets-scanner** — `detect-secrets` подключён (поставка legacy-debt),
+- [x] **secrets-scanner** — `detect-secrets` подключён (poстaвкa legacy-debt),
       baseline пустой.
 - [x] **`ruff-format`** — подключён; стилевой прогон вынесен в `afbd5f4` и
       внесён в `.git-blame-ignore-revs`.
@@ -50,11 +50,13 @@ CI на main зелёный (`gates` + `delivery`), `main-guard` отрабат�
 
 ## Контекст поставки
 
-Владелец просил лёгкую nav-модель, прогретую к моменту открытия браузера. Замер
-`qwen3:8b` против `qwen3:14b` сделан 2026-07-31 **на одном коде** (два инстанса
-API, 8002/8003) и показал, что «просто заменить модель» — неверный ответ:
-лёгкая быстрее вдвое на локальных по DOM решениях и стабильно хуже на выборе
-ссылки по смыслу (3 прогона из 3 с `G-H2` и лишним хопом в 404).
+**Phase 7 ✅ закрыта живым прогоном 2026-07-30** (doc 25 v1.1, doc 06 v0.12):
+агент заполнил форму, выбрал «Оплатить заказ», встал в handoff-паузу; человек
+нажал сам; агент зафиксировал `order_number = WX9-1337`. Прогон вскрыл девять
+дефектов, которых юниты не видели (см. `verify-report.md`) — все исправлены и
+закрыты тестами (200).
 
-Отсюда поставка: **не подмена модели, а маршрутизация решений** — лёгкая на
-интеракцию, тяжёлая на анализ и синтез. Числа и приёмка — в `tasks.md`.
+Остаток по скорости: заполнение формы теперь один вызов модели (~5 s на
+`qwen3:14b`); владелец попросил лёгкую nav-модель, прогретую к открытию
+браузера. Прогрев реализован (`OllamaClient.warmup` до `browser.start`),
+`qwen3:8b` качается для замера — следующая поставка.

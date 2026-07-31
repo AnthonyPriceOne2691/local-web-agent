@@ -13,6 +13,7 @@ from typing import Any
 
 from app.contracts.context import build_action_context
 from app.contracts.enforcer import ContractEnforcer
+from app.llm.model_router import NavRouting
 from app.llm.navigator import Navigator
 from app.observer.links import normalize_url
 from app.orchestrator.robots import RobotsPolicy
@@ -37,6 +38,7 @@ async def plan_validated(
     *,
     navigator: Navigator,
     enforcer: ContractEnforcer,
+    routing: NavRouting | None = None,
 ) -> tuple[AgentAction, list[Violation], dict[str, Any]]:
     violations: list[Violation] = []
     llm_stats: dict[str, Any] = {}
@@ -62,6 +64,7 @@ async def plan_validated(
                 temperature=temperature,
                 attended=record.config.attended,
                 destructive_signals=enforcer.destructive_signals,
+                model=_nav_model(routing, record, current, replanning=attempt > 0),
             )
             replans_used = attempt
             if action is None:  # I-H7 invalid schema
@@ -111,6 +114,28 @@ async def plan_validated(
                 v.recovered = True
             return fallback, violations, llm_stats
     return AgentAction(action="stop", reasoning="no valid candidates"), violations, llm_stats
+
+
+def _nav_model(
+    routing: NavRouting | None,
+    record: RunRecord,
+    current: PageSnapshot,
+    *,
+    replanning: bool,
+) -> str:
+    """Лёгкая или тяжёлая модель на это решение (doc 16 § Маршрутизация).
+
+    `routing is None` → маршрутизация не настроена, `""` = канонная nav-модель
+    навигатора (поведение до поставки `nav-model-split`).
+    """
+    if routing is None:
+        return ""
+    return routing.pick(
+        task=record.config.task,
+        snapshot=current,
+        steps=[(s.state, s.action, s.url) for s in record.steps],
+        replanning=replanning,
+    )
 
 
 def _fallback_only(drift: dict[str, Any]) -> bool:

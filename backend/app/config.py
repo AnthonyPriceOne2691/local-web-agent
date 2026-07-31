@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     #   fallback-пара: LWA_NAV_MODEL=qwen2.5:14b-instruct LWA_SYNTH_MODEL=deepseek-r1:14b)
     ollama_url: str = "http://localhost:11434"
     nav_model: str = "qwen3:14b"
+    # Лёгкая модель — только на решения, замкнутые на текущей странице (doc 16
+    # § Маршрутизация nav-решений; замер 2026-07-31). Пусто = всё на nav_model.
+    nav_light_model: str = "qwen3:8b"
     synth_model: str = "qwen3:14b"
     nav_num_ctx: int = 8192
     synth_num_ctx: int = 16384

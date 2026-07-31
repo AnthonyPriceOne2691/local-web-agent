@@ -154,6 +154,10 @@ class FakeOllama:
     async def unload(self, model: str) -> None:
         self.unloaded.append(model)
 
+    async def unload_many(self, *models: str) -> None:
+        for model in dict.fromkeys(m for m in models if m):
+            await self.unload(model)
+
     async def health(self) -> dict:
         return {"reachable": True, "version": "0.31.1", "models": ["fake"]}
 

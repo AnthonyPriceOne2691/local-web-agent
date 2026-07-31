@@ -1,20 +1,27 @@
 # 14 — LLM Model Split
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-18
+> Local Web Agent · Design doc · **v0.6** · 2026-07-31
 
 ## Принцип (D-2/D-3 closed: single-model qwen3)
 
 **Один text-модель `qwen3:14b` в двух режимах (`think:false` для hot loop, `think:true` для итогового JSON) · VLM для скриншотов.** Ноль свопов внутри text-пайплайна — главный выигрыш на 32 GB (Phase 0 A/B #10 + Phase 2 exit-бенчмарк).
 
-| Pass | Latency sensitive? | Model (канон doc 16 v0.5) | Fallback |
+| Pass | Latency sensitive? | Model (канон doc 16 v0.6) | Fallback |
 |------|-------------------|---------------------------|----------|
-| PLAN (each page) | ✅ Yes | `qwen3:14b` `think:false` | `qwen2.5:14b-instruct` |
+| PLAN — выбор ссылки / extract vs navigate | ✅ Yes | `qwen3:14b` `think:false` | `qwen2.5:14b-instruct` |
+| **PLAN — решение локально по DOM** (что заполнить/нажать) | ✅✅ Very | **`qwen3:8b`** `think:false` (doc 16 § Маршрутизация) | `qwen3:14b` (эскалация автоматом на replan) |
 | **VISION** (per PNG, batch) | ⚠️ Moderate | **`qwen2.5vl:7b`** (doc 23) | `gemma3:12b` |
 | SYNTHESIZE (per site) | ❌ No | `qwen3:14b` `think:true` | `deepseek-r1:14b` |
 | **META** (research plan) | — | **rules-planner Phase 3** (без LLM, doc 24); LLM Phase 4 → `qwen3:14b` `think:false` | |
 | **COMPARE** (N sites) | ❌ No | `qwen3:14b` `think:true` | `deepseek-r1:14b` |
 
 Правило: **навигация — think off; картинки — VLM; итог — think on.** Synthesis/compare не получают raw PNG — только текст `vision_insights`.
+
+Внутри навигации канон уточнён замером 2026-07-31: **тяжёлая модель — на смысл,
+лёгкая — на DOM.** `qwen3:8b` вдвое быстрее там, где решение замкнуто на текущей
+странице, и систематически хуже там, где надо выбрать ссылку по смыслу (3 прогона
+из 3: `G-H2` + лишний хоп в 404). Таблица условий маршрутизации — doc 16 v0.6
+§ Маршрутизация nav-решений; здесь — только следствия для RAM и свопов.
 
 ---
 
@@ -85,9 +92,17 @@ Research session (Layer 2, doc 24):
 
 **Never** two 14B models or 14B + VLM + Chromium together.
 
+**Лёгкая + тяжёлая nav-модель** (8b ~5 GB + 14b ~9 GB) сосуществовать могут — это
+не два 14B, — но перед синтезом выгружаются **обе**: иначе лёгкая держит свои
+~5 GB, пока синтез идёт на 16K ctx. Смешанные задачи («зайди на сайт → найди
+страницу → заполни форму») дадут своп 14b↔8b внутри навигации; он стоит ~2–4 s
+загрузки лёгкой и оправдан только там, где решений по DOM несколько подряд —
+поэтому признак интеракции сбрасывается на `navigate`, а не тянется через весь run.
+
 | Phase | Loaded | RAM ~ |
 |-------|--------|-------|
 | Crawl | Qwen + Chromium | ~14–16 GB |
+| Crawl (действие на странице) | qwen3:8b + Chromium | ~10–11 GB |
 | Vision batch | qwen2.5vl:7b | ~8–10 GB |
 | Synthesis | R1 14B | ~10–12 GB |
 
@@ -148,4 +163,5 @@ Research session (Layer 2, doc 24):
 | 2026-07-05 | **v0.2:** three-model split + swap timeline; D-6b vision model (doc 23) |
 | 2026-07-05 | **v0.3:** Meta-agent Qwen + Compare R1 (doc 24) |
 | 2026-07-05 | **v0.4 (review):** vision-тег исправлен `qwen2-vl:7b` → **`qwen2.5vl:7b`** (реального тега qwen2-vl в Ollama library нет); fallback-матрица обновлена (gemma3/minicpm-v вместо llava:13b); swap mechanics (keep_alive=0, OLLAMA_MAX_LOADED_MODELS=1, /api/ps); Phase 0 A/B кандидаты qwen3:14b (single-model вариант) и gpt-oss:20b; strip_thinking → Ollama think param |
+| 2026-07-31 | **v0.6 (замер лёгкой nav-модели):** PLAN разделён на два класса решений — DOM-локальные уходят на **`qwen3:8b`**, смысловые остаются на `qwen3:14b` (условия — doc 16 v0.6); RAM-таймлайн дополнен строкой «действие на странице» (~10–11 GB) и правилом «перед синтезом выгружаются обе nav-модели»; своп 14b↔8b внутри навигации назван честно (~2–4 s, поэтому признак интеракции сбрасывается на `navigate`) |
 | 2026-07-18 | **v0.5 (D-2/D-3 closed):** канон — **`qwen3:14b` single-model** (PLAN `think:false` / SYNTHESIZE+COMPARE `think:true`), пара qwen2.5+r1 — fallback; META Phase 3 — rules-planner без LLM (doc 24 v0.4); свопы остаются только text↔VLM (vision batch) |

@@ -11,6 +11,7 @@ resource: docs/16-prompts-library.md
 implementation:
   - backend/app/llm/
   - data/prompts/
+  - data/navigation/nav_model_routing.yaml
 ---
 
 # Purpose
@@ -23,9 +24,17 @@ implementation:
 
 | Пасс | Модель | Флаги |
 |---|---|---|
-| Навигация (DECIDE) | `qwen3:14b` | `think: false`, structured output |
+| Навигация — выбор ссылки, смысл | `qwen3:14b` | `think: false`, structured output |
+| Навигация — решение локально по DOM | `qwen3:8b` | то же (см. правило ниже) |
 | Синтез (SYNTHESIZE) | `qwen3:14b` | `think: true`, **без** `format` |
 | Vision | `qwen2.5vl:7b` | батчем, браузер закрыт до вызова |
+
+- **Тяжёлая на смысл, лёгкая на DOM.** Замер 2026-07-31 на одном коде: `qwen3:8b`
+  вдвое быстрее там, где решение замкнуто на текущей странице (что заполнить, что
+  нажать), и в **3 прогонах из 3** хуже там, где надо выбрать статью по смыслу
+  (`G-H2` + лишний хоп в 404). Поэтому лёгкая берёт только DOM-локальные решения,
+  а на hard-violation replan **эскалируется** на тяжёлую. Условия — doc 16 v0.6
+  § Маршрутизация nav-решений; скорость без качества навигации не считается.
 
 - **`format: json` + thinking несовместимы** — душит рассуждение; синтез идёт без
   `format`, а `strip_thinking()` подчищает ответ.

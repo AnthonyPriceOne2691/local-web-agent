@@ -1,6 +1,6 @@
 # 16 — Prompts Library
 
-> Local Web Agent · Design doc · **v0.5** · 2026-07-18  
+> Local Web Agent · Design doc · **v0.6** · 2026-07-31  
 > **Канон LLM parameters** — этот документ. Doc 07 зеркалит.
 
 **Не храним тексты промптов в design docs.** Только: какие файлы, за что отвечают, variables, ссылка на output schema. Рабочие тексты — в `data/prompts/` при реализации (итерация через Phase 0/1 spike).
@@ -37,8 +37,9 @@ Reload: on each run start (no restart required in dev).
 > **R1 + format=json несовместимы со strip_thinking:** constrained decoding заставляет JSON с первого токена и **подавляет thinking-фазу** — теряется смысл reasoning-модели. Для R1: `format` не задаём, `think: true` (Ollama ≥ 0.9 отдаёт рассуждения отдельным полем `message.thinking`), JSON парсим из `content`; `strip_thinking()` — fallback для утечек `<think>`.
 
 ```yaml
-navigation:    # PLAN step → qwen3:14b single-model (D-2 closed 2026-07-18; fallback qwen2.5:14b-instruct)
+navigation:    # PLAN step → qwen3:14b (D-2 closed 2026-07-18; fallback qwen2.5:14b-instruct)
   model: qwen3:14b
+  light_model: qwen3:8b             # только DOM-локальные решения (§ Маршрутизация nav-решений)
   think: false                      # qwen3 в Ollama думает по умолчанию — для nav выключать
   num_ctx: 8192
   temperature: 0.4                  # drift auto-tighten → 0.2 (doc 13)
@@ -85,6 +86,45 @@ compare:       # COMPARE → deepseek-r1:14b (doc 24)
 ```
 
 Все pass'ы: `keep_alive: 0` на последнем запросе перед model swap (doc 14 § Swap mechanics).
+
+---
+
+## Маршрутизация nav-решений (лёгкая × тяжёлая модель)
+
+Одна модель на все решения навигатора — неверная экономия: класс решений разный.
+Замер 2026-07-31 (`qwen3:8b` vs `qwen3:14b` **на одном коде**, два инстанса API,
+фикстуры 8901/8904/8908; nav = сумма `total_duration` решений навигатора):
+
+| Класс решения | `qwen3:8b` | `qwen3:14b` |
+|---|---|---|
+| локально по DOM (что заполнить, что нажать) | nav **9.4 s**, решения те же, 0 violations | nav 16.8 s |
+| одна очевидная ссылка (contact page) | nav **10.1 s**, путь и ответ те же | nav 22.1 s |
+| выбор статьи по смыслу | **3 прогона из 3**: 3× `G-H2` (уход за `max_depth`) + лишний хоп в 404-дубль, спасён fallback'ом | **0 violations в 2 из 2**, путь `статья → extract_now` |
+
+Отсюда правило: **лёгкая модель отвечает только за решения, замкнутые на текущей
+странице.** Скорость без качества навигации не считается — навигация по смыслу
+это ядро продукта, а не оптимизируемая деталь.
+
+| Условие | Модель |
+|---|---|
+| `light_model` пусто | тяжёлая (поведение до поставки `nav-model-split`) |
+| replan после hard-violation | тяжёлая — **эскалация**: replan и есть сигнал, что лёгкая ошиблась |
+| на странице нет живых интерактивных элементов | тяжёлая (решать локально нечего → это выбор ссылки) |
+| предыдущее DOM-действие было на этом же URL | лёгкая (мы посреди интеракции) |
+| задача просит действия (`action_keywords`) + элементы есть | лёгкая |
+| иначе | тяжёлая |
+
+- Словарь `action_keywords` (RU+EN) — **данные**: `data/navigation/nav_model_routing.yaml`.
+  Ошибаться безопасно в сторону тяжёлой: она медленнее, но не уводит агента с пути.
+- Реализация: `llm/model_router.py` (`pick_nav_model` — чистая функция, без сети и
+  файлов), вызов — из `orchestrator/decide.py`; модель шага пишется в
+  `llm_stats.model`, иначе маршрут нечем подтвердить.
+- `navigate` в истории **сбрасывает** признак интеракции: ушли со страницы —
+  следующее решение снова смысловое.
+- Прогревается модель **первого** шага (`first_step_model`): на первом шаге истории
+  ещё нет, решает формулировка задачи.
+- Перед синтезом выгружаются **обе** nav-модели: иначе лёгкая держит свои ~5 GB,
+  пока синтез работает на 16K ctx (дисциплина RAM, doc 14).
 
 ---
 
@@ -177,4 +217,5 @@ Image: Ollama `images[]`, not in Jinja template.
 | 2026-07-05 | **v0.3:** removed prompt body text from design; outlines + variables only |
 | 2026-07-05 | **v0.4 (review):** structured outputs (JSON Schema в `format`) для nav/meta/vision; конфликт `format:json`×`strip_thinking` у R1 устранён → `think:true` + отдельное поле thinking; vision fallback → gemma3:12b; compare num_ctx 24576 при N>3; правило языка ответа |
 | 2026-07-05 | **v0.4.1 (review-2):** navigator links = top-10 candidates (было 15 — рассинхрон с docs 04/21) |
+| 2026-07-31 | **v0.6 (замер лёгкой nav-модели):** новая секция **§ Маршрутизация nav-решений** — `light_model: qwen3:8b` берёт только решения, замкнутые на текущей странице (заполнить/нажать), выбор ссылки по смыслу и синтез остаются на `qwen3:14b`; таблица условий + эскалация на тяжёлую после hard-violation; словарь `action_keywords` → `data/navigation/nav_model_routing.yaml`; в `llm_stats` добавлена `model`. Основание: 8b вдвое быстрее на DOM-решениях и в 3 прогонах из 3 хуже на выборе статьи (`G-H2` + хоп в 404) |
 | 2026-07-18 | **v0.5 (Phase 2 exit-бенчмарк):** synthesizer_system — vision-aware: evidence получил поле `source: dom\|vision`, правило «факт только из VISION-блока → source: vision»; добавлены prod-промпты `vision_system.txt` + `vision_user.j2` (doc 23); **канон nav/synth → `qwen3:14b` single-model** (D-2/D-3 closed по бенчмарку doc 06 v0.6; пара qwen2.5+r1 — fallback) |
