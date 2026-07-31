@@ -9,6 +9,17 @@
 * **Note (no canon change)**: правила формулировок целиком — doc 17 v0.5 § Словарь
   (`copy.ts` на фронте, `research/phrasing.py` на бэкенде). Инварианты тиров и
   реестра не менялись — поменялся только язык, которым интерфейс о них говорит.
+## 2026-07-31 (поставка session-throughput, закрыта частично)
+* **Canon change** — [LLM canon](/engineering/llm-canon.md): добавлено правило
+  «схема под constrained decoding обязана быть плоской». Основание — замер стадии
+  `compare`: схема с `dict[str, int | float | str]` сорвала таймаут 300 s дважды,
+  тогда как плоская схема синтеза давала −68 % токенов. Следствие: `compare`
+  остаётся каноничным до отдельного замера.
+* **Structure**: появился `llm/json_chat.py` — паттерн «вызов модели → парсинг JSON
+  → один повтор» жил копией в `synthesizer` и `compare_synthesizer`; DRY-гейт поймал
+  это, когда добавление схемы сделало блоки идентичными. Инварианты не менялись.
+* **Note (no canon change)**: `ComparisonResult.llm_stats` — телеметрия стадии
+  `compare`, которая раньше выбрасывалась в runner'е. Это измерение, не политика.
 
 ## 2026-07-31 (поставка synth-speed)
 * **Canon change** — [LLM canon](/engineering/llm-canon.md): синтез разделён по

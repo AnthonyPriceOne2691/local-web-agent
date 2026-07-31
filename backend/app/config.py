@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # правило «извлекай названные значения»: без него схема давала эхо ввода
     # вместо содержимого страницы.
     synth_summary_cap: int = 500
+    # Compare-стадия сессии. Замер 2026-07-31: она весит 21 % сессии (205 s на
+    # 4 сайтах) и 51 % её выхода — мысли. Переключатели для замера; дефолт = канон,
+    # меняется только если сравнение не просело (winner/порядок rankings/dimensions).
+    compare_think: bool = True
+    compare_schema: bool = False
+    compare_narrative_cap: int = 0
     nav_num_ctx: int = 8192
     synth_num_ctx: int = 16384
     nav_max_tokens: int = 400

@@ -287,11 +287,12 @@ class ResearchRunner:
         self._sessions.save(session)
         if cancel_event is not None and cancel_event.is_set():
             return self._finish(session, "failed", "Stopped before I could compare the sites.")
-        comparison, _ = await self._compare.compare(
+        comparison, compare_stats = await self._compare.compare(
             task=task,
             rubric_id=compare_call.args.get("rubric", "generic_merge"),
             inputs=[(r.id, r.result) for r in survivors if r.result is not None],
         )
+        comparison.llm_stats = compare_stats  # иначе стадия compare неизмерима
         comparison.session_id = session.id
         comparison.excluded = excluded
         comparison.generated_at = _now()

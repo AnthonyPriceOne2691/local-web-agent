@@ -1,4 +1,7 @@
 COMPARISON TASK: {{ task }}
+{% if narrative_cap %}
+OUTPUT BUDGET: keep "narrative" under {{ narrative_cap }} characters. It explains WHY the winner won — it is not a retelling of each site. Never restate the article excerpts: they are attached above and the reader already has them.
+{% endif %}
 
 RUBRIC ({{ rubric_id }}):
 {{ rubric }}

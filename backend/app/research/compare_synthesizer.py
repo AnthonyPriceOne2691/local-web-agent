@@ -13,10 +13,10 @@ from jinja2 import Template
 from pydantic import ValidationError
 
 from app.config import Settings
+from app.llm.json_chat import chat_json
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
-from app.llm.parsing import extract_json
 from app.schemas.extraction import ExtractionResult
-from app.schemas.research import ComparisonResult
+from app.schemas.research import ComparisonOutput, ComparisonResult
 
 SITE_SUMMARY_CAP = 1200
 ARTICLE_EXCERPT_CAP = 12000  # doc 20 § compare
@@ -72,6 +72,18 @@ class CompareSynthesizer:
             path = self._rubrics_dir / "generic_merge.txt"
         return path.read_text(encoding="utf-8")
 
+    def _mode(self) -> tuple[bool, dict[str, Any] | None, int]:
+        """Режим compare: (think, schema, narrative_cap) — по аналогии с синтезом.
+
+        Схема доступна только при выключенном рассуждении (`format` × thinking
+        несовместимы, doc 16). Дефолт — канон: стадия весит 21 % сессии, но
+        качество сравнения (winner, порядок rankings) дороже её длительности.
+        """
+        if self._s.compare_think or not self._s.compare_schema:
+            return self._s.compare_think, None, 0
+        schema: dict[str, Any] = ComparisonOutput.model_json_schema()
+        return False, schema, self._s.compare_narrative_cap
+
     async def compare(
         self,
         *,
@@ -79,37 +91,27 @@ class CompareSynthesizer:
         rubric_id: str,
         inputs: list[tuple[str, ExtractionResult]],
     ) -> tuple[ComparisonResult, dict[str, Any]]:
+        think, schema, cap = self._mode()
         user = self._user_tpl.render(
             task=task,
             rubric_id=rubric_id,
             rubric=self._rubric_text(rubric_id),
             sites_count=len(inputs),
             sites_block=build_sites_block(inputs),
+            narrative_cap=cap,
         )
         num_ctx = WIDE_NUM_CTX if len(inputs) > 3 else self._s.synth_num_ctx
-        content, stats = await self._client.chat(
+        raw, content, stats = await chat_json(
+            self._client,
             model=self._s.synth_model,
             system=self._system,
             user=user,
-            think=True if supports_think(self._s.synth_model) else None,
-            temperature=0.2,
+            retry_note="Your previous reply was not valid JSON. JSON object only.",
+            schema=schema,
+            think=think if supports_think(self._s.synth_model) else None,
             num_ctx=num_ctx,
             max_tokens=self._s.synth_max_tokens,
-            keep_alive=0,
         )
-        raw = extract_json(content)
-        if raw is None:  # 1 retry (doc 05 § Validation)
-            content, stats = await self._client.chat(
-                model=self._s.synth_model,
-                system=self._system,
-                user=user + "\n\nYour previous reply was not valid JSON. JSON object only.",
-                think=True if supports_think(self._s.synth_model) else None,
-                temperature=0.2,
-                num_ctx=num_ctx,
-                max_tokens=self._s.synth_max_tokens,
-                keep_alive=0,
-            )
-            raw = extract_json(content)
         if raw is None:
             return (ComparisonResult(status="failed", narrative=strip_thinking(content)[:500]), stats)
         result = self._validated(raw, task=task, rubric_id=rubric_id, inputs=inputs)
