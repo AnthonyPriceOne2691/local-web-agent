@@ -76,11 +76,15 @@ Tier 3 инвариант держится: `handoff_done` в metadata нет, �
 
 `ollama ps` пуст — обе nav-модели выгружены.
 
+## Handoff (2026-07-31)
+
+PR #7 → `quality` зелёный (`gates` + `delivery`) → `merge_guard` (6 гейтов на
+слитом состоянии) → `main` = `6cd3586`.
+
 ## Verdict
 
-- [ ] READY FOR HANDOFF — после зелёного CI на PR
-- [x] NEED CONVERGE — остался пуш ветки + PR + зелёный CI; критерий A4
-      переформулирован по итогу замера (см. выше)
+- [x] READY FOR HANDOFF — CI на PR зелёный, слито через `merge_guard`
+- [ ] NEED CONVERGE (new tasks)
 - [ ] BLOCKED
 
 ## Harness metrics (this shipment)

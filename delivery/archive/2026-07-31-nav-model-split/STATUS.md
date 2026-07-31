@@ -1,11 +1,11 @@
 # Active delivery status
 
-- **slug:** synth-speed
+- **slug:** nav-model-split
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** specify
+- **phase:** verify
 - **builder:** agent:claude-code
-- **verifier:** human:anthony     <!-- качество синтеза (факты/evidence) принимает владелец -->
+- **verifier:** human:anthony     <!-- решение «модель X на класс решений Y» принимает владелец -->
 - **human_ok_spec:** n/a          <!-- class S: mini-spec в tasks.md (§2.2) -->
 - **human_ok_plan:** n/a
 - **shape-oracles:** cqg-deployed
@@ -15,20 +15,19 @@
        + pre-push + needs:). Серверная защита ветки — платная для приватного репо
        (Pro+), поэтому НЕ закрыты: force-push в main и обход админом. Остаток
        зафиксирован в delivery/STACK-ACCEPTANCE.md § Остатки. -->
-- **worktree:** none
+- **worktree:** none (ветка feat/nav-model-split)
 - **hooks:** claude    <!-- stop-on-red + protect-main, .claude/settings.json -->
 - **stack-selftest:** external (Prepare/)  <!-- AGENT_STACK §7.1 вариант B: каноны вне репо,
      CI их не видит; гоняется вручную при каждой правке канонов -->
-- **blockers:** приоритет и scope ещё не подтверждены владельцем — поставка
-  открыта на `specify` как следующий по весу лаг, а не как принятое решение
+- **blockers:** —
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
 ## Предыдущие поставки
 
-`legacy-debt` (M) · `ci-red` (S) · `mypy-strict` (M) · `tier3-exit-smoke` (S) ·
-`nav-model-split` (S) — завершены и слиты через `merge_guard`; артефакты в
-`delivery/archive/`. CI на main зелёный (`gates` + `delivery`).
+`legacy-debt` (M) · `ci-red` (S) · `mypy-strict` (M) · `tier3-exit-smoke` (S) —
+завершены и слиты через `merge_guard`; артефакты в `delivery/archive/`.
+CI на main зелёный (`gates` + `delivery`), `main-guard` отрабатывает `skipped`.
 
 ## Backlog гейтов (обновлён 2026-07-28)
 
@@ -51,15 +50,11 @@
 
 ## Контекст поставки
 
-Замер приёмки `nav-model-split` показал, где реально лежит время прогона:
-навигация — 8 / 31 / 17 % wall-времени трёх кейсов, **синтез — 37 / 37 / 134 s**.
-Поэтому следующий по весу лаг — синтез, а не навигация. Метод тот же, что дал
-результат на моделях: **замер, качество прежде скорости** (число фактов и наличие
-evidence не должны просесть — это и есть продукт).
+Владелец просил лёгкую nav-модель, прогретую к моменту открытия браузера. Замер
+`qwen3:8b` против `qwen3:14b` сделан 2026-07-31 **на одном коде** (два инстанса
+API, 8002/8003) и показал, что «просто заменить модель» — неверный ответ:
+лёгкая быстрее вдвое на локальных по DOM решениях и стабильно хуже на выборе
+ссылки по смыслу (3 прогона из 3 с `G-H2` и лишним хопом в 404).
 
-Туда же примыкает известный хвост: synth-таймаут 300 s изредка роняет сайт на
-холодном свопе VLM→qwen3 (partial M-H4 спасает, но это лечение симптома).
-
-Альтернативы на выбор владельца, если приоритет другой: UI-рефактор
-(`App.tsx`/`ComparisonView`), сложность функций (`C901` в оркестраторе),
-real-site калибровка на публичных сайтах.
+Отсюда поставка: **не подмена модели, а маршрутизация решений** — лёгкая на
+интеракцию, тяжёлая на анализ и синтез. Числа и приёмка — в `tasks.md`.
