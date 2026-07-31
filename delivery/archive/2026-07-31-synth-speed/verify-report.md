@@ -87,11 +87,16 @@ concept [llm-canon](../../knowledge/engineering/llm-canon.md) + `knowledge/log.m
 
 `ollama ps` пуст.
 
+## Handoff (2026-07-31)
+
+PR #8 → `quality` зелёный (`gates` + `delivery`, включая `okf_sync_gate` — концепт
+синхронизирован сразу, а не после падения) → `merge_guard` (6 гейтов на слитом
+состоянии) → `main` = `71d4bef`. Правку дефолта синтеза владелец подтвердил.
+
 ## Verdict
 
-- [ ] READY FOR HANDOFF — после зелёного CI на PR
-- [x] NEED CONVERGE — остался PR + зелёный CI; правка дефолта синтеза ждёт
-      подтверждения владельца (он verifier этой поставки)
+- [x] READY FOR HANDOFF — CI зелёный, слито через `merge_guard`
+- [ ] NEED CONVERGE (new tasks)
 - [ ] BLOCKED
 
 ## Harness metrics (this shipment)
