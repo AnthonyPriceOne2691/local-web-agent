@@ -1,4 +1,8 @@
 TASK: {{ task }}
+{% if summary_cap %}
+OUTPUT BUDGET: "summary" must stay under {{ summary_cap }} characters — it answers the task, it is not an essay. Full page text is attached by the system, so never retype it.
+EXTRACT NAMED VALUES: prefer proper nouns, numbers and identifiers over yes/no statements. A fact like {"key": "form_filled", "value": "yes"} is worthless next to {"key": "product_name", "value": "WX-9"}. If the task names an entity, extract that entity.
+{% endif %}
 {% if intent == "content_search" %}
 ARTICLE MODE (content_search): the task is about finding the best article. In addition to facts, add:
 "article": {"url": "...", "title": "...", "word_count": approx int, "headings": ["..."], "main_text_excerpt": "ONE short key quote, max 400 chars — the full text is attached automatically by the system, do NOT retype the article", "published_date": "YYYY-MM-DD or null", "page_type_confidence": "high|medium|low"}

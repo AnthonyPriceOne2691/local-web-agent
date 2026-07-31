@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
 from app.llm.parsing import extract_json
-from app.schemas.extraction import ExtractionResult
+from app.schemas.extraction import ExtractionResult, SynthesisOutput
 from app.schemas.snapshot import PageSnapshot
 
 PAGE_TEXT_CAP = 1000  # doc 20 synthesis bundle
@@ -59,6 +59,18 @@ class Synthesizer:
         self._system = (prompts / "synthesizer_system.txt").read_text(encoding="utf-8")
         self._user_tpl = Template((prompts / "synthesizer_user.j2").read_text(encoding="utf-8"))
 
+    def _schema(self) -> dict[str, Any] | None:
+        """JSON Schema для synthesis — только когда рассуждение выключено.
+
+        `format` + thinking несовместимы (doc 16): constrained decoding душит
+        рассуждение. Поэтому схема включается лишь вместе с `synth_think: false`,
+        и тогда она режет прозу и снимает retry-ветку невалидного JSON.
+        """
+        if not self._s.synth_schema or self._s.synth_think:
+            return None
+        schema: dict[str, Any] = SynthesisOutput.model_json_schema()
+        return schema
+
     async def synthesize(
         self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
     ) -> tuple[ExtractionResult, dict[str, Any]]:
@@ -67,11 +79,13 @@ class Synthesizer:
             intent=intent,
             pages_count=len(snapshots),
             pages_block=build_pages_block(snapshots, intent),
+            summary_cap=self._s.synth_summary_cap,
         )
         content, stats = await self._client.chat(
             model=self._s.synth_model,
             system=self._system,
             user=user,
+            schema=self._schema(),
             think=self._s.synth_think if supports_think(self._s.synth_model) else None,
             temperature=0.2,
             num_ctx=self._s.synth_num_ctx,
@@ -84,6 +98,7 @@ class Synthesizer:
                 model=self._s.synth_model,
                 system=self._system,
                 user=user + "\n\nYour previous reply was not valid JSON. Respond with the JSON object only.",
+                schema=self._schema(),
                 think=self._s.synth_think if supports_think(self._s.synth_model) else None,
                 temperature=0.2,
                 num_ctx=self._s.synth_num_ctx,
