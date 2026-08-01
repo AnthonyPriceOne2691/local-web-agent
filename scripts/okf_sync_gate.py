@@ -21,7 +21,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 BUNDLE = os.environ.get("OKF_BUNDLE", "knowledge")
@@ -42,9 +42,7 @@ DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 def git(*args: str) -> str:
     """git с подавлением ошибок: пустая строка = git не смог (не блокер сам по себе)."""
     try:
-        out = subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=False
-        )
+        out = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
     except FileNotFoundError:
         return ""
     return out.stdout if out.returncode == 0 else ""
@@ -146,7 +144,9 @@ def main() -> int:
     # --- собрать карту concept -> declared paths
     concepts: dict[str, list[str]] = {}
     stale: list[tuple[str, str]] = []
-    today = date.today()
+    # Явный UTC, а не локальная дата: гейт гоняется и на машине автора, и в CI —
+    # «просрочен ли stale_after» не должно зависеть от часового пояса раннера.
+    today = datetime.now(UTC).date()
     for path in sorted(bundle.rglob("*.md")):
         if path.name in RESERVED:
             continue
@@ -179,23 +179,16 @@ def main() -> int:
         if not files and not issues:
             # Пустой дифф = гейт ничего не судит. Это законно (push в саму базу),
             # но должно быть видно: молчаливый no-op читается как «проверено».
-            warnings.append(
-                f"diff vs '{args.base or 'staged'}' is empty — gate inert this run"
-            )
+            warnings.append(f"diff vs '{args.base or 'staged'}' is empty — gate inert this run")
         if files:
             touched_bundle = {f for f in files if f.startswith(f"{BUNDLE}/")}
             code = [f for f in files if f not in touched_bundle]
             for rel, declared in sorted(concepts.items()):
                 if rel in touched_bundle:
                     continue  # concept обновлён — синхронизация заявлена
-                hits = sorted(
-                    {c for c in code for d in declared if covers(d, c)}
-                )[:5]
+                hits = sorted({c for c in code for d in declared if covers(d, c)})[:5]
                 if hits:
-                    errors.append(
-                        f"{rel}: implementation changed but concept untouched -> "
-                        f"{', '.join(hits)}"
-                    )
+                    errors.append(f"{rel}: implementation changed but concept untouched -> {', '.join(hits)}")
             if not concepts:
                 warnings.append(
                     "no concept declares implementation: — gate is inert; "
@@ -208,10 +201,7 @@ def main() -> int:
         print(f"ERROR: {e}", file=sys.stderr)
 
     if not errors:
-        print(
-            f"okf_sync_gate: OK ({len(concepts)} mapped concepts, "
-            f"{len(warnings)} warning(s))"
-        )
+        print(f"okf_sync_gate: OK ({len(concepts)} mapped concepts, {len(warnings)} warning(s))")
         return 0
     waiver = status_waiver()
     if ALLOW_DRIFT or waiver:

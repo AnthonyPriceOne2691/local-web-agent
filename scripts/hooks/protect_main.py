@@ -91,11 +91,16 @@ def _hard_reset_to_remote_protected(segment: str) -> bool:
 
 
 RULES = (
-    (_force_push_to_protected, "force-push в main/master запрещён (Delivery §4.2). "
-                               "Нужен переписанный main — это HITL-решение человека."),
+    (
+        _force_push_to_protected,
+        "force-push в main/master запрещён (Delivery §4.2). "
+        "Нужен переписанный main — это HITL-решение человека.",
+    ),
     (_delete_protected, "удаление main/master на remote запрещено."),
-    (_hard_reset_to_remote_protected, "git reset --hard origin/main уничтожает локальную "
-                                      "работу — останови и спроси человека."),
+    (
+        _hard_reset_to_remote_protected,
+        "git reset --hard origin/main уничтожает локальную работу — останови и спроси человека.",
+    ),
 )
 
 

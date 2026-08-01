@@ -74,10 +74,8 @@ def _handler_leaves_trace(handler: ast.ExceptHandler) -> bool:
 
 def _handler_has_silent_ok(handler: ast.ExceptHandler, src_lines: list[str]) -> bool:
     end = handler.body[-1].end_lineno if handler.body else handler.lineno
-    for i in range(handler.lineno - 1, min(end, len(src_lines))):
-        if SILENT_OK_MARKER in src_lines[i]:
-            return True
-    return False
+    span = range(handler.lineno - 1, min(end, len(src_lines)))
+    return any(SILENT_OK_MARKER in src_lines[i] for i in span)
 
 
 def _docstring_ids(tree: ast.AST) -> set[int]:
@@ -85,7 +83,12 @@ def _docstring_ids(tree: ast.AST) -> set[int]:
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             body = node.body
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
                 ids.add(id(body[0].value))
     return ids
 
@@ -93,12 +96,19 @@ def _docstring_ids(tree: ast.AST) -> set[int]:
 def find_silent_except(tree: ast.AST, src_lines: list[str]) -> list[int]:
     out = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ExceptHandler) and _is_broad(node) and not _handler_leaves_trace(node) and not _handler_has_silent_ok(node, src_lines):
+        if (
+            isinstance(node, ast.ExceptHandler)
+            and _is_broad(node)
+            and not _handler_leaves_trace(node)
+            and not _handler_has_silent_ok(node, src_lines)
+        ):
             out.append(node.lineno)
     return out
 
 
-def find_inline_prompt(tree: ast.AST, src_lines: list[str]) -> list[int]:  # noqa: ARG001
+# src_lines не используется — сигнатура общая с find_silent_except, обе функции
+# вызываются одинаково из таблицы проверок.
+def find_inline_prompt(tree: ast.AST, src_lines: list[str]) -> list[int]:
     doc_ids = _docstring_ids(tree)
     out = []
     for node in ast.walk(tree):
@@ -187,7 +197,9 @@ def main() -> int:
         ]
         lines += [f"{c}:{p}" for p, c in sorted(counts.items())]
         baseline_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"baseline пересобран: {baseline_path.name} ({len(counts)} файлов, {sum(counts.values())} сайтов)")
+        print(
+            f"baseline пересобран: {baseline_path.name} ({len(counts)} файлов, {sum(counts.values())} сайтов)"
+        )
         return 0
 
     snap = load_baseline(baseline_path)
@@ -201,7 +213,9 @@ def main() -> int:
         mark = "✗" if strict else "⚠"
         for p, c, allowed in violations:
             print(f"  {mark}  {p}: {c} нарушений (разрешено {allowed})")
-        print(f"\n{'ERROR' if strict else 'WARNING'}: {len(violations)} файл(ов) нарушают правило {args.rule}.")
+        print(
+            f"\n{'ERROR' if strict else 'WARNING'}: {len(violations)} файл(ов) нарушают правило {args.rule}."
+        )
         print(rule["hint"])
         print("Легаси из baseline — ок до чистки; новый код держим на нуле. Пересъём вниз: --generate.")
         return 1 if strict else 0

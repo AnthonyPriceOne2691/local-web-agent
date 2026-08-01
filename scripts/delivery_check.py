@@ -56,7 +56,7 @@ def diff_stats(base: str) -> tuple[int, int, int, int] | None:
             excluded += 1
             continue
         files += 1
-        added += int(a) if a.isdigit() else 0      # "-" у бинарников
+        added += int(a) if a.isdigit() else 0  # "-" у бинарников
         deleted += int(d) if d.isdigit() else 0
     return files, added, deleted, excluded
 
@@ -130,31 +130,18 @@ def main() -> int:
         raw_phase = field(status, "phase")
         raw_class = field(status, "class")
 
-        phase_m = (
-            re.match(r"(?i)^([a-z_]+)", raw_phase)
-            if not is_placeholder(raw_phase)
-            else None
-        )
-        class_m = (
-            re.match(r"(?i)^([SML])\b", raw_class)
-            if not is_placeholder(raw_class)
-            else None
-        )
+        phase_m = re.match(r"(?i)^([a-z_]+)", raw_phase) if not is_placeholder(raw_phase) else None
+        class_m = re.match(r"(?i)^([SML])\b", raw_class) if not is_placeholder(raw_class) else None
         phase = phase_m.group(1).lower() if phase_m else ""
         klass = class_m.group(1).upper() if class_m else ""
 
         if is_placeholder(raw_phase):
-            errors.append(
-                f"STATUS.md: phase not filled in (template placeholder {raw_phase!r})"
-            )
+            errors.append(f"STATUS.md: phase not filled in (template placeholder {raw_phase!r})")
         elif not phase:
             errors.append("STATUS.md: missing phase")
         elif phase not in allowed:
             # constitution is project-level file, not active phase
-            errors.append(
-                f"STATUS.md: unknown phase '{phase}' "
-                f"(allowed: {', '.join(sorted(allowed))})"
-            )
+            errors.append(f"STATUS.md: unknown phase '{phase}' (allowed: {', '.join(sorted(allowed))})")
 
         if not klass:
             msg = (
@@ -174,13 +161,9 @@ def main() -> int:
         verify = ACTIVE / "verify-report.md"
         eval_smoke = ACTIVE / "eval-smoke.md"
 
-        if klass in {"M", "L"} and phase in {
-            "plan",
-            "tasks",
-            *implement_like,
-        }:
-            if not spec.is_file():
-                errors.append(f"class {klass} at phase={phase}: missing active/spec.md")
+        spec_required = klass in {"M", "L"} and phase in {"plan", "tasks", *implement_like}
+        if spec_required and not spec.is_file():
+            errors.append(f"class {klass} at phase={phase}: missing active/spec.md")
 
         if klass in {"M", "L"} and phase in implement_like:
             if not plan.is_file():
@@ -189,16 +172,14 @@ def main() -> int:
                 errors.append(f"class {klass} at phase={phase}: missing active/tasks.md")
             # §3.3 называет это stop-gate'ом — значит error, не warning.
             if not field(status, "human_ok_spec").lower().startswith("yes"):
-                errors.append(
-                    f"class {klass} at phase={phase}: human_ok_spec is not yes "
-                    "(stop-gate §3.3)"
-                )
+                errors.append(f"class {klass} at phase={phase}: human_ok_spec is not yes (stop-gate §3.3)")
 
-        if klass == "L" and phase in implement_like:
-            if not field(status, "human_ok_plan").lower().startswith("yes"):
-                errors.append(
-                    "class L at implement+: human_ok_plan is not yes (stop-gate §3.3)"
-                )
+        if (
+            klass == "L"
+            and phase in implement_like
+            and not field(status, "human_ok_plan").lower().startswith("yes")
+        ):
+            errors.append("class L at implement+: human_ok_plan is not yes (stop-gate §3.3)")
 
         if klass == "S" and phase in implement_like and not tasks.is_file():
             errors.append("class S at implement+: missing active/tasks.md (mini-spec)")
@@ -206,27 +187,20 @@ def main() -> int:
         if not verify.is_file():
             if phase == "verify":
                 # Фаза в процессе: отчёт ещё пишется — но выйти из неё без него нельзя.
-                warnings.append(
-                    "phase=verify: active/verify-report.md not created yet"
-                )
+                warnings.append("phase=verify: active/verify-report.md not created yet")
             elif phase in {"converge", "handoff"}:
-                errors.append(
-                    f"phase={phase}: missing active/verify-report.md (DoD §3.2.2)"
-                )
+                errors.append(f"phase={phase}: missing active/verify-report.md (DoD §3.2.2)")
 
-        if klass in {"M", "L"} and phase in {"verify", "converge", "handoff"}:
-            if not eval_smoke.is_file():
-                errors.append(
-                    "class M/L at verify+: missing active/eval-smoke.md "
-                    "(product oracles are mandatory, §6.2)"
-                )
+        smoke_required = klass in {"M", "L"} and phase in {"verify", "converge", "handoff"}
+        if smoke_required and not eval_smoke.is_file():
+            errors.append(
+                "class M/L at verify+: missing active/eval-smoke.md (product oracles are mandatory, §6.2)"
+            )
 
         if phase == "handoff" and verify.is_file():
             vr = read(verify)
             if not re.search(r"READY FOR HANDOFF", vr, re.I):
-                errors.append(
-                    "phase=handoff: verify-report.md lacks 'READY FOR HANDOFF' verdict"
-                )
+                errors.append("phase=handoff: verify-report.md lacks 'READY FOR HANDOFF' verdict")
             # §9.2: метрики снимаются на handoff. Без гейта ритуал не выполняется.
             if "Harness metrics" not in vr:
                 errors.append(
@@ -260,14 +234,10 @@ def main() -> int:
         ci = field(status, "ci-oracles").lower()
         waivers = field(status, "waivers").lower()
         if is_placeholder(ci):
-            warnings.append(
-                "STATUS.md: missing ci-oracles (weak|tooling|deployed) — §10.4"
-            )
+            warnings.append("STATUS.md: missing ci-oracles (weak|tooling|deployed) — §10.4")
         elif ci.startswith("weak"):
             if klass == "L" and "ci" not in waivers:
-                errors.append(
-                    "class L with ci-oracles: weak and no ci waiver in STATUS (§10.4)"
-                )
+                errors.append("class L with ci-oracles: weak and no ci waiver in STATUS (§10.4)")
             else:
                 warnings.append(
                     "ci-oracles: weak — local gates are bypassable (§10.4); "
@@ -276,16 +246,11 @@ def main() -> int:
         # 'tooling' — легитимный режим (гейт мержа в репо, серверного нет по тарифу),
         # а не поддавки: см. §10.4. Недопустим только 'weak'.
         if args.require_ci and not ci.startswith(("deployed", "tooling")):
-            errors.append(
-                "--require-ci: ci-oracles is neither 'deployed' nor 'tooling'"
-            )
+            errors.append("--require-ci: ci-oracles is neither 'deployed' nor 'tooling'")
 
         stack = field(status, "stack")
         if is_placeholder(stack) or "delivery@" not in stack:
-            warnings.append(
-                "STATUS.md: missing stack version "
-                "(e.g. 'delivery@1.11, cqg@1.2, okf@absent')"
-            )
+            warnings.append("STATUS.md: missing stack version (e.g. 'delivery@1.11, cqg@1.2, okf@absent')")
 
         # --- Circuit breakers (§3.4): анти-oneshot по объёму поставки
         if args.diff_base:
@@ -298,8 +263,7 @@ def main() -> int:
             stats = diff_stats(args.diff_base)
             if stats is None:
                 warnings.append(
-                    f"circuit breakers: ref '{args.diff_base}' unavailable "
-                    "(shallow clone? need full history)"
+                    f"circuit breakers: ref '{args.diff_base}' unavailable (shallow clone? need full history)"
                 )
             else:
                 n_files, added, deleted, excluded = stats

@@ -97,8 +97,7 @@ def collect(base: str) -> dict[str, str]:
         deleted += int(d) if d.isdigit() else 0
 
     m["files_touched / loc_diff"] = (
-        f"{code_files} code (+{doc_files} process docs) / "
-        f"+{added}/-{deleted} (net {added - deleted:+d})"
+        f"{code_files} code (+{doc_files} process docs) / +{added}/-{deleted} (net {added - deleted:+d})"
     )
     m["commits"] = git("rev-list", "--count", f"{merge_base}..HEAD").strip() or "0"
 
@@ -118,9 +117,7 @@ def collect(base: str) -> dict[str, str]:
     else:
         m["rework_after_done"] = "0 (handoff not declared yet)"
 
-    m["harness_hardened"] = (
-        f"yes — {', '.join(sorted(set(hardened))[:4])}" if hardened else "no"
-    )
+    m["harness_hardened"] = f"yes — {', '.join(sorted(set(hardened))[:4])}" if hardened else "no"
     m["implement_retries"] = "MANUAL — fills from session log"
     m["verify_fails_before_green"] = "MANUAL — count red verify runs (CI run list)"
     m["est_token_or_cost"] = "MANUAL / n/a"

@@ -4,3 +4,6 @@
 
 # style: ruff format по проекту (71 файл, только формат) — 2026-07-27
 afbd5f4a5a8efdff5ed02d9391b91494ce021c21
+
+# style: ruff format по cli/ и scripts/ (3 файла, только формат) — 2026-08-01
+1c0ce0c2adce75eb641fe5cb2bfcf6fdd4a46d2b

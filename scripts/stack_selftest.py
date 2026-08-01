@@ -46,9 +46,9 @@ def blocks(text: str) -> tuple[list[tuple[int, str, str]], int]:
             if lang is not None:
                 buf.append(line)
             continue
-        if lang is None:                       # открытие
+        if lang is None:  # открытие
             lang, start, buf = line[3:].strip().lower(), i, []
-        else:                                  # закрытие
+        else:  # закрытие
             out.append((start, lang, "\n".join(buf)))
             lang = None
     return out, (1 if lang is not None else 0)
@@ -68,7 +68,7 @@ def check_yaml(code: str) -> str | None:
         # то есть являются потоком из нескольких YAML-документов, и одиночный
         # safe_load ронял их с ComposerError (ложное срабатывание).
         list(yaml.safe_load_all(code))
-    except Exception as exc:  # noqa: BLE001 -- любая ошибка парсера = провал блока
+    except Exception as exc:  # любая ошибка парсера = провал блока
         # silent-ok: ошибка не теряется — текст возвращается вызывающему и печатается
         # как FAIL в отчёте; логгера у одноразового CLI-скрипта нет.
         return f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
@@ -120,9 +120,7 @@ def main() -> int:
                 except SyntaxError as exc:
                     err = f"SyntaxError: {exc.msg} (block line {exc.lineno})"
             elif lang in {"bash", "sh"}:
-                proc = subprocess.run(
-                    ["bash", "-n"], input=code, text=True, capture_output=True, check=False
-                )
+                proc = subprocess.run(["bash", "-n"], input=code, text=True, capture_output=True, check=False)
                 if proc.returncode:
                     err = proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else "bash -n failed"
             else:

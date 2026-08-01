@@ -39,19 +39,25 @@ repos:
       # а формат кода уже держат ruff-format и prettier.
 
   # -------------------------------------------------------------------------
-  # Python: ruff lint — backend/app + cli (прод-код проекта).
+  # Python: ruff lint — backend + cli + scripts (весь Python репозитория,
+  # кроме Phase 0 spike). Правила берутся из backend/pyproject.toml, а для
+  # cli/ и scripts/ — из корневого ruff.toml, который его `extend`-ит: без
+  # конфига в корне эти каталоги линтовались ДЕФОЛТНЫМ набором ruff (E4/E7/E9/F),
+  # то есть канонные правила там не работали никогда, а хук был зелёным.
   # -------------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.13
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        files: ^(backend|cli)/
+        files: ^(backend|cli|scripts)/
+        exclude: ^scripts/spike/   # Phase 0 артефакт — вне стандартов (CLAUDE.md)
       # Подключён после того, как база отформатирована целиком (поставка
       # legacy-debt): до этого он переформатировал бы 71 файл на первом коммите.
       # Стилевой коммит — в .git-blame-ignore-revs.
       - id: ruff-format
-        files: ^(backend|cli)/
+        files: ^(backend|cli|scripts)/
+        exclude: ^scripts/spike/
 
   # -------------------------------------------------------------------------
   # Python: mypy на изменённых файлах через проектный venv (local hook,
