@@ -67,9 +67,8 @@ def validate_bundle(root: Path) -> int:
             continue
 
         if name in RESERVED:
-            if name == "log.md":
-                if not re.search(r"(?m)^## \d{4}-\d{2}-\d{2}\s*$", text):
-                    warnings.append(f"{rel}: no ## YYYY-MM-DD headings (SPEC §9 shape)")
+            if name == "log.md" and not re.search(r"(?m)^## \d{4}-\d{2}-\d{2}\s*$", text):
+                warnings.append(f"{rel}: no ## YYYY-MM-DD headings (SPEC §9 shape)")
             continue
 
         meta, body = parse_frontmatter(text)
