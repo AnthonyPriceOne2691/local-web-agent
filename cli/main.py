@@ -43,15 +43,9 @@ def crawl(
     max_depth: int = typer.Option(2, "--max-depth"),
     no_robots: bool = typer.Option(False, "--no-robots"),
     screenshots: str = typer.Option("auto", "--screenshots", help="auto|always|never"),
-    sitemap: str = typer.Option(
-        "auto", "--sitemap", help="auto|always|never (P2.5, doc 21)"
-    ),
-    consent: str = typer.Option(
-        "auto", "--consent", help="auto|hide_only|never (D-11)"
-    ),
-    consent_click: str = typer.Option(
-        "reject_first", "--consent-click", help="reject_first|accept|never"
-    ),
+    sitemap: str = typer.Option("auto", "--sitemap", help="auto|always|never (P2.5, doc 21)"),
+    consent: str = typer.Option("auto", "--consent", help="auto|hide_only|never (D-11)"),
+    consent_click: str = typer.Option("reject_first", "--consent-click", help="reject_first|accept|never"),
     vision: str = typer.Option("auto", "--vision", help="auto|always|never (doc 23)"),
     allow_private: bool = typer.Option(
         False, "--allow-private", help="разрешить private-network цели (I-H8 override)"
@@ -61,9 +55,7 @@ def crawl(
         "--attended",
         help="видимый браузер; на anti-bot challenge пауза — пройди проверку сам, затем resume (Phase 5)",
     ),
-    output: Path | None = typer.Option(
-        None, "--output", help="write ExtractionResult JSON to file"
-    ),
+    output: Path | None = typer.Option(None, "--output", help="write ExtractionResult JSON to file"),
     wait: bool = typer.Option(True, "--wait/--no-wait"),
     api_url: str = typer.Option(API_DEFAULT, "--api-url"),
 ) -> None:
@@ -126,18 +118,10 @@ def crawl(
         result = record.get("result") or {}
         _print_result(result, record)
         if output:
-            output.write_text(
-                json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             console.print(f"Saved: {output}")
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        code = (
-            0
-            if status in ("completed", "partial")
-            else 1
-            if status in ("not_found", "blocked")
-            else 2
-        )
+        code = 0 if status in ("completed", "partial") else 1 if status in ("not_found", "blocked") else 2
         raise typer.Exit(code)
 
 
@@ -158,9 +142,7 @@ def _print_result(result: dict, record: dict) -> None:
 
 
 @runs_app.command("list")
-def runs_list(
-    limit: int = 20, api_url: str = typer.Option(API_DEFAULT, "--api-url")
-) -> None:
+def runs_list(limit: int = 20, api_url: str = typer.Option(API_DEFAULT, "--api-url")) -> None:
     with _client(api_url) as client:
         data = client.get("/runs", params={"limit": limit}).json()
     table = Table("ID", "STATUS", "PAGES", "TASK", "STARTED")
@@ -210,12 +192,8 @@ def research(
     rubric: str | None = typer.Option(
         None, "--rubric", help="design_diff|content_completeness|generic_merge"
     ),
-    output: Path | None = typer.Option(
-        None, "--output", help="ComparisonResult JSON to file"
-    ),
-    report: Path | None = typer.Option(
-        None, "--report", help="copy comparison_report.md here"
-    ),
+    output: Path | None = typer.Option(None, "--output", help="ComparisonResult JSON to file"),
+    report: Path | None = typer.Option(None, "--report", help="copy comparison_report.md here"),
     api_url: str = typer.Option(API_DEFAULT, "--api-url"),
 ) -> None:
     """Multi-site research (doc 24): sequential crawls + compare. Один chat-message без UI."""
@@ -241,14 +219,10 @@ def research(
             status = session["status"]
             for msg in session["messages"][seen_msgs:]:
                 if msg["role"] in ("tool", "assistant"):
-                    console.print(
-                        f"[{msg['role']}] {msg['content'][:200]}", highlight=False
-                    )
+                    console.print(f"[{msg['role']}] {msg['content'][:200]}", highlight=False)
             seen_msgs = len(session["messages"])
         comparison = session.get("comparison_result")
-        console.print(
-            f"\n[bold]Session:[/bold] {status} · runs: {len(session['run_ids'])}"
-        )
+        console.print(f"\n[bold]Session:[/bold] {status} · runs: {len(session['run_ids'])}")
         if comparison:
             print(json.dumps(comparison, ensure_ascii=False, indent=2))
             if output:
@@ -289,9 +263,7 @@ def runs_cancel(
 
 
 @runs_app.command("delete")
-def runs_delete(
-    run_id: str, api_url: str = typer.Option(API_DEFAULT, "--api-url")
-) -> None:
+def runs_delete(run_id: str, api_url: str = typer.Option(API_DEFAULT, "--api-url")) -> None:
     with _client(api_url) as client:
         r = client.delete(f"/runs/{run_id}")
     if r.status_code == 404:
