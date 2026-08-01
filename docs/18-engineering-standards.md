@@ -1,6 +1,6 @@
 # 18 — Engineering Standards (SOLID, DRY, tests, module size)
 
-> Local Web Agent · Design doc · **v0.2.1** · 2026-07-05
+> Local Web Agent · Design doc · **v0.3** · 2026-08-01
 
 ## Принцип
 
@@ -167,10 +167,24 @@ Serve via `pytest-httpserver` or static file handler — no flaky network.
 
 | Tool | Scope |
 |------|-------|
-| ruff | lint + format |
+| ruff (lint + format) | `backend/`, `cli/`, `scripts/` — **весь Python репозитория**, кроме `scripts/spike/` |
 | mypy strict | `backend/app/` |
 | pytest + pytest-cov | backend |
 | playwright | optional e2e script only |
+
+**Конфиг ruff — в двух файлах, но правила в одном.** `backend/pyproject.toml` держит
+набор правил, ignore-список и пороги сложности; корневой `ruff.toml` его `extend`-ит
+и добавляет только то, что специфично для корня (`scripts/spike` в `extend-exclude`,
+per-file-ignores для `cli/` и гейт-скриптов).
+
+**Гонять lint и format только из корня репозитория** — так же, как это делает
+pre-commit. Запуск из `backend/` применяет к `cli/` и `scripts/` backend-конфиг и
+даёт ложный красный на формате.
+
+История, ради которой это записано (поставка `lint-contour`, 2026-08-01): конфига в
+корне не было, ruff берёт ближайший вверх по дереву, поэтому `cli/` и `scripts/`
+линтовались **дефолтным** набором ruff (E4/E7/E9/F). Канонные правила там не работали
+никогда, а хук был зелёным — «гейт есть, проверки нет».
 
 ---
 
@@ -204,3 +218,4 @@ Serve via `pytest-httpserver` or static file handler — no flaky network.
 | 2026-07-05 | `navigation/` module + GEO fixture; coverage Phase 1 |
 | 2026-07-05 | **v0.2 (review):** fixtures redirect_offsite / private_ip_link / cookie_banner / paginated_blog / sitemap_only; test cases I-H8/I-H9, cancel, 409, sitemap, URL normalization |
 | 2026-07-05 | **v0.2.1 (review-2):** test cases hop depth, RU keywords, article candidates, startup sweep |
+| 2026-08-01 | **v0.3:** контур ruff зафиксирован — `backend/` + `cli/` + `scripts/` (кроме `scripts/spike/`), корневой `ruff.toml` через `extend`, lint/format гонять из корня |
