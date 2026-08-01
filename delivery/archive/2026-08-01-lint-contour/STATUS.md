@@ -1,9 +1,9 @@
 # Active delivery status
 
-- **slug:** next-up
+- **slug:** lint-contour
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** specify
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
 - **human_ok_spec:** n/a
@@ -17,7 +17,7 @@
 - **worktree:** none
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **blockers:** приоритет не выбран — слот открыт по остатку, а не решён
+- **blockers:** —  <!-- приоритет задан владельцем: «закрывай дыры» -->
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
@@ -26,22 +26,25 @@
 `legacy-debt` (M) · `ci-red` (S) · `mypy-strict` (M) · `tier3-exit-smoke` (S) ·
 `nav-model-split` (S) · `synth-speed` (S) · `session-throughput` (S, закрыта
 **частично**) · `ui-liquid-glass` (S) · `real-site-calibration` (S) ·
-`protect-main-segments` (S) · `lint-contour` (S) — все слиты через `merge_guard`;
-CI на main зелёный. Артефакты в `delivery/archive/`.
+`protect-main-segments` (S) — все слиты через `merge_guard`; CI на main зелёный.
+Артефакты в `delivery/archive/`.
 
 ## Backlog гейтов
 
 - [x] **secrets-scanner** — `detect-secrets`, baseline пустой.
-- [x] **`ruff-format`** — подключён; стилевые прогоны `afbd5f4` и `1c0ce0c`.
+- [x] **`ruff-format`** — подключён, стилевой прогон в `afbd5f4`.
 - [x] **Молчаливые `except`** — baseline 20 → 3 сайта (только `scripts/spike/**`).
 - [x] **mypy-заглушки** сняты; **mypy → strict** ✅ (89 модулей).
 - [x] **Diff-coverage** ✅ прогнан на реальном диффе кода (PR #7).
+- [ ] **Сложность функций** (`C901`/`PLR09xx`, 10 модулей) — рефакторинг оркестратора.
 - [x] **UI-рефактор** ✅ (поставка `ui-liquid-glass`).
-- [x] **`scripts/` и `cli/` в контуре ruff** ✅ (поставка `lint-contour`): корневой
-      `ruff.toml` через `extend`, тест контура с негативным контролем, doc 18 v0.3.
-- [ ] **Сложность функций** (`C901`/`PLR09xx`): 10 модулей backend + 4 гейт-скрипта
-      (`delivery_check.main` — 50 при пороге 10). Заморожено per-file-ignores.
+- [x] **`scripts/` в lint-контуре** ✅ (поставка `lint-contour`): корневой
+      `ruff.toml` через `extend`, хуки расширены, `scripts/spike` исключён явно.
+      Заодно вскрылось, что `cli/` всё это время линтовался дефолтным набором ruff.
+- [x] **Команда формата в CLAUDE.md** ✅ исправлена: lint и format гоняются из корня.
 - [ ] **mypy на `scripts/`** — 6 файлов без аннотаций; отдельная поставка.
+- [ ] **Сложность гейт-скриптов** (`delivery_check.main` — 50 при пороге 10) —
+      заморожена per-file-ignores, разбирать вместе с долгом сложности backend.
 
 ## Хвосты из session-throughput (перенесены, не потеряны)
 
@@ -62,15 +65,19 @@ CI на main зелёный. Артефакты в `delivery/archive/`.
 
 ## Контекст поставки
 
-Слот открыт без выбранного приоритета. Что лежит на столе, по весу:
+Владелец (01.08): «закрывай дыры» — то есть два открытых пункта бэклога гейтов.
+Обе оказались одной причиной: конфига ruff в корне не было, поэтому канонные правила
+не действовали нигде, кроме `backend/`. Подробности — `tasks.md`, `verify-report.md`.
+
+Что лежит на столе дальше, по весу:
 
 1. **Качество результата вместо скорости** — рубрики, полнота evidence, язык
    narrative в compare-промпте (re-compare отвечает по-английски на русский вопрос).
    Скорость упёрлась в локальную генерацию 8–13 ток/с — это свойство железа.
 2. **`compare` без схемы** — единственная измеримая цель по скорости на реальных
    сайтах (36 % сессии, 81 % выхода — мысли); входы для A/B уже в БД.
-3. **Сложность функций** — последний пункт долга гейтов; рефакторинг оркестратора
-   плюс гейт-скрипты.
+3. **Сложность функций** (`C901`/`PLR09xx`, 10 модулей backend + 4 гейт-скрипта) —
+   последний пункт долга гейтов.
 4. **mypy на `scripts/`** — 6 файлов без аннотаций.
 5. **Открытый вопрос канона по robots** — владелец считает, что при работе «как будто
    заходит он сам» robots можно игнорировать. Дефолт не менялся; для осознанного
