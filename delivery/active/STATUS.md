@@ -1,9 +1,9 @@
 # Active delivery status
 
-- **slug:** next-up
+- **slug:** protect-main-segments
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** specify
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
 - **human_ok_spec:** n/a
@@ -69,7 +69,8 @@
 истории. За одну сессию сработало трижды.
 
 Решение: разбирать команду по разделителям (`&&`, `||`, `;`, `|`, перевод строки) и
-проверять **каждый сегмент отдельно**; плюс `scripts/hooks/test_protect_main.py`, где
+проверять **каждый сегмент отдельно**; плюс `backend/tests/test_protect_main_hook.py`
+(там, а не в `scripts/hooks/`, иначе `testpaths = ["tests"]` его бы не собрал), где
 половина кейсов — «должен **пропустить**» (обычный пуш `main`, пуш ветки, перезапись
 не-`main`, слово `main` в соседней команде, регрессия с `pkill -f`), а вторая —
 «должен **заблокировать**» (force-push в main, удаление main на remote,
