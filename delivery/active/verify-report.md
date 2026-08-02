@@ -1,73 +1,104 @@
-# Verify report
+# Verify report — orchestrator-complexity
 
 **Date:** 2026-08-02
-**Verifier:** human:anthony (приоритет), agent:claude-code (прогон проверок)
+**Verifier:** human:anthony (спека и объём прогона), agent:claude-code (проверки)
 
-## Порядок работы: тесты до рефакторинга
+## Что сделано
 
-Гейт-скрипты не имели тестов вообще, поэтому разбирать `main()` на 123 строки «на
-глаз» было нельзя: любая потерянная ветка означала бы гейт, который молча пропускает
-нарушение. Последовательность была такой:
+Семь функций, державшихся на `per-file-ignores`, разобраны. **Заморозок сложности в
+проекте не осталось ни одной** — `ruff --isolated --select C901,PLR0912,PLR0915` по
+`backend/app`, `cli` и `scripts` чист.
 
-1. `delivery_check` получил `--root` (прогон на фикстуре) — минимальная правка,
-   поведение на репозитории не изменилось.
-2. Написаны **22 характеризационных теста** и прогнаны на **старом** коде — зелёные.
-3. Только после этого разобрана структура; те же тесты остались зелёными.
-
-Тесты вызывают гейты процессом и пиннят наблюдаемое: exit code и текст сообщений.
-Проверяется граница, а не внутренние функции — иначе рефакторинг ломал бы тесты
-вместе с кодом и ничего не доказывал.
-
-## Что покрыто (22 кейса)
-
-| Гейт | Кейсы |
-|---|---|
-| `delivery_check` | class S без mini-spec; class M без spec/plan/human_ok; class L без human_ok_plan; placeholder'ы шаблона («class: S \| M \| L» — не класс S); handoff без вердикта и метрик; verifier == builder; ci-oracles weak (warning для S, `--require-ci` — ошибка); `--require-spec`/`--require-verify`; отсутствие CONSTITUTION и active/ |
-| `okf_validate` | concept без frontmatter / без `type` (ошибки); отсутствие index.md и битая bundle-ссылка (предупреждения, не блокеры); `log.md` без дат; несуществующий каталог |
-| `okf_sync_gate` | просроченный `stale_after` (провал); свежий bundle (freshness OK); отсутствие bundle — skip, а не падение |
-| `stack_selftest` | отсутствующий каталог канонов |
-
-## Сложность: было → стало
-
-| Скрипт | Было | Стало |
+| Функция | Было | Стало |
 |---|---|---|
-| `delivery_check.main` | **47** (50 ветвлений, 123 statements) | ≤ 10, заморозок нет |
-| `okf_sync_gate.main` | 25 | ≤ 10 |
-| `okf_validate.validate_bundle` | 17 | ≤ 10 |
-| `stack_selftest.main` | 15 | ≤ 10 |
+| `loop.py::run` | **C901 30**, 30 ветвлений, **160 statements** | ≤ 10 |
+| `candidate_queue::build_candidates` | 18 / 16 ветвлений | ≤ 10 |
+| `runner::run_message` | 13 | ≤ 10 |
+| `runner::_run_llm_plan` | 13 | ≤ 10 |
+| `decide::plan_validated` | 12 | ≤ 10 |
+| `synthesis_validator::validate` | 11 | ≤ 10 |
+| `markdown::build_report` | 11 | ≤ 10 |
+| `vision::select_vision_jobs` | 11 | ≤ 10 |
 
-Все четыре заморозки из `ruff.toml` **сняты**, а не переписаны.
+Новые модули (`loop.py` удержан ≤ 500 LOC): `run_state.py` (состояние прогона +
+`StepOutcome`), `finalize.py` (результат и отчёт), `observe.py` (переход, ретрай,
+redirect-guard, SPA-fallback, скриншот). Consent переехал в `capture.py`.
 
-## Проверка на настоящих данных, а не только на фикстурах
+## Порядок работы: тесты до кода
 
-- `stack_selftest Prepare/` → 41 блок, 0 провалов (каноны лежат вне гита).
-- `okf_validate knowledge/` → 0 ошибок, 14 файлов.
-- `okf_sync_gate --base main` → OK, 6 mapped concepts.
-- `delivery_check` → 0 ошибок.
+Как и в `scripts-canon`: сначала тесты, прогнанные на **старом** коде, потом разбор.
 
-Вывод совпадает с тем, что печатали старые версии.
+| Инвариант `run()` | Тест |
+|---|---|
+| Отмена до OBSERVE — браузер никуда не идёт | `test_run_invariants::cancel_before_observe_stops_without_navigating` |
+| Отмена между OBSERVE и PLAN — LLM не зовётся | `…::cancel_between_observe_and_plan_skips_llm` |
+| Отмена перед синтезом — синтез пропускается | `test_orchestrator::cancel_before_synthesis_skips_llm` |
+| Ранняя остановка G-S1 | `test_orchestrator_edges::early_stop_gs1_after_three_stale_pages` |
+| Attended-пауза на captcha и на login_wall | `test_attended::attended_pause_resume_then_observe`, `…::attended_login_wall_pause_resume` |
+| Без attended блокер завершает прогон | `test_attended::captcha_without_attended_still_blocks` |
+| После handoff — только фиксация исхода | `test_tier3_handoff::after_handoff_agent_stops_acting` |
+| Анти-залипание click / fill / fill_form | `test_run_invariants::repeated_click_stops_acting`, `test_tier3_handoff::repeated_fill_stops_acting`, `…::repeated_fill_form_stops_acting` |
+| `extract_now` guard | `test_orchestrator_edges::extract_now_streak_breaks_loop` |
+| Падение в середине → `failed` + имя типа + закрытый браузер | `test_run_invariants::crash_mid_run_fails_with_type_name_and_closes_browser` |
+| Финализация: результат, длительность, `report.md` | `…::finalize_fills_result_and_writes_report` |
+| Hard-нарушение конфига — отказ до браузера | `test_orchestrator_edges::config_hard_violation_fails_before_start` |
+| Источники кандидатов P1–P4 и дедуп | `test_candidate_sources` (5 кейсов) |
 
-## Ратчет растоплен, а не подкручен
+Покрытие: `candidate_queue` 74 % → **100 %**, `loop.py` 92 % → **98 %**, общий
+92 % → **93 %**. Тестов 302 (было 292).
 
-Из backend сняты заморозки `vision_batch`, `sitemap`, `snapshot`,
-`compare_synthesizer` — эти модули больше не нарушают пороги, а заморозка висела и
-завышала видимый долг. Если сложность вернётся, гейт скажет сразу.
+## Отклонения от правила «только перестановка»
+
+Правило поставки: дифф — перестановка и извлечение; изменение условия требует
+отдельного объяснения.
+
+**Отклонений нет.** Настоящих дефектов по дороге не нашлось, логика не менялась.
+Сохранены и неочевидные тонкости, которые легко было потерять:
+
+- проверка `handoff_done` осталась **только** у `click`/`fill` — у `fill_form` её не
+  было и раньше (пачка полей до handoff не доходит по построению);
+- браузер закрывается и на отменённом прогоне (`_finish_canceled` вызывает
+  `_safe_close`, как делал прежний код);
+- отмена проверяется на **обеих** границах состояний, а не один раз в начале цикла;
+- `_early_stop` сбрасывает `just_visited` даже когда новых ссылок нет — иначе
+  счётчик G-S1 считал бы одну страницу дважды.
+
+## Находка из тестов (не дефект, но важно знать)
+
+На **статичной** странице анти-залипание `click` недостижимо: раньше срабатывает
+ранняя остановка G-S1 (три страницы подряд без новых релевантных ссылок). Поэтому
+тестовая фикстура честно подгружает новую ссылку на каждый клик — как настоящая
+кнопка «показать ещё». Это не обход проверки, а её условие.
+
+## Продуктовый прогон (eval-smoke) ✅
+
+Объём выбран владельцем: UC-2 на фикстурах. Сессия `7b546c74527d`, второй инстанс
+API на 8002 с кодом ветки (рабочий 8001 не трогали).
+
+| Критерий | Результат |
+|---|---|
+| Все сайты прочитаны | 3 из 3 `completed`, `excluded` пуст |
+| Победитель и порядок | **8901 → 8903 → 8902**, 95 > 75 > 40 (записано 95 > 75 > 50) |
+| Факты с цитатами | 2/2, 1/1, 2/2 — цитаты прошли сверку с DOM (S-H3) |
+| Размерности + narrative | 5 размерностей, narrative называет разделы и объём |
+| Стадии | OBSERVE, ACT, SYNTHESIZE присутствуют в каждом run'е |
+| Модели выгружены | `ollama ps` пуст |
+
+Разница в третьем счёте (40 против 50) — разброс локальной модели; критерием был
+**порядок**, он совпал. Полные детали — `eval-smoke.md`.
 
 ## Гейты
 
-`pytest` **292** (было 270, +22) · ruff · ruff format · `mypy --strict` для `app`
-(89 модулей) **и** `scripts` (8 файлов) · module-size · pre-commit `--all-files` ·
-`delivery_check` · `okf_sync_gate`.
+`pytest` **302** · ruff · ruff format · `mypy --strict` (app 92 модуля + scripts) ·
+module-size (`loop.py` 493) · pre-commit `--all-files` · `delivery_check` ·
+`okf_sync_gate` · `lint-imports`.
 
 ## Честные ограничения
 
-- **Сложность backend не тронута**: `loop.run` (30 ветвлений, 160 statements),
-  `candidate_queue`, `decide`, `runner`, `markdown`, `selection`,
-  `synthesis_validator`. Это ядро оркестратора — рефакторинг влияет на поведение
-  агента, а не на форму кода, поэтому идёт отдельной поставкой класса M со спекой,
-  планом и подписью владельца, и с продуктовым прогоном в проверке. Заморозки
-  оставлены и помечены как долг.
-- `stack_selftest` покрыт слабее прочих: один кейс на границе. Его настоящая
-  проверка — прогон на `Prepare/`, который вне репозитория и в CI недоступен.
-- Тесты пиннят **тексты сообщений**. Это осознанно (сообщение гейта — его продукт),
-  но означает, что смена формулировки потребует правки теста.
+- **Прогон не покрывает attended/Tier 3**: ветки `_handle_blocker` и
+  `_interact_step` на UC-2 не задействованы — их держат только юниты. Живого
+  подтверждения этих веток в поставке нет (см. `eval-smoke.md` § Чего не проверяет).
+- **Real-site прогон не делался** — по выбранному объёму. Значит, поведение на
+  настоящих сайтах после разбора подтверждено только косвенно.
+- `loop.py` — 493 LOC при лимите 500: запаса мало, следующий вынос понадобится
+  скоро. Это цена того, что машина состояний осталась одним читаемым файлом.

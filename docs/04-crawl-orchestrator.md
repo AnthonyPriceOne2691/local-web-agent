@@ -1,6 +1,6 @@
 # 04 — Crawl Orchestrator
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-05
+> Local Web Agent · Design doc · **v0.7** · 2026-08-02
 
 ## Назначение
 
@@ -216,6 +216,35 @@ After every ACT:
 
 Crash recovery (P1): resume from last checkpoint — not MVP.
 
+## Реализация: одна стадия — одна функция
+
+`CrawlOrchestrator.run()` собирает контекст и вызывает стадии; сама она решений не
+принимает. Состояние прогона живёт в `RunState` (`orchestrator/run_state.py`), исход
+шага — в `StepOutcome`:
+
+| Исход | Значение для цикла |
+|---|---|
+| `CONTINUE` | следующая итерация (новая страница или повторный PLAN) |
+| `PROCEED` | дальше по той же итерации (страница уже открыта) |
+| `STOP` | выход из цикла к VISION_BATCH/SYNTHESIZE |
+
+| Стадия | Функция | Что решает |
+|---|---|---|
+| INIT | `_config_allows_run` + `_prepare` | hard-нарушение конфига → отказ до браузера; robots, темп, пробы, sitemap, видимость окна |
+| OBSERVE | `_observe_step` → `observe.navigate_and_observe` | переход с ретраем, I-H9 redirect-guard, SPA-fallback, скриншот |
+| — | `_handle_blocker` | captcha/login_wall: attended-пауза или `blocked_by` |
+| PLAN | `_plan_step` + `_early_stop` | кандидаты, G-S1, решение навигатора с валидацией |
+| ACT | `_act_step` → `_repeats_too_often` / `_interact_step` | навигация, extract_now, тиры 1–3, анти-залипание |
+| DONE | `finalize.finalize_run` | поля результата, S-*-валидация, `report.md` |
+
+**Почему так, а не одной функцией.** До поставки `orchestrator-complexity`
+(2026-08-02) `run()` была на 160 statements и 30 ветвлений: все инварианты прогона
+(отмена на границах состояний, ранняя остановка, attended-паузы, тиры действий,
+анти-залипание) читались вперемешку, а девять дефектов живого прогона Tier 3
+нашлись именно там. Порядок проверок при этом **содержателен** и сохранён:
+отмена — на каждой границе состояний (FR-3.8), handoff-ветка — раньше
+submit-confirm (doc 25 § Tier 3).
+
 ## Testing strategy
 
 | Test type | Cases |
@@ -238,3 +267,4 @@ Crash recovery (P1): resume from last checkpoint — not MVP.
 | 2026-07-05 | **v0.4:** VISION_BATCH state; priority_snapshot; vision config (doc 23) |
 | 2026-07-05 | **v0.5 (review):** extract_now семантика определена (назад в PLAN без re-OBSERVE + loop guard #11); policies #12 redirect re-check, #13 cancel flag; config: use_sitemap, dismiss_cookie_banners |
 | 2026-07-05 | **v0.6 (review-2):** max_depth = **hop depth**, не path-сегменты (иначе ломались UC-2 и sitemap tier); INIT landing-domain rule (редирект первой навигации переопределяет allowed_domains); max_article_candidates |
+| 2026-08-02 | **v0.7:** § Реализация — стадии как функции, `RunState` + `StepOutcome`; поведение не менялось (поставка `orchestrator-complexity`) |

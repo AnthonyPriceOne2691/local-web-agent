@@ -58,16 +58,7 @@ def select_vision_jobs(
     if intent == "design_audit" or mode == "always":
         pages = list(with_shots)  # page cap не применяется (кроме max_calls)
     else:
-        ordered: list[PageSnapshot] = []
-        if snapshots and snapshots[0].screenshots:  # R0 homepage
-            ordered.append(snapshots[0])
-        for s in reversed(with_shots):  # R1 priority — most recent first
-            if s.priority and s not in ordered:
-                ordered.append(s)
-        for s in with_shots:  # R2 empty DOM
-            if len(s.main_text) < SPA_TEXT_THRESHOLD and s not in ordered:
-                ordered.append(s)
-        pages = ordered[:max_pages]
+        pages = _key_pages(snapshots, with_shots)[:max_pages]
 
     jobs: list[VisionJob] = []
     for snap in pages:
@@ -79,6 +70,24 @@ def select_vision_jobs(
     analyzed_urls = {j.snapshot.url for j in jobs}
     skipped = [s.url for s in with_shots if s.url not in analyzed_urls]
     return jobs, skipped
+
+
+def _key_pages(snapshots: list[PageSnapshot], with_shots: list[PageSnapshot]) -> list[PageSnapshot]:
+    """Ключевые страницы в порядке doc 23: R0 homepage → R1 priority → R2 empty-DOM.
+
+    Порядок содержателен, а не декоративен: он решает, кого VLM успеет посмотреть
+    до потолка вызовов, а кто уйдёт в skipped.
+    """
+    ordered: list[PageSnapshot] = []
+    if snapshots and snapshots[0].screenshots:  # R0 homepage
+        ordered.append(snapshots[0])
+    for s in reversed(with_shots):  # R1 priority — most recent first
+        if s.priority and s not in ordered:
+            ordered.append(s)
+    for s in with_shots:  # R2 empty DOM
+        if len(s.main_text) < SPA_TEXT_THRESHOLD and s not in ordered:
+            ordered.append(s)
+    return ordered
 
 
 def _profiles_for(snap: PageSnapshot, intent: str) -> list[ScreenshotRef]:

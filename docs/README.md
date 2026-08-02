@@ -10,7 +10,7 @@
 | [01-requirements.md](01-requirements.md) | ✅ **v0.5.3** | FR/NFR incl. FR-6/FR-7 (actions); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
 | [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.8** | Playwright pipeline; robots своим UA; SPA fallback |
-| [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.6** | Agent loop + VISION_BATCH; hop depth; landing domain |
+| [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.7** | Agent loop + VISION_BATCH; hop depth; landing domain |
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.10** | **Phases 0–4 DONE**; Phase 5 attended-режим |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |

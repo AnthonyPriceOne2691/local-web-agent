@@ -15,7 +15,7 @@ from rapidfuzz import fuzz
 
 from app.contracts.loader import ContractSpec, load_contract
 from app.extraction.validator import validate_result
-from app.schemas.extraction import Evidence, ExtractionResult, NotFound
+from app.schemas.extraction import Evidence, ExtractionResult, Fact, NotFound
 from app.schemas.snapshot import PageSnapshot
 
 _WS = re.compile(r"\s+")
@@ -75,18 +75,9 @@ class SynthesisValidator:
                 ev for ev in fact.evidence if self._evidence_ok(ev, pages, all_text, vision_pages, all_vision)
             ]
             if not fact.evidence:  # S-H3c: URL-факт — визит страницы сам по себе пруф
-                visited_url = _visited_url_in_value(fact.value, snapshots)
-                if visited_url:
-                    fact.evidence = [Evidence(url=visited_url, quote="")]
-                    if fact.confidence == "high":
-                        fact.confidence = "medium"
-            quoted = [ev for ev in fact.evidence if ev.quote.strip() and ev.source != "vision"]
+                self._accept_visited_url_as_proof(fact, snapshots)
             if fact.evidence or fact.confidence != "high":
-                if fact.confidence == "high" and not quoted:
-                    fact.confidence = "medium"  # S-H2 после фильтра цитат
-                vision_only = fact.evidence and all(ev.source == "vision" for ev in fact.evidence)
-                if fact.confidence == "high" and vision_only:
-                    fact.confidence = "medium"  # S-H6: vision-only не может быть high
+                self._downgrade_unquoted(fact)
                 kept.append(fact)
             else:
                 removed_keys.append(fact.key)  # S-H3 recovery: remove → not_found
@@ -96,6 +87,33 @@ class SynthesisValidator:
                 result.not_found.append(NotFound(key=key, reason="evidence quote not found in visited pages"))
         self._enrich_article(result, snapshots)
         return validate_result(result)  # S-H2 базовый + статус-согласование (S-G1)
+
+    @staticmethod
+    def _accept_visited_url_as_proof(fact: Fact, snapshots: list[PageSnapshot]) -> None:
+        """S-H3c: если значение факта — URL посещённой страницы, сам визит и есть пруф.
+
+        Уверенность при этом снимается с `high`: страницу видели, но цитаты нет.
+        """
+        visited_url = _visited_url_in_value(fact.value, snapshots)
+        if not visited_url:
+            return
+        fact.evidence = [Evidence(url=visited_url, quote="")]
+        if fact.confidence == "high":
+            fact.confidence = "medium"
+
+    @staticmethod
+    def _downgrade_unquoted(fact: Fact) -> None:
+        """S-H2 и S-H6: `high` требует цитаты из DOM. Без неё — `medium`.
+
+        Два разных случая с одним исходом: цитат не осталось после фильтра вовсе,
+        либо все оставшиеся пришли от vision (модель «увидела», а не прочитала).
+        """
+        if fact.confidence != "high":
+            return
+        quoted = [ev for ev in fact.evidence if ev.quote.strip() and ev.source != "vision"]
+        vision_only = bool(fact.evidence) and all(ev.source == "vision" for ev in fact.evidence)
+        if not quoted or vision_only:
+            fact.confidence = "medium"
 
     @staticmethod
     def _enrich_article(result: ExtractionResult, snapshots: list[PageSnapshot]) -> None:

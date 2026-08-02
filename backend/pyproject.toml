@@ -86,21 +86,10 @@ max-statements = 50
 
 [tool.ruff.lint.per-file-ignores]
 "../cli/**" = ["B008"]  # typer.Option в defaults — идиома typer
-# TODO(legacy, тающий список — CQG §1 baseline-ratchet): пере-снимать ВНИЗ по мере
-# правки этих модулей; новый код держится на канонных правилах без исключений.
-# Сложность (C901/PLR09xx) — разбить при следующем рефакторинге модуля.
-"app/orchestrator/loop.py" = ["C901", "PLR0912", "PLR0915"]
-# Тот же долг сложности, что был у loop.py: DECIDE-стадия переехала в decide.py
-# при разгрузке файла — заморозка перенесена, а не добавлена заново.
-"app/orchestrator/decide.py" = ["C901"]
-"app/navigation/candidate_queue.py" = ["C901", "PLR0912"]
-"app/extraction/synthesis_validator.py" = ["C901"]
-"app/reporting/markdown.py" = ["C901"]
-"app/vision/selection.py" = ["C901"]
-"app/research/runner.py" = ["C901"]
-# Растоплено поставкой scripts-canon (2026-08-02): vision_batch, sitemap, snapshot и
-# compare_synthesizer уже НЕ нарушают пороги — заморозки сняты, и если сложность
-# вернётся, гейт скажет об этом сразу. Ратчет обязан таять, иначе он врёт о долге.
+# Заморозок сложности (C901/PLR09xx) здесь БОЛЬШЕ НЕТ: поставка
+# orchestrator-complexity (2026-08-02) разобрала все семь функций, включая
+# loop.run (30 ветвлений, 160 statements). Возвращать заморозку нельзя — сначала
+# разбирается функция. Порог общий: mccabe 10, branches 12, statements 50.
 # Молчаливое подавление исключений разобрано поставкой legacy-debt (2026-07-27):
 # 20 сайтов получили осмысленные логи или `# silent-ok:` с причиной. Здесь остались
 # только точки, где подавление штатное и объяснено в коде.
