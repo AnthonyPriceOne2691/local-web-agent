@@ -92,8 +92,6 @@ max-statements = 50
 "app/orchestrator/loop.py" = ["C901", "PLR0912", "PLR0915"]
 # Тот же долг сложности, что был у loop.py: DECIDE-стадия переехала в decide.py
 # при разгрузке файла — заморозка перенесена, а не добавлена заново.
-"app/navigation/candidate_queue.py" = ["C901", "PLR0912"]
-"app/research/runner.py" = ["C901"]
 # Растоплено поставкой scripts-canon (2026-08-02): vision_batch, sitemap, snapshot и
 # compare_synthesizer уже НЕ нарушают пороги — заморозки сняты, и если сложность
 # вернётся, гейт скажет об этом сразу. Ратчет обязан таять, иначе он врёт о долге.

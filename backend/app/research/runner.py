@@ -36,6 +36,7 @@ from app.research.report import build_comparison_report
 from app.schemas.research import (
     ComparisonResult,
     ExcludedSite,
+    ResearchIntent,
     SessionMessage,
     SessionRecord,
 )
@@ -84,15 +85,7 @@ class ResearchRunner:
         started = time.monotonic()
         session.messages.append(SessionMessage(role="user", content=message, created_at=_now()))
         session.title = session.title or message[:80]
-        found = parse_urls(message, max_sites=None)  # все distinct; M-H2 cap ниже — с предупреждением
-        cap = session.config.max_sites
-        urls = found[:cap]
-        if len(found) > cap:  # не глотаем лишние URL молча (честность перед пользователем)
-            self._note(
-                session,
-                f"You gave {len(found)} links — I can take {cap} at a time, "
-                f"so I'll work through the first {cap} and skip the rest.",
-            )
+        urls = self._urls_within_cap(session, message)
         if not urls:
             if self._planner is not None:  # Phase 4: свободный диалог → LLM-план
                 return await self._run_llm_plan(session, message, cancel_event, started)
@@ -100,33 +93,66 @@ class ResearchRunner:
         intent = classify_research_intent(message, len(urls))
         session.research_intent = intent
         task = strip_urls(message) or message
+        plan = self._rules_plan(session, intent, urls, task)
+        unknown = next((c.name for c in plan if actions.get(c.name) is None), None)
+        if unknown is not None:  # M-H1/A-H1
+            return self._finish(session, "failed", f"I don't know how to do “{_action_name(unknown)}”.")
+
+        session.status = "running_tools"
+        self._sessions.save(session)
+        crawled = await self._crawl_each(session, plan, len(urls), started, cancel_event)
+        return await self._compare_stage(session, crawled, task, plan, cancel_event)
+
+    def _urls_within_cap(self, session: SessionRecord, message: str) -> list[str]:
+        """URL сообщения в пределах cap. Лишние не глотаем молча — говорим о них."""
+        found = parse_urls(message, max_sites=None)  # все distinct; M-H2 cap ниже
+        cap = session.config.max_sites
+        if len(found) > cap:
+            self._note(
+                session,
+                f"You gave {len(found)} links — I can take {cap} at a time, "
+                f"so I'll work through the first {cap} and skip the rest.",
+            )
+        return found[:cap]
+
+    @staticmethod
+    def _rules_plan(
+        session: SessionRecord, intent: ResearchIntent, urls: list[str], task: str
+    ) -> list[ToolCall]:
         plan = build_plan(intent, urls, task)
         if session.config.rubric_override:
             for call in plan:
                 if call.name == "compare_results":
                     call.args["rubric"] = session.config.rubric_override
-        session.status = "running_tools"
-        self._sessions.save(session)
+        return plan
 
+    async def _crawl_each(
+        self,
+        session: SessionRecord,
+        plan: list[ToolCall],
+        total: int,
+        started: float,
+        cancel_event: asyncio.Event | None,
+    ) -> list[RunRecord]:
+        """Сайты по очереди (D-7), с cooldown между ними; бюджет и отмена — на границе."""
         crawled: list[RunRecord] = []
         for i, call in enumerate(plan):
-            if actions.get(call.name) is None:  # M-H1/A-H1
-                return self._finish(session, "failed", f"I don't know how to do “{_action_name(call.name)}”.")
-            if call.name == "crawl_site":
-                if self._session_expired(started):
-                    self._note(session, "Out of time for this chat — comparing what I managed to read.")
-                    break
-                if cancel_event is not None and cancel_event.is_set():
-                    break
-                site = _site_name(call.args["url"])
-                self._note(session, f"Reading {site} — site {len(crawled) + 1} of {len(urls)}")  # M-S1
-                record = await self._crawl_site(session, call, cancel_event)
-                crawled.append(record)
-                session.run_ids.append(record.id)
-                self._sessions.save(session)
-                if i + 1 < len(urls):
-                    await asyncio.sleep(self._cooldown_s(len(urls)))
-        return await self._compare_stage(session, crawled, task, plan, cancel_event)
+            if call.name != "crawl_site":
+                continue
+            if self._session_expired(started):
+                self._note(session, "Out of time for this chat — comparing what I managed to read.")
+                break
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            site = _site_name(call.args["url"])
+            self._note(session, f"Reading {site} — site {len(crawled) + 1} of {total}")  # M-S1
+            record = await self._crawl_site(session, call, cancel_event)
+            crawled.append(record)
+            session.run_ids.append(record.id)
+            self._sessions.save(session)
+            if i + 1 < total:
+                await asyncio.sleep(self._cooldown_s(total))
+        return crawled
 
     # ------------------------------------------------------- llm plan path
     async def _run_llm_plan(
@@ -145,37 +171,23 @@ class ResearchRunner:
         session.status = "running_tools"
         self._sessions.save(session)
 
-        n_crawls = sum(1 for c in decision.plan if c.name == "crawl_site")
         crawled: list[RunRecord] = []
         reply_blocks: list[str] = []
         compare_call: ToolCall | None = None
+        n_crawls = sum(1 for c in decision.plan if c.name == "crawl_site")
         for call in decision.plan:
             if cancel_event is not None and cancel_event.is_set():
                 return self._finish(session, "failed", "Stopped at your request.")
             spec = actions.get(call.name)
             if spec is None:  # A-H1: планнер такое уже отбросил — двойная защита
                 continue
-            if call.name == "crawl_site":
-                if self._session_expired(started):
-                    self._note(session, "Out of time for this chat.")
-                    break
-                self._note(session, f"Reading {_site_name(call.args['url'])}")  # M-S1
-                record = await self._crawl_site(session, call, cancel_event)
-                crawled.append(record)
-                session.run_ids.append(record.id)
-                self._sessions.save(session)
-                if len(crawled) < n_crawls:
-                    await asyncio.sleep(self._cooldown_s(n_crawls))
-            elif call.name == "compare_results":
+            if call.name == "compare_results":
                 compare_call = call  # enforced: максимум один, последним
-            elif spec.tier >= 2:  # A-H2/A-H3: без подтверждения не исполняем
-                self._note(
-                    session,
-                    f"Skipped “{_action_name(call.name)}” — it needs your go-ahead first.",
-                )
-            elif spec.execute is not None:  # reply-block действия — через реестр
-                self._note(session, spec.note(call) if spec.note else call.name)  # M-S1
-                reply_blocks.append(spec.execute(call, self._action_ctx(session)))
+            elif call.name == "crawl_site":
+                if not await self._crawl_one_of(session, call, crawled, n_crawls, started, cancel_event):
+                    break  # бюджет сессии исчерпан
+            else:
+                reply_blocks += self._run_side_action(session, call, spec)
 
         if compare_call is not None:
             records = self._records_for_compare(session, compare_call, crawled)
@@ -183,6 +195,50 @@ class ResearchRunner:
             return await self._compare_stage(session, records, task, [compare_call], cancel_event)
         reply = "\n\n".join(b for b in (decision.reply.strip(), *reply_blocks) if b) or "done"
         return self._finish(session, "completed", reply)
+
+    async def _crawl_one_of(
+        self,
+        session: SessionRecord,
+        call: ToolCall,
+        crawled: list[RunRecord],
+        n_crawls: int,
+        started: float,
+        cancel_event: asyncio.Event | None,
+    ) -> bool:
+        """Один сайт из плана планнера. `False` = бюджет сессии исчерпан, дальше не идём."""
+        if self._session_expired(started):
+            self._note(session, "Out of time for this chat.")
+            return False
+        self._note(session, f"Reading {_site_name(call.args['url'])}")  # M-S1
+        record = await self._crawl_site(session, call, cancel_event)
+        crawled.append(record)
+        session.run_ids.append(record.id)
+        self._sessions.save(session)
+        if len(crawled) < n_crawls:
+            await asyncio.sleep(self._cooldown_s(n_crawls))
+        return True
+
+    def _run_side_action(
+        self,
+        session: SessionRecord,
+        call: ToolCall,
+        spec: actions.ActionSpec,
+    ) -> list[str]:
+        """Действия, не связанные с обходом: экспорт, чтение результата и т.п.
+
+        Tier ≥ 2 без подтверждения человека не исполняется (A-H2/A-H3) — вместо
+        исполнения агент честно говорит, что пропустил и почему.
+        """
+        if spec.tier >= 2:
+            self._note(
+                session,
+                f"Skipped “{_action_name(call.name)}” — it needs your go-ahead first.",
+            )
+            return []
+        if spec.execute is None:
+            return []
+        self._note(session, spec.note(call) if spec.note else call.name)  # M-S1
+        return [spec.execute(call, self._action_ctx(session))]
 
     def _records_for_compare(
         self,

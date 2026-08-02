@@ -1,4 +1,10 @@
-"""CandidateQueue P0–P4 (doc 21): порядок фиксирован до budget-cut (урок SEOLB §9)."""
+"""CandidateQueue P0–P4 (doc 21): порядок фиксирован до budget-cut (урок SEOLB §9).
+
+Каждое ведро наполняет свой источник — ссылки текущей страницы, кэшированная
+homepage, ссылки F1-проб, живые slug-пробы, sitemap, legal-пробы. Порядок вёдер и
+есть политика приоритетов, поэтому сборка каждого источника вынесена отдельно, а
+слияние с дедупликацией — одно на всех.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +14,75 @@ from app.navigation.link_scorer import score_link
 from app.navigation.path_hints import PathHints
 from app.observer.links import normalize_url, same_site
 from app.schemas.snapshot import Candidate, PageSnapshot
+
+# Индексы вёдер: P0 · P1 · P2 probes · P2.5 sitemap · P3 legal · P4 rest (doc 21)
+P0_PAGE_SIGNAL = 0
+P1_HOMEPAGE_AND_PROBE_LINKS = 1
+P2_ALIVE_PROBES = 2
+P25_SITEMAP = 3
+P3_LEGAL = 4
+P4_REST = 5
+BUCKET_COUNT = 6
+
+# Причины, по которым ссылка считается «со смыслом» и уходит в P0, а не в хвост.
+SIGNAL_TAGS = ("slug", "task-kw", "homepage+intent")
+
+
+def _fresh_links(links: list[dict[str, str]], origin: str, visited: set[str]) -> list[dict[str, str]]:
+    """Свои и ещё не посещённые. visited отсекается у каждого источника."""
+    return [
+        link
+        for link in links
+        if same_site(link["href"], origin) and normalize_url(link["href"]) not in visited
+    ]
+
+
+def _page_links(snapshot: PageSnapshot) -> list[dict[str, str]]:
+    return [{"href": ln.href, "text": ln.text} for ln in snapshot.links]
+
+
+def _scored(
+    links: list[dict[str, str]],
+    *,
+    intent: str,
+    task: str,
+    hints: PathHints,
+    on_homepage: bool,
+    prefix: str = "",
+    positive_only: bool = False,
+) -> list[Candidate]:
+    """Ссылки → кандидаты со счётом. `prefix` в reason сохраняет источник ссылки:
+    без него нельзя отличить ссылку с текущей страницы от homepage или F1-пробы."""
+    out: list[Candidate] = []
+    for link in links:
+        score, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=on_homepage)
+        if positive_only and score <= 0:
+            continue
+        out.append(Candidate(href=link["href"], text=link["text"], score=score, reason=prefix + reason))
+    return out
+
+
+def _from_urls(urls: list[str], visited: set[str], *, text: str, score: int, reason: str) -> list[Candidate]:
+    """Пробы, sitemap и legal приходят голыми URL — счёт у них фиксированный (doc 21)."""
+    return [
+        Candidate(href=url, text=text, score=score, reason=reason)
+        for url in urls
+        if normalize_url(url) not in visited
+    ]
+
+
+def _merge(buckets: list[list[Candidate]], top_k: int) -> list[Candidate]:
+    """Вёдра по порядку, внутри ведра — по убыванию счёта; дубли между источниками
+    отбрасываются: побеждает более раннее ведро."""
+    seen: set[str] = set()
+    queue: list[Candidate] = []
+    for bucket in buckets:
+        for cand in sorted(bucket, key=lambda c: -c.score):
+            n = normalize_url(cand.href)
+            if n not in seen:
+                seen.add(n)
+                queue.append(cand)
+    return queue[:top_k]
 
 
 def build_candidates(
@@ -25,56 +100,48 @@ def build_candidates(
     probe_links: list[dict[str, str]] | None = None,
     top_k: int = 10,
 ) -> list[Candidate]:
-    def usable(snap: PageSnapshot) -> list[dict[str, str]]:
-        return [
-            {"href": ln.href, "text": ln.text}
-            for ln in snap.links
-            if same_site(ln.href, origin) and normalize_url(ln.href) not in visited
-        ]
-
     is_home = urlparse(snapshot.url).path.rstrip("/") in ("", "/")
-    # P0 · P1 · P2 probes · P2.5 sitemap · P3 legal · P4 rest (doc 21)
-    buckets: list[list[Candidate]] = [[], [], [], [], [], []]
+    buckets: list[list[Candidate]] = [[] for _ in range(BUCKET_COUNT)]
 
     # P0: ссылки текущей страницы с intent/task-сигналом; P4: остальные
-    for link in usable(snapshot):
-        s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=is_home)
-        tier = 0 if any(tag in reason for tag in ("slug", "task-kw", "homepage+intent")) else 5
-        buckets[tier].append(Candidate(href=link["href"], text=link["text"], score=s, reason=reason))
+    for cand in _scored(
+        _fresh_links(_page_links(snapshot), origin, visited),
+        intent=intent,
+        task=task,
+        hints=hints,
+        on_homepage=is_home,
+    ):
+        tier = P0_PAGE_SIGNAL if any(tag in cand.reason for tag in SIGNAL_TAGS) else P4_REST
+        buckets[tier].append(cand)
 
     # P1: ссылки с закэшированной homepage + ссылки с F1-проб (doc 03) — s > 0
     if homepage is not None and homepage.url != snapshot.url:
-        for link in usable(homepage):
-            s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=True)
-            if s > 0:
-                buckets[1].append(
-                    Candidate(href=link["href"], text=link["text"], score=s, reason="home:" + reason)
-                )
-    for link in probe_links or []:
-        if same_site(link["href"], origin) and normalize_url(link["href"]) not in visited:
-            s, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=False)
-            if s > 0:
-                buckets[1].append(
-                    Candidate(href=link["href"], text=link["text"], score=s, reason="f1:" + reason)
-                )
+        buckets[P1_HOMEPAGE_AND_PROBE_LINKS] += _scored(
+            _fresh_links(_page_links(homepage), origin, visited),
+            intent=intent,
+            task=task,
+            hints=hints,
+            on_homepage=True,
+            prefix="home:",
+            positive_only=True,
+        )
+    buckets[P1_HOMEPAGE_AND_PROBE_LINKS] += _scored(
+        _fresh_links(probe_links or [], origin, visited),
+        intent=intent,
+        task=task,
+        hints=hints,
+        on_homepage=False,
+        prefix="f1:",
+        positive_only=True,
+    )
 
     # P2: живые slug-пробы (HTTP-alive, doc 19 lesson); P2.5 sitemap; P3 legal (contact)
-    for url in alive_probes:
-        if normalize_url(url) not in visited:
-            buckets[2].append(Candidate(href=url, text="(slug probe)", score=12, reason="probe"))
-    for url in sitemap_urls or []:
-        if normalize_url(url) not in visited:
-            buckets[3].append(Candidate(href=url, text="(sitemap)", score=10, reason="sitemap"))
-    for url in legal_probes:
-        if normalize_url(url) not in visited:
-            buckets[4].append(Candidate(href=url, text="(legal probe)", score=8, reason="legal-probe"))
+    buckets[P2_ALIVE_PROBES] = _from_urls(
+        alive_probes, visited, text="(slug probe)", score=12, reason="probe"
+    )
+    buckets[P25_SITEMAP] = _from_urls(
+        sitemap_urls or [], visited, text="(sitemap)", score=10, reason="sitemap"
+    )
+    buckets[P3_LEGAL] = _from_urls(legal_probes, visited, text="(legal probe)", score=8, reason="legal-probe")
 
-    seen: set[str] = set()
-    queue: list[Candidate] = []
-    for bucket in buckets:
-        for cand in sorted(bucket, key=lambda c: -c.score):
-            n = normalize_url(cand.href)
-            if n not in seen:
-                seen.add(n)
-                queue.append(cand)
-    return queue[:top_k]
+    return _merge(buckets, top_k)
