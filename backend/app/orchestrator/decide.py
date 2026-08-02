@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.contracts.context import build_action_context
+from app.contracts.context import ActionContext, build_action_context
 from app.contracts.enforcer import ContractEnforcer
 from app.llm.model_router import NavRouting
 from app.llm.navigator import Navigator
@@ -24,6 +24,28 @@ from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
 DRIFT_HARD_FOR_LOW_TEMP = 3  # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
 DRIFT_IH6_FOR_TOP5 = 2  # fabricated URL ≥ 2 → shrink candidate list to top 5
 DRIFT_MIN_RECOVERIES = 2  # recovery success < 50% (при ≥2 попытках) → fallback-only
+
+
+def _tighten_after_violation(
+    hard: Violation,
+    drift: dict[str, Any],
+    cands: list[Candidate],
+    ctx: ActionContext,
+) -> list[Candidate]:
+    """Auto-tighten по I-H6 (doc 13): после двух выдуманных URL сужаем список до top-5.
+
+    Возвращает список кандидатов — тот же или суженный; контекст валидации при
+    сужении обновляется здесь же, иначе enforcer продолжил бы считать законными
+    ссылки, которых модель уже не видит.
+    """
+    if hard.constraint_id != "I-H6":
+        return cands
+    drift["ih6"] += 1
+    if drift["ih6"] < DRIFT_IH6_FOR_TOP5:
+        return cands
+    tightened = cands[:5]
+    ctx.candidates = {normalize_url(c.href) for c in tightened}
+    return tightened
 
 
 async def plan_validated(
@@ -90,11 +112,7 @@ async def plan_validated(
                 return action, violations, llm_stats
             violations.append(hard)
             drift["hard_total"] += 1
-            if hard.constraint_id == "I-H6":
-                drift["ih6"] += 1
-                if drift["ih6"] >= DRIFT_IH6_FOR_TOP5:  # auto-tighten: top-5 (doc 13)
-                    cands = cands[:5]
-                    ctx.candidates = {normalize_url(c.href) for c in cands}
+            cands = _tighten_after_violation(hard, drift, cands, ctx)
             if hard.constraint_id == "G-H1":  # budget → форс stop, не replan
                 return (
                     AgentAction(action="stop", reasoning="page budget exhausted"),

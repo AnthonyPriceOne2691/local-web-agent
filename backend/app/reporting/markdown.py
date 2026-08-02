@@ -8,28 +8,55 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.schemas.extraction import Fact
+from app.schemas.extraction import ExtractionResult, Fact
 from app.schemas.run import RunRecord
 from app.schemas.snapshot import PageSnapshot
 
 VISION_SNIPPET_CAP = 120
 
 
-def build_report(record: RunRecord, snapshots: list[PageSnapshot]) -> str:
+def _header(record: RunRecord) -> list[str]:
     meta = record.metadata
-    result = record.result
-    lines: list[str] = [f"# Crawl Report: {record.config.task}", ""]
     vision_note = ""
     if meta.get("vision_calls_total"):
         vision_note = (
             f" · **Vision:** {meta.get('vision_pages_analyzed', 0)} pages"
             f"/{meta.get('vision_calls_total', 0)} calls"
         )
-    lines.append(
+    return [
+        f"# Crawl Report: {record.config.task}",
+        "",
         f"**URL:** {record.config.start_url} · **Status:** {record.status} · "
-        f"**Pages:** {record.pages_visited}{vision_note}"
-    )
-    lines.append("")
+        f"**Pages:** {record.pages_visited}{vision_note}",
+        "",
+    ]
+
+
+def _findings_section(result: ExtractionResult, snapshots: list[PageSnapshot]) -> list[str]:
+    """Факты с цитатами. Источник (dom/vision/both) виден у каждого факта —
+    иначе не отличить прочитанное в DOM от увиденного моделью."""
+    if not result.facts:
+        return []
+    lines = ["## Findings", ""]
+    for fact in result.facts:
+        sources = {ev.source for ev in fact.evidence} or {"dom"}
+        src = "both" if {"dom", "vision"} <= sources or "both" in sources else next(iter(sources))
+        lines.append(f"### {fact.label or fact.key} ({fact.confidence}) · source: {src}")
+        lines.append(fact.value)
+        for ev in fact.evidence:
+            if ev.quote.strip():
+                lines.append(f'> "{ev.quote}" — [{ev.url}]({ev.url})')
+        snippet = _vision_snippet(fact, snapshots)
+        if snippet:
+            lines.append(f"> _{snippet}_")
+        lines.append("")
+    return lines
+
+
+def build_report(record: RunRecord, snapshots: list[PageSnapshot]) -> str:
+    meta = record.metadata
+    result = record.result
+    lines: list[str] = _header(record)
 
     if result is None or record.status in ("blocked", "failed"):
         reason = meta.get("blocked_by") or record.error_message or "no result"
@@ -37,21 +64,7 @@ def build_report(record: RunRecord, snapshots: list[PageSnapshot]) -> str:
         return "\n".join(lines)
 
     lines += ["## Summary", "", result.summary or "(no summary)", ""]
-
-    if result.facts:
-        lines += ["## Findings", ""]
-        for fact in result.facts:
-            sources = {ev.source for ev in fact.evidence} or {"dom"}
-            src = "both" if {"dom", "vision"} <= sources or "both" in sources else next(iter(sources))
-            lines.append(f"### {fact.label or fact.key} ({fact.confidence}) · source: {src}")
-            lines.append(fact.value)
-            for ev in fact.evidence:
-                if ev.quote.strip():
-                    lines.append(f'> "{ev.quote}" — [{ev.url}]({ev.url})')
-            snippet = _vision_snippet(fact, snapshots)
-            if snippet:
-                lines.append(f"> _{snippet}_")
-            lines.append("")
+    lines += _findings_section(result, snapshots)
 
     design = _design_section(record, snapshots)
     if design:
