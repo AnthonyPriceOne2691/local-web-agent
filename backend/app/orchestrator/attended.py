@@ -10,8 +10,9 @@ doc 18) и держит orchestrator тонким: одна развилка н�
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -42,6 +43,13 @@ async def pause_with_window(browser: BrowserSession, pause: Awaitable[bool], *, 
             await browser.conceal()
 
 
+# Подпись открытой страницы: URL + отпечаток текста. Нужна, чтобы заметить, что
+# человек уже сделал свой шаг, и не заставлять его подтверждать это второй раз.
+PageProbe = Callable[[], Awaitable[str]]
+# «Сними скриншот этого шага» — стадии интеракции не знают про store (см. capture.py).
+StepCapture = Callable[[RunRecord, PageSnapshot, int], Awaitable[None]]
+
+
 class AttendedGate(Protocol):
     async def try_clear(
         self,
@@ -53,16 +61,26 @@ class AttendedGate(Protocol):
 
     async def confirm_action(self, record: RunRecord, description: str) -> bool: ...
 
-    async def handoff_action(self, record: RunRecord, description: str) -> bool: ...
+    async def handoff_action(
+        self, record: RunRecord, description: str, probe: PageProbe | None = None
+    ) -> bool: ...
 
 
 class EventAttendedGate:
     """Пауза на challenge → ожидание resume_event с таймаутом → сброс для повторного захода."""
 
-    def __init__(self, resume_event: asyncio.Event, store: RunStore, *, timeout_s: float):
+    def __init__(
+        self,
+        resume_event: asyncio.Event,
+        store: RunStore,
+        *,
+        timeout_s: float,
+        poll_s: float = 2.0,
+    ):
         self._resume = resume_event
         self._store = store
         self._timeout_s = timeout_s
+        self._poll_s = poll_s  # как часто смотреть, не сделал ли человек свой шаг
 
     async def try_clear(
         self,
@@ -103,13 +121,22 @@ class EventAttendedGate:
         True — подтвердил (агент выполняет), False — таймаут (не выполняем)."""
         return await self._pause_for_user(record, "confirm_submit", description)
 
-    async def handoff_action(self, record: RunRecord, description: str) -> bool:
+    async def handoff_action(
+        self, record: RunRecord, description: str, probe: PageProbe | None = None
+    ) -> bool:
         """Tier 3 (doc 25): handoff — агент подготовил необратимый шаг, **кнопку жмёт
         человек сам** в видимом браузере; агент не кликает ни до, ни после. True —
-        человек завершил (re-observe покажет исход), False — таймаут."""
-        return await self._pause_for_user(record, "handoff", description)
+        человек завершил (re-observe покажет исход), False — таймаут.
 
-    async def _pause_for_user(self, record: RunRecord, kind: str, description: str) -> bool:
+        `probe` (если передан) даёт агенту заметить нажатие самому: человек и так
+        сделал действие на странице, требовать от него второе подтверждение — лишний
+        шаг. Явный resume при этом никуда не девается и срабатывает раньше опроса.
+        """
+        return await self._pause_for_user(record, "handoff", description, probe)
+
+    async def _pause_for_user(
+        self, record: RunRecord, kind: str, description: str, probe: PageProbe | None = None
+    ) -> bool:
         """Общая пауза Tier 2/3: `waiting_user` + resume-event, что и challenge
         (kind → SSE challenge_wait → kind-aware карточка в Chat UI)."""
         self._resume.clear()
@@ -121,17 +148,74 @@ class EventAttendedGate:
             "since": datetime.now(UTC).isoformat(),
         }
         self._store.save(record)  # SSE увидит через poll → challenge_wait
-        try:
-            await asyncio.wait_for(self._resume.wait(), timeout=self._timeout_s)
-        except TimeoutError:
-            record.metadata.pop("challenge", None)
-            record.status = "running"
-            self._store.save(record)
-            return False
+        outcome = await self._wait_for_human(probe)
         record.metadata.pop("challenge", None)
+        record.metadata[f"{kind}_resolved_by"] = outcome  # видно, чем кончилась пауза
         record.status = "running"
         self._store.save(record)
+        return outcome != "timeout"
+
+    async def _wait_for_human(self, probe: PageProbe | None) -> str:
+        """`resume` · `page_change` · `timeout`.
+
+        Изменение страницы засчитывается только если оно **держится** два опроса
+        подряд: страница может дёрнуться сама (дозагрузка, баннер, редирект), и
+        принять это за действие человека — значит зафиксировать исход, которого ещё
+        нет. Явный resume проверяется первым и всегда сильнее опроса.
+        """
+        clock = asyncio.get_running_loop().time
+        deadline = clock() + self._timeout_s
+        baseline = await _read_probe(probe)
+        pending: str | None = None
+        while clock() < deadline:
+            if await self._resume_within(min(self._poll_s, max(deadline - clock(), 0.0))):
+                return "resume"
+            current = await _read_probe(probe)
+            if current is None or current == baseline:
+                continue
+            if pending == current:  # то же самое изменение второй раз — это не мигание
+                return "page_change"
+            pending = current
+        return "timeout"
+
+    async def _resume_within(self, seconds: float) -> bool:
+        try:
+            await asyncio.wait_for(self._resume.wait(), timeout=seconds)
+        except TimeoutError:
+            return False
         return True
+
+
+def page_probe(browser: BrowserSession) -> PageProbe:
+    """Подпись открытой страницы: URL + длина и хэш основного текста.
+
+    Дёшево (одно чтение DOM) и достаточно, чтобы отличить «страница ответила на
+    действие человека» от «ничего не произошло». Точность тут не нужна: решение
+    всё равно подтверждается вторым опросом.
+    """
+
+    async def probe() -> str:
+        raw = await browser.raw_snapshot()
+        text = str(raw.get("main_text") or "")
+        digest = hashlib.blake2s(text.encode("utf-8", "replace"), digest_size=8).hexdigest()
+        return f"{browser.page_url()}|{len(text)}|{digest}"
+
+    return probe
+
+
+async def _read_probe(probe: PageProbe | None) -> str | None:
+    """Подпись страницы или None, если снять её нельзя.
+
+    Человек мог закрыть окно или уйти со страницы в момент опроса — это не повод
+    ронять паузу: возвращаем None и продолжаем ждать resume или таймаут.
+    """
+    if probe is None:
+        return None
+    try:
+        return await probe()
+    except Exception as exc:  # silent-ok: диагностика в логе, пауза продолжается
+        logger.debug("page probe failed during pause (%s)", type(exc).__name__)
+        return None
 
 
 async def reobserve_in_place(
@@ -143,6 +227,7 @@ async def reobserve_in_place(
     snapshots: list[PageSnapshot],
     visited: set[str],
     note: str = "attended: re-observe after resume",
+    capture: StepCapture | None = None,
 ) -> PageSnapshot:
     """OBSERVE текущей открытой страницы БЕЗ повторного goto.
 
@@ -157,5 +242,15 @@ async def reobserve_in_place(
     visited.add(snap.url)
     record.pages_visited = len(visited)
     record.current_url = snap.url
-    record.steps.append(CrawlStep(index=step_index, state=State.OBSERVE, url=snap.url, note=note))
+    if capture is not None:
+        await capture(record, snap, step_index)
+    record.steps.append(
+        CrawlStep(
+            index=step_index,
+            state=State.OBSERVE,
+            url=snap.url,
+            note=note,
+            screenshot_paths={s.profile: s.relative_path for s in snap.screenshots},
+        )
+    )
     return snap

@@ -1,5 +1,14 @@
 # Knowledge Bundle Update Log
 
+## 2026-08-03 (поставка post-refactor-live)
+* **Canon change** — [action tiers](/engineering/action-tiers.md): пауза Tier 3
+  кончается по resume **или** по устойчивому изменению страницы (два опроса подряд).
+  Основание: живой прогон — человек нажал кнопку и ждал, агент стоял. Tier 2 confirm
+  автодетекта не получает: там человек отвечает, а не действует. Детали — doc 25 v1.2.
+* **Note** — [attended mode](/engineering/attended-mode.md): скриншот шага снимается и
+  после интеракции (`step_capturer`); раньше при `capture_screenshots: "always"` был
+  только первый кадр.
+
 ## 2026-08-01 (поставка real-site-calibration)
 * **Canon change** — [attended mode](/engineering/attended-mode.md): `attended`
   означает «человек доступен», а не «видимое окно на весь прогон». Окно
