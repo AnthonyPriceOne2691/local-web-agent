@@ -1,9 +1,9 @@
 # Active delivery status
 
-- **slug:** next-up
+- **slug:** post-refactor-live
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** specify
+- **phase:** implement
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
 - **human_ok_spec:** n/a
@@ -14,10 +14,10 @@
   <!-- CI есть; гейт мержа в репо (merge_guard + pre-push). Серверная защита ветки
        платная для приватного репо, поэтому force-push в main и обход админом не
        закрыты — остаток в delivery/STACK-ACCEPTANCE.md § Остатки. -->
-- **worktree:** none
+- **worktree:** none (ветка `verify/post-refactor-live`)
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **blockers:** приоритет не выбран — слот открыт по остатку, а не решён
+- **blockers:** —  <!-- приоритет выбран владельцем: живой прогон после рефакторинга -->
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
@@ -62,7 +62,12 @@
 
 ## Контекст поставки
 
-Слот открыт без выбранного приоритета. Что лежит на столе, по весу:
+Владелец (02.08) выбрал живой прогон: ядро только что разобрано, а живьём проверен
+один UC-2 на фикстурах — ветки attended и Tier 3 остались без подтверждения. Тот же
+прогон даёт вход для следующей работы: `I-H6` виден только на настоящих доках, а
+телеметрия `compare` нужна для A/B по скорости.
+
+После этой поставки на столе, по весу:
 
 1. **Качество результата** — рубрики, полнота evidence, язык narrative в
    compare-промпте. Скорость упёрлась в локальную генерацию 8–13 ток/с (железо).
