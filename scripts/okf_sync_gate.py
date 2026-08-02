@@ -35,6 +35,9 @@ ALLOW_DRIFT = os.environ.get("ALLOW_CANON_DRIFT", "0") == "1"
 STATUS_WAIVER_RE = re.compile(r"(?im)^[ \t]*[-*]?[ \t]*\**canon_drift_waiver\**[ \t]*:[ \t]*(.+)$")
 RESERVED = {"index.md", "log.md"}
 
+# (ошибки, предупреждения) — общий тип проверок, чтобы их можно было складывать.
+Report = tuple[list[str], list[str]]
+
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
@@ -125,27 +128,14 @@ def status_waiver() -> str:
     return re.sub(r"<!--.*?-->", "", m.group(1)).strip().lstrip("*").strip()
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--base", help="ref to diff against (e.g. origin/main)")
-    ap.add_argument("--staged", action="store_true", help="use staged diff")
-    ap.add_argument("--check-stale", action="store_true", help="stale_after check")
-    args = ap.parse_args()
+def scan_bundle(root: Path, bundle: Path) -> tuple[dict[str, list[str]], list[tuple[str, str]]]:
+    """(concept -> объявленные пути, просроченные concept'ы).
 
-    root = repo_root()
-    bundle = root / BUNDLE
-    errors: list[str] = []
-    warnings: list[str] = []
-
-    if not bundle.is_dir():
-        print(f"okf_sync_gate: no bundle at {BUNDLE}/ — skip (deploy OKF first)")
-        return 0
-
-    # --- собрать карту concept -> declared paths
+    Явный UTC, а не локальная дата: гейт гоняется и на машине автора, и в CI —
+    «просрочен ли stale_after» не должно зависеть от часового пояса раннера.
+    """
     concepts: dict[str, list[str]] = {}
     stale: list[tuple[str, str]] = []
-    # Явный UTC, а не локальная дата: гейт гоняется и на машине автора, и в CI —
-    # «просрочен ли stale_after» не должно зависеть от часового пояса раннера.
     today = datetime.now(UTC).date()
     for path in sorted(bundle.rglob("*.md")):
         if path.name in RESERVED:
@@ -159,50 +149,42 @@ def main() -> int:
             concepts[rel] = declared
         after = scalar_field(fm, "stale_after")
         m = DATE_RE.search(after) if after else None
-        if m:
-            when = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            if when < today:
-                stale.append((rel, after))
+        if m and date(int(m.group(1)), int(m.group(2)), int(m.group(3))) < today:
+            stale.append((rel, after))
+    return concepts, stale
 
-    if args.check_stale:
-        for rel, when in stale:
-            errors.append(f"{rel}: stale_after {when} is in the past — re-verify or bump")
-        if not stale:
-            print(f"okf_sync_gate: freshness OK ({len(concepts)} mapped concepts)")
-    else:
-        for rel, when in stale:
-            warnings.append(f"{rel}: stale_after {when} is in the past (§7.2)")
 
-        files, issues = changed_files(args.base, args.staged)
-        for i in issues:
-            warnings.append(f"cannot compute diff: {i}")
-        if not files and not issues:
-            # Пустой дифф = гейт ничего не судит. Это законно (push в саму базу),
-            # но должно быть видно: молчаливый no-op читается как «проверено».
-            warnings.append(f"diff vs '{args.base or 'staged'}' is empty — gate inert this run")
-        if files:
-            touched_bundle = {f for f in files if f.startswith(f"{BUNDLE}/")}
-            code = [f for f in files if f not in touched_bundle]
-            for rel, declared in sorted(concepts.items()):
-                if rel in touched_bundle:
-                    continue  # concept обновлён — синхронизация заявлена
-                hits = sorted({c for c in code for d in declared if covers(d, c)})[:5]
-                if hits:
-                    errors.append(f"{rel}: implementation changed but concept untouched -> {', '.join(hits)}")
-            if not concepts:
-                warnings.append(
-                    "no concept declares implementation: — gate is inert; "
-                    "start filling the field (Приложение A.3)"
-                )
+def check_sync(concepts: dict[str, list[str]], base: str | None, staged: bool) -> Report:
+    """Дрейф кода относительно concept'ов на диффе."""
+    errors: list[str] = []
+    warnings: list[str] = []
 
-    for w in warnings:
-        print(f"WARNING: {w}")
-    for e in errors:
-        print(f"ERROR: {e}", file=sys.stderr)
+    files, issues = changed_files(base, staged)
+    warnings += [f"cannot compute diff: {i}" for i in issues]
+    if not files and not issues:
+        # Пустой дифф = гейт ничего не судит. Это законно (push в саму базу),
+        # но должно быть видно: молчаливый no-op читается как «проверено».
+        warnings.append(f"diff vs '{base or 'staged'}' is empty — gate inert this run")
+    if not files:
+        return errors, warnings
 
-    if not errors:
-        print(f"okf_sync_gate: OK ({len(concepts)} mapped concepts, {len(warnings)} warning(s))")
-        return 0
+    touched_bundle = {f for f in files if f.startswith(f"{BUNDLE}/")}
+    code = [f for f in files if f not in touched_bundle]
+    for rel, declared in sorted(concepts.items()):
+        if rel in touched_bundle:
+            continue  # concept обновлён — синхронизация заявлена
+        hits = sorted({c for c in code for d in declared if covers(d, c)})[:5]
+        if hits:
+            errors.append(f"{rel}: implementation changed but concept untouched -> {', '.join(hits)}")
+    if not concepts:
+        warnings.append(
+            "no concept declares implementation: — gate is inert; start filling the field (Приложение A.3)"
+        )
+    return errors, warnings
+
+
+def explain_failure(errors: list[str], check_stale: bool) -> int:
+    """Печать вердикта при находках: waiver / STRICT=0 / провал с подсказкой."""
     waiver = status_waiver()
     if ALLOW_DRIFT or waiver:
         source = "ALLOW_CANON_DRIFT=1" if ALLOW_DRIFT else f"STATUS: {waiver}"
@@ -215,7 +197,7 @@ def main() -> int:
     if not STRICT:
         print(f"okf_sync_gate: WARNING (STRICT=0) — {len(errors)} finding(s)", file=sys.stderr)
         return 0
-    if args.check_stale:
+    if check_stale:
         print(
             f"okf_sync_gate: FAIL — {len(errors)} concept(s) past stale_after.\n"
             "Fix: re-verify the canon and set `verified:` + a new `stale_after`, "
@@ -230,6 +212,44 @@ def main() -> int:
             file=sys.stderr,
         )
     return 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--base", help="ref to diff against (e.g. origin/main)")
+    ap.add_argument("--staged", action="store_true", help="use staged diff")
+    ap.add_argument("--check-stale", action="store_true", help="stale_after check")
+    args = ap.parse_args()
+
+    root = repo_root()
+    bundle = root / BUNDLE
+    if not bundle.is_dir():
+        print(f"okf_sync_gate: no bundle at {BUNDLE}/ — skip (deploy OKF first)")
+        return 0
+
+    concepts, stale = scan_bundle(root, bundle)
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if args.check_stale:
+        errors += [f"{rel}: stale_after {when} is in the past — re-verify or bump" for rel, when in stale]
+        if not stale:
+            print(f"okf_sync_gate: freshness OK ({len(concepts)} mapped concepts)")
+    else:
+        warnings += [f"{rel}: stale_after {when} is in the past (§7.2)" for rel, when in stale]
+        sync_errors, sync_warnings = check_sync(concepts, args.base, args.staged)
+        errors += sync_errors
+        warnings += sync_warnings
+
+    for w in warnings:
+        print(f"WARNING: {w}")
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+
+    if not errors:
+        print(f"okf_sync_gate: OK ({len(concepts)} mapped concepts, {len(warnings)} warning(s))")
+        return 0
+    return explain_failure(errors, args.check_stale)
 
 
 if __name__ == "__main__":

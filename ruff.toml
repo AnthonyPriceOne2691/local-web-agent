@@ -22,11 +22,6 @@ extend-exclude = ["scripts/spike"]
 [lint.per-file-ignores]
 "cli/**" = ["B008"]  # typer.Option в defaults — идиома typer
 
-# TODO(тающий список — CQG §1 baseline-ratchet): сложность гейт-скриптов. Это тот же
-# долг, что заморожен в backend (C901/PLR09xx в 10 модулях): правила линейные, но
-# длинные — `main()` собирает проверки и печатает отчёт. Снимать по мере разбиения,
-# новый код держится на канонных порогах.
-"scripts/delivery_check.py" = ["C901", "PLR0912", "PLR0915"]
-"scripts/okf_sync_gate.py" = ["C901", "PLR0912", "PLR0915"]
-"scripts/okf_validate.py" = ["C901", "PLR0912"]
-"scripts/stack_selftest.py" = ["C901", "PLR0912"]
+# Заморозок сложности для scripts/ здесь БОЛЬШЕ НЕТ: поставка scripts-canon
+# разобрала все четыре гейт-скрипта (delivery_check.main была 47 при пороге 10).
+# Не возвращать: новый гейт пишется проверками-функциями, а не одной main().

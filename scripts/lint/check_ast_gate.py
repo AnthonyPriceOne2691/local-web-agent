@@ -29,6 +29,8 @@ import argparse
 import ast
 import os
 import sys
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 FEATURES = Path(os.environ.get("LINT_PY_SRC", "backend/features"))
@@ -73,7 +75,7 @@ def _handler_leaves_trace(handler: ast.ExceptHandler) -> bool:
 
 
 def _handler_has_silent_ok(handler: ast.ExceptHandler, src_lines: list[str]) -> bool:
-    end = handler.body[-1].end_lineno if handler.body else handler.lineno
+    end = (handler.body[-1].end_lineno if handler.body else None) or handler.lineno
     span = range(handler.lineno - 1, min(end, len(src_lines)))
     return any(SILENT_OK_MARKER in src_lines[i] for i in span)
 
@@ -121,23 +123,37 @@ def find_inline_prompt(tree: ast.AST, src_lines: list[str]) -> list[int]:
     return out
 
 
+@dataclass(frozen=True)
+class Rule:
+    """Правило гейта. Датакласс, а не dict: у dict с разнородными значениями тип
+    полей схлопывается в `object`, и `rule["find"](…)` уже не проверяется."""
+
+    find: Callable[[ast.AST, list[str]], list[int]]
+    baseline: str
+    label: str
+    hint: str
+
+
 RULES = {
-    "silent-except": {
-        "find": find_silent_except,
-        "baseline": "silent_except_baseline.txt",
-        "label": "silent-except: broad-except без raise/лога",
-        "hint": "Оставь след: logger.warning/exception с контекстом, либо пробрось. Осознанный fail-soft — пометь `# silent-ok: <причина>` в хендлере.",
-    },
-    "inline-prompt": {
-        "find": find_inline_prompt,
-        "baseline": "inline_prompt_baseline.txt",
-        "label": "inline-prompt: LLM-промпт инлайном в .py",
-        "hint": "Промпт — в отдельный <name>.md + lazy-load, не строкой в коде.",
-    },
+    "silent-except": Rule(
+        find=find_silent_except,
+        baseline="silent_except_baseline.txt",
+        label="silent-except: broad-except без raise/лога",
+        hint=(
+            "Оставь след: logger.warning/exception с контекстом, либо пробрось. "
+            "Осознанный fail-soft — пометь `# silent-ok: <причина>` в хендлере."
+        ),
+    ),
+    "inline-prompt": Rule(
+        find=find_inline_prompt,
+        baseline="inline_prompt_baseline.txt",
+        label="inline-prompt: LLM-промпт инлайном в .py",
+        hint="Промпт — в отдельный <name>.md + lazy-load, не строкой в коде.",
+    ),
 }
 
 
-def iter_target_files(repo_root: Path):
+def iter_target_files(repo_root: Path) -> Iterator[Path]:
     for path in sorted((repo_root / FEATURES).rglob("*.py")):
         rel = path.as_posix()
         if any(part in rel for part in SKIP_PARTS):
@@ -175,7 +191,7 @@ def main() -> int:
 
     script_dir = Path(__file__).resolve().parent
     repo_root = script_dir.parent.parent  # <repo-root>/scripts/lint/ -> repo-root
-    baseline_path = script_dir / rule["baseline"]
+    baseline_path = script_dir / rule.baseline
 
     counts: dict[str, int] = {}
     for path in iter_target_files(repo_root):
@@ -184,14 +200,14 @@ def main() -> int:
             tree = ast.parse(src)
         except (OSError, SyntaxError):
             continue
-        hits = rule["find"](tree, src.splitlines())
+        hits = rule.find(tree, src.splitlines())
         if hits:
             counts[repo_rel(path, repo_root)] = len(hits)
 
     if args.generate:
         lines = [
-            f"# {rule['baseline']} — снимок AST-гейта. Генерируется --generate, НЕ руками.",
-            f"# Правило: {rule['label']}",
+            f"# {rule.baseline} — снимок AST-гейта. Генерируется --generate, НЕ руками.",
+            f"# Правило: {rule.label}",
             "# Формат: <count>:<path> (path от repo-root). Ратчет вниз: файл проходит при count <= снимок;",
             "# файл ВНЕ снимка (новый) — hard 0.",
         ]
@@ -216,7 +232,7 @@ def main() -> int:
         print(
             f"\n{'ERROR' if strict else 'WARNING'}: {len(violations)} файл(ов) нарушают правило {args.rule}."
         )
-        print(rule["hint"])
+        print(rule.hint)
         print("Легаси из baseline — ок до чистки; новый код держим на нуле. Пересъём вниз: --generate.")
         return 1 if strict else 0
     return 0

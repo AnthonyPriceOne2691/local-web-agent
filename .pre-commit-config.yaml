@@ -78,6 +78,17 @@ repos:
         exclude: /tests/
         entry: bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && .venv/bin/mypy --config-file pyproject.toml app'
         pass_filenames: false
+      # Гейт-скрипты — тоже код с поведением (они решают, пройдёт ли поставка),
+      # поэтому типы у них проверяются так же строго. Флаги в entry, а не в
+      # конфиге: у корня репозитория нет своего pyproject, а backend-конфиг
+      # исключает scripts/ (там своё дерево импортов).
+      - id: mypy-scripts
+        name: mypy --strict (гейт-скрипты)
+        language: system
+        files: ^scripts/.*\.py$
+        exclude: ^scripts/spike/
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && backend/.venv/bin/mypy --strict --exclude "scripts/spike" scripts'
+        pass_filenames: false
 
   # -------------------------------------------------------------------------
   # TypeScript / React: ESLint (per-file errors) + warning-ратчет + Prettier.

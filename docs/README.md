@@ -20,7 +20,7 @@
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.7** | + SSE events, report, статика UI, attended resume/challenge_wait |
 | [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.7** | Params: structured outputs, think; маршрутизация nav-моделей; быстрый синтез |
 | [17-ui-screens.md](17-ui-screens.md) | ✅ **v0.5** | CLI flows; Chat UI: liquid glass + человеческий словарь |
-| [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.3** | 500 LOC, SOLID, DRY, coverage; контур ruff (backend+cli+scripts) |
+| [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.4** | 500 LOC, SOLID, DRY, coverage; контур ruff + mypy на scripts/ |
 | [19-phase0-benchmark-results.md](19-phase0-benchmark-results.md) | ✅ **v1.0 DONE** | Все гейты ✅; qwen3 single-model рекомендация |
 | [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.3** | Token budget; non-Latin; compare N>3; вход синтеза ≠ латентность |
 | [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.7** | + content_search, sitemap P2.5, RU keywords |
