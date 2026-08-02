@@ -93,42 +93,44 @@ def declared_versions(root: Path) -> tuple[dict[str, str], dict[str, str]]:
     return heads, table
 
 
-def main() -> int:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
+def check_block(lang: str, code: str) -> str | None:
+    """Синтаксис одного блока: None = валиден, строка = текст ошибки."""
+    if lang == "python":
+        try:
+            ast.parse(code)
+        except SyntaxError as exc:
+            return f"SyntaxError: {exc.msg} (block line {exc.lineno})"
+        return None
+    if lang in {"bash", "sh"}:
+        proc = subprocess.run(["bash", "-n"], input=code, text=True, capture_output=True, check=False)
+        if proc.returncode:
+            return proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else "bash -n failed"
+        return None
+    return check_yaml(code)
+
+
+def check_canon(path: Path, name: str) -> tuple[list[str], int]:
+    """(провалы, сколько блоков проверено) для одного файла канона."""
     failures: list[str] = []
-    total = 0
-
-    for name in CANONS:
-        path = root / name
-        if not path.is_file():
-            failures.append(f"{name}: MISSING")
+    text = path.read_text(encoding="utf-8")
+    found, unbalanced = blocks(text)
+    if unbalanced:
+        failures.append(f"{name}: unbalanced ``` fence (unterminated block)")
+    checked = 0
+    for line_no, lang, code in found:
+        if lang not in CHECKED_LANGS or not code.strip():
             continue
-        text = path.read_text(encoding="utf-8")
-        found, unbalanced = blocks(text)
-        if unbalanced:
-            failures.append(f"{name}: unbalanced ``` fence (unterminated block)")
-        checked = 0
-        for line_no, lang, code in found:
-            if lang not in CHECKED_LANGS or not code.strip():
-                continue
-            checked += 1
-            total += 1
-            err: str | None = None
-            if lang == "python":
-                try:
-                    ast.parse(code)
-                except SyntaxError as exc:
-                    err = f"SyntaxError: {exc.msg} (block line {exc.lineno})"
-            elif lang in {"bash", "sh"}:
-                proc = subprocess.run(["bash", "-n"], input=code, text=True, capture_output=True, check=False)
-                if proc.returncode:
-                    err = proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else "bash -n failed"
-            else:
-                err = check_yaml(code)
-            if err:
-                failures.append(f"{name}:{line_no} [{lang}] {err}")
-        print(f"{name}: {checked} executable block(s) checked")
+        checked += 1
+        err = check_block(lang, code)
+        if err:
+            failures.append(f"{name}:{line_no} [{lang}] {err}")
+    print(f"{name}: {checked} executable block(s) checked")
+    return failures, checked
 
+
+def check_versions(root: Path) -> list[str]:
+    """Версия в шапке канона обязана совпадать с таблицей §1 карты стека."""
+    failures: list[str] = []
     heads, table = declared_versions(root)
     for layer, ver in heads.items():
         if layer in table and table[layer] != ver:
@@ -139,6 +141,24 @@ def main() -> int:
     missing = sorted(set(table) - set(heads))
     if missing:
         print(f"note: no Canon version header for {', '.join(missing)}")
+    return failures
+
+
+def main() -> int:
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
+    failures: list[str] = []
+    total = 0
+
+    for name in CANONS:
+        path = root / name
+        if not path.is_file():
+            failures.append(f"{name}: MISSING")
+            continue
+        canon_failures, checked = check_canon(path, name)
+        failures += canon_failures
+        total += checked
+
+    failures += check_versions(root)
 
     print(f"\nstack_selftest: {total} block(s), {len(failures)} failure(s)")
     for f in failures:
