@@ -106,36 +106,86 @@ def test_prompt_forbids_claiming_absence_when_pages_were_missed():
 
 def test_summary_always_says_what_was_not_reached():
     """Живой замер: запрет в промпте сработал на 1 сайте из 2 — поэтому приписка кодом."""
-    from app.orchestrator.synthesize import note_unreached
+    from app.orchestrator.synthesize import note_limits
     from app.schemas.extraction import ExtractionResult
 
     result = ExtractionResult(
         status="completed",
         summary="The site does not explain how releases are handled.",
     )
-    noted = note_unreached(result, ["https://blog.rust-lang.org/releases/latest"])
+    noted = note_limits(result, ["https://blog.rust-lang.org/releases/latest"])
 
-    assert "Not reached" in noted.summary
+    assert "pages not opened" in noted.summary
     assert "https://blog.rust-lang.org/releases/latest" in noted.summary
-    assert "not absent from the site" in noted.summary
+    assert "not by the site lacking content" in noted.summary
     assert result.summary in noted.summary, "ответ модели сохраняется, приписка добавляется"
 
 
 def test_clean_result_is_untouched():
-    from app.orchestrator.synthesize import note_unreached
+    from app.orchestrator.synthesize import note_limits
     from app.schemas.extraction import ExtractionResult
 
     result = ExtractionResult(status="completed", summary="All good.")
-    assert note_unreached(result, []) is result
+    assert note_limits(result, []) is result
 
 
 def test_long_unreached_list_is_capped_in_the_note():
-    from app.orchestrator.synthesize import note_unreached
+    from app.orchestrator.synthesize import note_limits
     from app.schemas.extraction import ExtractionResult
 
     urls = [f"https://x.test/{i}" for i in range(8)]
-    noted = note_unreached(ExtractionResult(status="completed", summary="s"), urls)
+    noted = note_limits(ExtractionResult(status="completed", summary="s"), urls)
 
     assert "https://x.test/4" in noted.summary
     assert "https://x.test/5" not in noted.summary, "длинный список режется"
     assert "(+3)" in noted.summary, "но количество отброшенных названо"
+
+
+# --- второй повод: обход оборвался сам (early stop G-S1), нарушений ноль ---
+
+
+def test_early_stop_is_reported_even_without_violations():
+    """Находка T-3c: агент встал на странице со списком анонсов релизов и заявил,
+    что подробных статей нет. Нарушений ноль → первая версия приписки не срабатывала."""
+    from app.orchestrator.synthesize import note_limits
+    from app.schemas.extraction import ExtractionResult
+
+    result = ExtractionResult(status="completed", summary="На сайте нет подробных статей.")
+    noted = note_limits(result, [], early_stop="G-S1: no new relevant links on 3 pages", pages_read=3)
+
+    assert "ended early after 3 page(s)" in noted.summary
+    assert "G-S1" in noted.summary
+    assert "not by the site lacking content" in noted.summary
+
+
+def test_both_reasons_are_listed_together():
+    from app.orchestrator.synthesize import note_limits
+    from app.schemas.extraction import ExtractionResult
+
+    noted = note_limits(
+        ExtractionResult(status="completed", summary="s"),
+        ["https://x.test/deep"],
+        early_stop="G-S1: no new relevant links on 3 pages",
+        pages_read=3,
+    )
+    assert "pages not opened" in noted.summary
+    assert "ended early" in noted.summary
+
+
+def test_prompt_warns_about_early_stop():
+    from pathlib import Path
+
+    from jinja2 import Template
+
+    tpl = Path(__file__).resolve().parents[2] / "data" / "prompts" / "synthesizer_user.j2"
+    rendered = Template(tpl.read_text(encoding="utf-8")).render(
+        task="releases",
+        intent="content_search",
+        pages_count=3,
+        pages_block="PAGE",
+        summary_cap=0,
+        unreached=[],
+        early_stop="G-S1: no new relevant links on 3 pages",
+    )
+    assert "CRAWL ENDED EARLY" in rendered
+    assert "not evidence of absence" in rendered

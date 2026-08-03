@@ -56,27 +56,54 @@ async def run_synthesis(
     # Обе nav-модели выгружаются: лёгкая иначе держит ~5 GB, пока синтез идёт на
     # 16K ctx (дисциплина RAM, doc 14).
     await llm.unload_many(settings.nav_model, settings.nav_light_model)
+    early_stop = str(record.metadata.get("early_stop") or "")
     result, stats = await synthesizer.synthesize(
-        task=record.config.task, snapshots=snapshots, intent=record.intent, unreached=unreached
+        task=record.config.task,
+        snapshots=snapshots,
+        intent=record.intent,
+        unreached=unreached,
+        early_stop=early_stop,
     )
     record.steps[-1].llm_stats = stats
-    return note_unreached(result, unreached)
+    return note_limits(result, unreached, early_stop=early_stop, pages_read=len(snapshots))
 
 
-def note_unreached(result: ExtractionResult, unreached: list[str]) -> ExtractionResult:
-    """Дописать в summary, чего агент не открыл. Кодом, а не просьбой к модели.
+def note_limits(
+    result: ExtractionResult,
+    unreached: list[str],
+    *,
+    early_stop: str = "",
+    pages_read: int = 0,
+) -> ExtractionResult:
+    """Дописать в summary, где обход остановили СВОИ правила. Кодом, не просьбой к модели.
 
-    Замер на живом прогоне: запрет в промпте («не называй это отсутствием
-    содержания») сработал на **одном сайте из двух** — `martinfowler.com` честно
-    сказал «not reached fully» и снизил confidence, а `blog.rust-lang.org` всё равно
-    заявил, что разбора релизов нет. Тот же урок, что в synth-speed: формулировка
-    слушается через раз, поэтому важное гарантируется кодом (doc 25 § T-2 —
-    enforcement, а не доверие LLM).
+    Замер на живом прогоне: запрет в промпте («не называй это отсутствием содержания»)
+    сработал на **одном сайте из двух**. Тот же урок, что в synth-speed: формулировка
+    слушается через раз, поэтому важное гарантируется кодом (doc 25 § T-2 — enforcement,
+    а не доверие LLM).
+
+    Два разных повода, и второй нашёлся уже после первой правки (doc 26 § T-3c-1):
+
+    * **не открыли страницу** — hard-нарушение с целевым URL (глубина, бюджет, robots);
+    * **обход оборвался раньше** — правило early stop G-S1. На живом прогоне агент дошёл
+      до `blog.rust-lang.org/releases`, то есть до страницы со списком анонсов релизов,
+      и остановился именно там (её ссылки не получили сигнальных тегов), после чего
+      заявил с `confidence: high`, что подробных статей о релизах на сайте нет.
+      Нарушений при этом ноль, поэтому первая версия приписки не срабатывала.
     """
-    if not unreached:
+    parts: list[str] = []
+    if unreached:
+        listed = ", ".join(unreached[:5])
+        more = f" (+{len(unreached) - 5})" if len(unreached) > 5 else ""
+        parts.append(f"pages not opened: {listed}{more}")
+    if early_stop:
+        parts.append(f"crawl ended early after {pages_read} page(s) by own rule ({early_stop})")
+    if not parts:
         return result
-    listed = ", ".join(unreached[:5])
-    more = f" (+{len(unreached) - 5})" if len(unreached) > 5 else ""
-    note = f"Not reached (stopped by own limits, not absent from the site): {listed}{more}."
+    note = (
+        "Reading was cut short by the agent's own limits, not by the site lacking content — "
+        + "; ".join(parts)
+        + "."
+    )
     summary = f"{result.summary.rstrip()} {note}".strip() if result.summary else note
     return result.model_copy(update={"summary": summary})

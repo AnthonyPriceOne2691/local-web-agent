@@ -81,6 +81,7 @@ class Synthesizer:
         snapshots: list[PageSnapshot],
         intent: str = "generic",
         unreached: list[str] | None = None,
+        early_stop: str = "",
     ) -> tuple[ExtractionResult, dict[str, Any]]:
         """`unreached` — страницы, которые агент счёл нужными, но не открыл из-за
         своих же лимитов (doc 26 § T-3a-2). Без этого списка модель описывает
@@ -97,6 +98,7 @@ class Synthesizer:
             pages_block=build_pages_block(snapshots, intent),
             summary_cap=cap,
             unreached=unreached or [],
+            early_stop=early_stop,
         )
         raw, content, stats = await chat_json(
             self._client,
