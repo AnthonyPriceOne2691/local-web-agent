@@ -3,11 +3,11 @@
 - **slug:** real-site-trials
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** M
-- **phase:** implement
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
-- **human_ok_spec:** human:anthony 2026-08-03
-- **human_ok_plan:** human:anthony 2026-08-03
+- **human_ok_spec:** yes — human:anthony 2026-08-03
+- **human_ok_plan:** yes — human:anthony 2026-08-03
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present
 - **ci-oracles:** tooling
@@ -25,7 +25,12 @@
 - **blockers:** T-2a и T-1 ждут участия владельца (логин на `saucedemo` вводит человек;
   в T-1b человек жмёт финальную кнопку). Всё, что можно без него, сделано: T-3a, T-3c,
   T-3b, T-2b закрыты, 9 дефектов найдено, 7 починены с тестами.
-- **waivers:** —
+- **waivers:** loc_diff 1270 > 800 — **human:anthony 2026-08-03** (решение при закрытии
+  поставки: «слить сделанное сейчас»). Основание: 458 строк из диффа — журнал испытаний
+  `docs/26`, 503 — тесты на найденные дефекты, ~150 — сам код правок. Дробить нечего:
+  отделять правки от их тестов или журнал от находок сделало бы обе части непонятнее.
+  Attended-испытания (T-2a, T-1) выделены в следующую поставку, чтобы диф снова влезал
+  в лимит.
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
 ## Предыдущие поставки
