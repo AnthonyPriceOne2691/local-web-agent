@@ -1,6 +1,6 @@
 # Design Documents Index
 
-> Local Web Agent · Design doc · **v1.0** · 2026-08-03
+> Local Web Agent · Design doc · **v1.1** · 2026-08-03
 
 Планирование проекта ведётся через design docs в этой папке: любое изменение дизайна = правка дока + запись в changelog + bump версии в шапке, и версии в шапке, индексе и changelog обязаны совпадать (инвариант [CLAUDE.md](../CLAUDE.md)).
 
@@ -32,6 +32,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.12** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions |
 | [25-action-framework.md](25-action-framework.md) | ✅ **v1.2** | Действия целиком: Tier 0 sinks (Google Docs + файл) · Tier 1 click · Tier 2 login/fill/submit · **Tier 3 handoff** (агент готовит, человек нажимает) — Phase 6–7 |
+| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.1** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -48,7 +49,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | **Phase 5 attended-режим** | ✅ **DONE 2026-07-19** — human-in-the-loop прохождение anti-bot challenge (видимый браузер, `waiting_user`, resume, SSE `challenge_wait`, Chat UI, CLI `--attended`); 137 тестов. **Подтверждён вживую** на публичном сайте за managed challenge: пауза → человек прошёл проверку сам → контент прочитан ([doc 24](24-research-chat-agent.md) § Attended-режим) |
 | **Phase 6 Action Framework** | ✅ **DONE 2026-07-20** — агент действует на сайте ([doc 25](25-action-framework.md)): Tier 1 автономный click · Tier 2 login/fill/submit под подтверждением человека · persist-session · Tier 0 sinks (Google Docs + файл) · Action registry (`research/actions/`, A-H1/A-H2). Живой E2E «найди статью → скопируй в Google Docs»; 181 тест ([doc 06](06-mvp-phases.md) § Phase 6–7) |
 | **Phase 7 Tier 3 handoff** | ✅ **DONE 2026-07-30** — «агент готовит, человек нажимает»: необратимую кнопку агент не жмёт никогда (I-H12 + пауза `handoff`). Живой exit-прогон: агент заполнил форму, выбрал «Оплатить заказ», **человек нажал**, агент зафиксировал `order_number = WX9-1337`; девять дефектов прогона исправлены; 200 тестов ([doc 25](25-action-framework.md) v1.1–v1.2) |
-| **Дальше** | Фаз в дизайне больше нет. Текущий этап — испытания на реальных сайтах по типам (магазин с Tier 2/3, SPA, логин, контакт-форма, новости, `Disallow`) + backlog улучшений ([doc 06](06-mvp-phases.md) § Phase 5+). Состояние поставок — [delivery/active/STATUS.md](../delivery/active/STATUS.md) |
+| **Дальше** | Фаз в дизайне больше нет. Текущий этап — **испытания на реальных сайтах** ([doc 26](26-real-site-trials.md): протокол, отобранные сайты, журнал) + backlog улучшений ([doc 06](06-mvp-phases.md) § Phase 5+). Состояние поставок — [delivery/active/STATUS.md](../delivery/active/STATUS.md) |
 
 ## Conventions
 
@@ -97,4 +98,5 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 | Дата | Изменение |
 |------|-----------|
+| 2026-08-03 | **v1.1:** зарегистрирован [doc 26](26-real-site-trials.md) — протокол испытаний на реальных сайтах (магазин / SPA / новости, задачи RU+EN, отобранные сайты, журнал результатов). Строка «Дальше» в Project status теперь ссылается на него |
 | 2026-08-03 | **v1.0 (первая версионированная ревизия индекса):** плюс doc 06 → v0.12.1 (persist `cf_clearance` в § Phase 5+ помечен сделанным). У индекса не было ни версии, ни changelog — сам он нарушал § Conventions, поэтому его расхождение с доками ничем не ловилось. Синхронизированы версии пяти доков, где индекс отстал (01 v0.5.3→v0.6, 06 v0.10→v0.12, 13 v0.8.3→v0.9, 15 v0.7→v0.8, 25 🛠 v0.8→✅ v1.2); у всех 22 доков шапка и индекс сверены. Таблица **Project status** дополнена Phase 6 и Phase 7 и строкой «Дальше» (фаз больше нет, идут испытания на реальных сайтах); Phase 5 переведена из 🛠 в ✅ (живое подтверждение 2026-07-19). Отмечено, что открытых решений нет |

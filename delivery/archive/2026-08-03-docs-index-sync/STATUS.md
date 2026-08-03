@@ -1,13 +1,13 @@
 # Active delivery status
 
-- **slug:** real-site-trials
+- **slug:** docs-index-sync
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
-- **class:** M
-- **phase:** specify
+- **class:** S
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
-- **human_ok_spec:** pending
-- **human_ok_plan:** pending
+- **human_ok_spec:** n/a
+- **human_ok_plan:** n/a
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present
 - **ci-oracles:** tooling
@@ -15,14 +15,10 @@
        платная для приватного репо, поэтому force-push в main и обход админом не
        закрыты — остаток в delivery/STACK-ACCEPTANCE.md § Остатки. -->
 - **worktree:** none
-  <!-- Класс M обычно просит worktree (§5.1), но прогоны требуют backend/.venv,
-       frontend/dist и data/ — всё gitignored, в свежем worktree их нет. Испытания
-       гоняются в основном клоне; правок кода в поставке почти нет (только фиксы
-       найденных дефектов), поэтому изоляция дешевле по-другому: ветка + merge_guard. -->
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **branch:** `trials/real-sites`
-- **blockers:** ждём `human_ok_spec` + явное «запускай» на подъём локальных моделей
+- **branch:** `docs/index-sync`
+- **blockers:** —
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
@@ -32,8 +28,8 @@
 `nav-model-split` (S) · `synth-speed` (S) · `session-throughput` (S, закрыта
 **частично**) · `ui-liquid-glass` (S) · `real-site-calibration` (S) ·
 `protect-main-segments` (S) · `lint-contour` (S) · `scripts-canon` (S) ·
-`orchestrator-complexity` (M) · `post-refactor-live` (S) · `docs-index-sync` (S) — все
-слиты через `merge_guard`; CI на main зелёный. Артефакты в `delivery/archive/`.
+`orchestrator-complexity` (M) · `post-refactor-live` (S) — все слиты через
+`merge_guard`; CI на main зелёный. Артефакты в `delivery/archive/`.
 
 ## Состояние гейтов и проверки
 
@@ -79,22 +75,7 @@ persist `cf_clearance` в `docs/06` помечен сделанным.
 - Длительность шагов `SYNTHESIZE` не сохраняется — разложение сессии по стадиям
   приходится считать остатком; мешает честному замеру синтеза.
 
-## Контекст поставки real-site-trials
-
-Владелец выбрал взять сразу три типа (магазин, SPA, новости/блоги), оформить док, найти
-сайты и сделать несколько проходов; отдельным уточнением — **задачи бывают и русские, и
-английские**, поэтому язык задачи стал отдельной осью испытаний (RU+EN на каждом типе +
-перекрёстный прогон RU-задачи по англоязычным сайтам на тех же сайтах, что EN-прогон).
-
-Ранее я рекомендовал одну поставку на тип, чтобы находки не смешивались. Владелец решил
-иначе; компенсация внутри одной поставки — свой прогон и свой раздел журнала на каждый
-тип, порядок от безопасного к рискованному (чтение → SPA → действия на магазине).
-
-Сайты отобраны механически до всякого LLM: `vet_sites.py` (scratchpad) проверил 29
-кандидатов — robots нашим UA, статус на наш и браузерный UA, текст в сыром HTML, маркеры
-SPA. Отсеяно 9. Протокол и таблицы — [doc 26](../../docs/26-real-site-trials.md).
-
-## Контекст (прежний, стадия проекта)
+## Контекст поставки
 
 **Стадия проекта:** всё запланированное дизайном построено (Phase 0–7 закрыты, решения
 D-1..D-14 закрыты, новых фаз в doc 06 нет — только таблица необязательных улучшений).
