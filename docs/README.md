@@ -1,6 +1,6 @@
 # Design Documents Index
 
-> Local Web Agent · Design doc · **v1.2** · 2026-08-03
+> Local Web Agent · Design doc · **v1.3** · 2026-08-03
 
 Планирование проекта ведётся через design docs в этой папке: любое изменение дизайна = правка дока + запись в changelog + bump версии в шапке, и версии в шапке, индексе и changelog обязаны совпадать (инвариант [CLAUDE.md](../CLAUDE.md)).
 
@@ -22,8 +22,8 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.9** | ABC; I-H10 click / I-H11 fill safety; submit под attended-confirm; **I-H12** destructive → handoff |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.6** | qwen3 канон; лёгкая 8b на DOM-решения; VLM; fallback-пара |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.8** | + SSE events, report, статика UI, attended resume/`challenge_wait` (kinds: challenge/login/confirm_submit/handoff) |
-| [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.8** | Params: structured outputs, think; маршрутизация nav-моделей; быстрый синтез |
-| [17-ui-screens.md](17-ui-screens.md) | ✅ **v0.5** | CLI flows; Chat UI: liquid glass + человеческий словарь |
+| [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.9** | Params: structured outputs, think; маршрутизация nav-моделей; быстрый синтез; **вывод всегда по-английски** |
+| [17-ui-screens.md](17-ui-screens.md) | ✅ **v0.6** | CLI flows; Chat UI: liquid glass + человеческий словарь; язык вывода, раскрытие карточек, движение |
 | [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.4** | 500 LOC, SOLID, DRY, coverage; контур ruff + mypy на scripts/ |
 | [19-phase0-benchmark-results.md](19-phase0-benchmark-results.md) | ✅ **v1.0 DONE** | Все гейты ✅; qwen3 single-model рекомендация |
 | [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.3** | Token budget; non-Latin; compare N>3; вход синтеза ≠ латентность |
@@ -32,7 +32,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.12** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions |
 | [25-action-framework.md](25-action-framework.md) | ✅ **v1.2** | Действия целиком: Tier 0 sinks (Google Docs + файл) · Tier 1 click · Tier 2 login/fill/submit · **Tier 3 handoff** (агент готовит, человек нажимает) — Phase 6–7 |
-| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.5** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3 + T-2b: 9 дефектов) |
+| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.6** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3 + T-2b: 9 дефектов) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -98,6 +98,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 | Дата | Изменение |
 |------|-----------|
+| 2026-08-03 | **v1.3:** doc 16 → v0.9 и doc 17 → v0.6 (язык вывода — английский всегда; служебный текст не показывается человеку; раскрытие карточек и движение) |
 | 2026-08-03 | **v1.2:** doc 03 → v0.9 (стратегия ожидания навигации — находка испытания T-3a: чужая аналитика держала DOMContentLoaded 30 s и стоила 2 сайтов из 3) |
 | 2026-08-03 | **v1.1:** зарегистрирован [doc 26](26-real-site-trials.md) — протокол испытаний на реальных сайтах (магазин / SPA / новости, задачи RU+EN, отобранные сайты, журнал результатов). Строка «Дальше» в Project status теперь ссылается на него |
 | 2026-08-03 | **v1.0 (первая версионированная ревизия индекса):** плюс doc 06 → v0.12.1 (persist `cf_clearance` в § Phase 5+ помечен сделанным). У индекса не было ни версии, ни changelog — сам он нарушал § Conventions, поэтому его расхождение с доками ничем не ловилось. Синхронизированы версии пяти доков, где индекс отстал (01 v0.5.3→v0.6, 06 v0.10→v0.12, 13 v0.8.3→v0.9, 15 v0.7→v0.8, 25 🛠 v0.8→✅ v1.2); у всех 22 доков шапка и индекс сверены. Таблица **Project status** дополнена Phase 6 и Phase 7 и строкой «Дальше» (фаз больше нет, идут испытания на реальных сайтах); Phase 5 переведена из 🛠 в ✅ (живое подтверждение 2026-07-19). Отмечено, что открытых решений нет |

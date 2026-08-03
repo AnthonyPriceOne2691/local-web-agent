@@ -23,16 +23,29 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
           <div className="truncate text-[15px] font-semibold tracking-tight">Local Web Agent</div>
           <div className="text-faint mt-0.5 text-[11px]">Research that never leaves this Mac</div>
         </div>
+        {/* Плюс рисуется фигурой, а не глифом «+»: у глифа своя метрика и оптический
+            центр не совпадает с центром круга — кнопка выглядела съехавшей. */}
         <button
           onClick={onNew}
           aria-label="Start a new chat"
-          className="btn-accent focus-ring grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none"
+          className="btn-accent focus-ring press grid size-8 shrink-0 place-items-center rounded-full"
         >
-          +
+          <svg viewBox="0 0 16 16" aria-hidden className="size-4">
+            <path
+              d="M8 3.25v9.5M3.25 8h9.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </div>
 
-      <nav className="scroll-slim flex-1 overflow-y-auto px-2 pb-2">
+      {/* Промежуток между карточками задаётся списком (`gap`), а не отступами у
+          каждой карточки: иначе он то удваивается, то исчезает при вставке блока
+          подтверждения удаления. Карточки стояли вплотную и читались как одна. */}
+      <nav className="scroll-slim flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
         {sessions.length === 0 && (
           <p className="text-faint px-2 py-6 text-center text-xs">
             No chats yet. Paste a few links and ask a question.
@@ -46,7 +59,7 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
               <button
                 onClick={() => onSelect(s.session_id)}
                 aria-current={selected ? 'true' : undefined}
-                className={`focus-ring block w-full rounded-2xl px-3 py-2.5 text-left transition
+                className={`focus-ring press block w-full rounded-2xl px-3 py-2.5 text-left
                   ${selected ? 'glass' : 'glass-slot'}`}
               >
                 <span className="block truncate pr-6 text-[13px] font-medium">

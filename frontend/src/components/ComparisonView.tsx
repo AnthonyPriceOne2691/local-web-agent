@@ -73,15 +73,18 @@ export default function ComparisonView({
           <h3 className="text-faint mb-2 text-[11px] font-medium tracking-wide uppercase">
             Side by side
           </h3>
+          {/* Оценки — числа, и колонка чисел читается только выровненной по центру
+              под своим заголовком: слева они разъезжались и глазом не сравнивались.
+              Первая колонка (название размерности) остаётся по левому краю — это текст. */}
           <div className="scroll-slim overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="text-faint text-left">
-                  <th className="pr-3 pb-1.5 font-medium">What we looked at</th>
+                <tr className="text-faint">
+                  <th className="pr-3 pb-1.5 text-left font-medium">What we looked at</th>
                   {columns.map((site) => (
                     <th
                       key={site}
-                      className="max-w-24 truncate px-2 pb-1.5 font-medium"
+                      className="max-w-24 truncate px-2 pb-1.5 text-center font-medium"
                       title={site}
                     >
                       {siteName(site)}
@@ -94,7 +97,7 @@ export default function ComparisonView({
                   <tr key={d.name} className="border-t border-[var(--glass-edge)] align-top">
                     <td className="text-soft py-1.5 pr-3">{humanizeKey(d.name)}</td>
                     {columns.map((site) => (
-                      <td key={site} className="text-faint px-2 py-1.5">
+                      <td key={site} className="text-soft px-2 py-1.5 text-center tabular-nums">
                         {String(d.scores[site] ?? '—')}
                       </td>
                     ))}

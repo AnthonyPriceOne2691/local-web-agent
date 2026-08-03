@@ -46,8 +46,51 @@ _EXCLUSION = {
 }
 
 
+# Техническая причина → человеческая. Ключи ищутся в тексте исключения; всё, что не
+# распознано, отбрасывается целиком: лучше «couldn't be read» без деталей, чем стек
+# Playwright в чате (живой прогон показал в интерфейсе три строки `at UtilityScript…`).
+_TECHNICAL_DETAIL = (
+    ("timeout", "the site did not respond in time"),
+    ("err_timed_out", "the site did not respond in time"),
+    ("err_name_not_resolved", "the address could not be resolved"),
+    ("err_connection", "the connection failed"),
+    ("net::", "the connection failed"),
+    ("targetclosed", "the browser was closed"),
+    ("robots", "robots.txt does not allow it"),
+    ("innertext", "the page never finished loading"),
+    ("execution context", "the page kept reloading"),
+)
+_MAX_DETAIL_CHARS = 90
+
+
+def humanize_detail(detail: str | None) -> str:
+    """Короткая человеческая причина или пусто. Стеки и внутренние типы не проходят.
+
+    Дефект живого прогона: `Page.evaluate: TypeError: Cannot read properties of null
+    (reading 'innerText') at eval (…) at UtilityScript.evaluate (…)` уезжал в чат целиком.
+    Пользователю нужно знать, что сайт не прочитался, а не где упал наш JS.
+    """
+    if not detail:
+        return ""
+    low = detail.casefold()
+    for needle, human in _TECHNICAL_DETAIL:
+        if needle in low:
+            return human
+    first_line = detail.strip().splitlines()[0].strip()
+    # Признаки служебного текста: тип исключения, кадр стека, путь к файлу.
+    looks_technical = (
+        "error:" in low[:60]
+        or low.startswith(("at ", "traceback"))
+        or "exception" in low[:60]
+        or ("/" in first_line and first_line.endswith((")", ";")))
+    )
+    if looks_technical or len(first_line) > _MAX_DETAIL_CHARS:
+        return ""
+    return first_line
+
+
 def exclusion_reason(status: str, blocked_by: str | None, error: str | None) -> str:
     """Одно предложение: что случилось с сайтом и, если известно, из-за чего."""
     what = _EXCLUSION.get(status, status.replace("_", " "))
-    detail = blocked_by or error
-    return f"{what} ({detail})" if detail else what
+    detail = humanize_detail(blocked_by or error)
+    return f"{what} — {detail}" if detail else what
