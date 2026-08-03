@@ -110,7 +110,9 @@ async def test_uc1_happy_path_sequential_compare_report(tmp_path):
     assert roles[-1] == "assistant"
     # Формулировки ответа — пользовательский текст (doc 17 § Wording), поэтому
     # тест держит их дословно: смена слов должна быть осознанной, не случайной.
-    assert "Best of the bunch: a.com" in session.messages[-1].content
+    # Сообщение здесь русское → и каркас ответа русский (doc 17 § Язык ответа):
+    # смешение английской строки с русской прозой и было дефектом.
+    assert "Лучший из всех: a.com" in session.messages[-1].content
     # состояние в store идентично
     assert session_store.get(session.id).status == "completed"
 
@@ -137,7 +139,7 @@ async def test_partial_failure_excluded_and_partial_status(tmp_path):
     assert comparison.status == "partial"  # excluded есть
     assert [e.start_url for e in comparison.excluded] == ["https://c.com"]
     assert "captcha" in comparison.excluded[0].reason
-    assert "Left out: c.com" in session.messages[-1].content
+    assert "Не вошли: c.com" in session.messages[-1].content  # сообщение русское
 
 
 async def test_single_survivor_answers_without_compare(tmp_path):
@@ -234,3 +236,36 @@ async def test_plan_argument_still_wins_over_the_setting(tmp_path):
 
     pages = [run_store.get(rid).config.max_pages for rid in session.run_ids]
     assert pages == [10, 10], "multi_site_research задаёт 10 страниц планом"
+
+
+# --- язык ответа следует языку запроса (doc 17 § Язык ответа) ---
+
+
+async def test_english_message_gets_english_answer(tmp_path):
+    """Симметричный случай к русским прогонам выше: тот же путь, другой язык запроса."""
+    runner, _run_store, session_store, visits, _llm = make_runner(tmp_path)
+    session = new_session()
+    session_store.save(session)
+
+    session = await runner.run_message(session, "Compare the design of these: https://a.com https://b.com")
+
+    assert visits == ["https://a.com", "https://b.com"]
+    reply = session.messages[-1].content
+    assert "Best of the bunch: a.com" in reply
+    assert "How they scored:" in reply
+    notes = [m.content for m in session.messages if m.role == "tool"]
+    assert any(n.startswith("Reading ") for n in notes), "заметки о ходе тоже английские"
+
+
+async def test_russian_message_keeps_the_whole_answer_russian(tmp_path):
+    runner, _run_store, session_store, _visits, _llm = make_runner(tmp_path)
+    session = new_session()
+    session_store.save(session)
+
+    session = await runner.run_message(session, "Сравни дизайн: https://a.com https://b.com")
+
+    reply = session.messages[-1].content
+    assert "Оценки:" in reply
+    assert "How they scored" not in reply, "английская строка над русским ответом — тот самый дефект"
+    notes = [m.content for m in session.messages if m.role == "tool"]
+    assert any(n.startswith("Читаю ") for n in notes)

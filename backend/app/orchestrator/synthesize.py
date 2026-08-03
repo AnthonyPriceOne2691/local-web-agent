@@ -12,6 +12,7 @@ from app.config import Settings
 from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
 from app.orchestrator.states import State
+from app.reporting.phrasing import Phrases
 from app.schemas.extraction import ExtractionResult
 from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import PageSnapshot
@@ -65,7 +66,13 @@ async def run_synthesis(
         early_stop=early_stop,
     )
     record.steps[-1].llm_stats = stats
-    return note_limits(result, unreached, early_stop=early_stop, pages_read=len(snapshots))
+    return note_limits(
+        result,
+        unreached,
+        early_stop=early_stop,
+        pages_read=len(snapshots),
+        say=Phrases.load(settings.data_dir, record.config.task),
+    )
 
 
 def note_limits(
@@ -74,6 +81,7 @@ def note_limits(
     *,
     early_stop: str = "",
     pages_read: int = 0,
+    say: Phrases,
 ) -> ExtractionResult:
     """Дописать в summary, где обход остановили СВОИ правила. Кодом, не просьбой к модели.
 
@@ -95,15 +103,13 @@ def note_limits(
     if unreached:
         listed = ", ".join(unreached[:5])
         more = f" (+{len(unreached) - 5})" if len(unreached) > 5 else ""
-        parts.append(f"pages not opened: {listed}{more}")
+        parts.append(say.say("not_opened", items=f"{listed}{more}"))
     if early_stop:
-        parts.append(f"crawl ended early after {pages_read} page(s) by own rule ({early_stop})")
+        parts.append(say.say("ended_early", pages=pages_read, rule=early_stop))
     if not parts:
         return result
-    note = (
-        "Reading was cut short by the agent's own limits, not by the site lacking content — "
-        + "; ".join(parts)
-        + "."
-    )
+    # Приписка на языке запроса: иначе она английской строкой встанет под русским
+    # ответом — та самая смесь, из-за которой правило и переписывалось.
+    note = say.say("cut_short", parts="; ".join(parts))
     summary = f"{result.summary.rstrip()} {note}".strip() if result.summary else note
     return result.model_copy(update={"summary": summary})

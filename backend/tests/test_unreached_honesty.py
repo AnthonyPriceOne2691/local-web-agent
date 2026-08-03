@@ -9,9 +9,14 @@ Rust, где анонсы релизов — основной жанр, это �
 
 from __future__ import annotations
 
+from app.config import Settings
 from app.orchestrator.synthesize import unreached_urls
+from app.reporting.phrasing import Phrases
 from app.schemas.run import CrawlStep, RunRecord, Violation
+from tests.conftest import REPO_ROOT
 from tests.test_orchestrator import record_for
+
+EN = Phrases.load(Settings(data_dir=REPO_ROOT / "data").data_dir, "find the article")
 
 
 def _record(*steps: CrawlStep) -> RunRecord:
@@ -113,7 +118,7 @@ def test_summary_always_says_what_was_not_reached():
         status="completed",
         summary="The site does not explain how releases are handled.",
     )
-    noted = note_limits(result, ["https://blog.rust-lang.org/releases/latest"])
+    noted = note_limits(result, ["https://blog.rust-lang.org/releases/latest"], say=EN)
 
     assert "pages not opened" in noted.summary
     assert "https://blog.rust-lang.org/releases/latest" in noted.summary
@@ -126,7 +131,7 @@ def test_clean_result_is_untouched():
     from app.schemas.extraction import ExtractionResult
 
     result = ExtractionResult(status="completed", summary="All good.")
-    assert note_limits(result, []) is result
+    assert note_limits(result, [], say=EN) is result
 
 
 def test_long_unreached_list_is_capped_in_the_note():
@@ -134,7 +139,7 @@ def test_long_unreached_list_is_capped_in_the_note():
     from app.schemas.extraction import ExtractionResult
 
     urls = [f"https://x.test/{i}" for i in range(8)]
-    noted = note_limits(ExtractionResult(status="completed", summary="s"), urls)
+    noted = note_limits(ExtractionResult(status="completed", summary="s"), urls, say=EN)
 
     assert "https://x.test/4" in noted.summary
     assert "https://x.test/5" not in noted.summary, "длинный список режется"
@@ -151,7 +156,7 @@ def test_early_stop_is_reported_even_without_violations():
     from app.schemas.extraction import ExtractionResult
 
     result = ExtractionResult(status="completed", summary="На сайте нет подробных статей.")
-    noted = note_limits(result, [], early_stop="G-S1: no new relevant links on 3 pages", pages_read=3)
+    noted = note_limits(result, [], early_stop="G-S1: no new relevant links on 3 pages", pages_read=3, say=EN)
 
     assert "ended early after 3 page(s)" in noted.summary
     assert "G-S1" in noted.summary
@@ -167,6 +172,7 @@ def test_both_reasons_are_listed_together():
         ["https://x.test/deep"],
         early_stop="G-S1: no new relevant links on 3 pages",
         pages_read=3,
+        say=EN,
     )
     assert "pages not opened" in noted.summary
     assert "ended early" in noted.summary

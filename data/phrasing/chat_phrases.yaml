@@ -1,0 +1,84 @@
+# Фразы, которые бэкенд сочиняет в переписку, на двух языках.
+#
+# Правило (решение владельца 2026-08-03): **ответ идёт на языке запроса** — русский
+# вопрос получает русский ответ, английский английский. Причём это касается не только
+# прозы модели, но и НАШИХ строк внутри сообщения: иначе получается смесь, из-за которой
+# правило и переписывалось («How they scored:» английской строкой над русским текстом).
+#
+# Что сюда НЕ входит: подписи интерфейса (кнопки, табы, заголовки карточек, статусы) —
+# они остаются английскими всегда, это мебель интерфейса, а не ответ (doc 17 § Словарь).
+#
+# Язык определяется по самому запросу (наличие кириллицы), без обращения к модели:
+# определение должно быть дешёвым и одинаковым при каждом прогоне.
+
+en:
+  winner: "Best of the bunch: {label} — {reason}"
+  scored: "How they scored: {scores}"
+  left_out: "Left out: {items}"
+  none_worked: "None of the sites worked out: {items}"
+  stopped_before_compare: "Stopped before I could compare the sites."
+  report_saved: "The full write-up is saved as {name}."
+  out_of_time_comparing: "Out of time for this chat — comparing what I managed to read."
+  out_of_time: "Out of time for this chat."
+  reading_site: "Reading {site} — site {index} of {total}"
+  reading: "Reading {site}"
+  done: "done"
+  cut_short: >-
+    Reading was cut short by the agent's own limits, not by the site lacking content —
+    {parts}.
+  not_opened: "pages not opened: {items}"
+  ended_early: "crawl ended early after {pages} page(s) by own rule ({rule})"
+
+ru:
+  winner: "Лучший из всех: {label} — {reason}"
+  scored: "Оценки: {scores}"
+  left_out: "Не вошли: {items}"
+  none_worked: "Ни один сайт не удалось прочитать: {items}"
+  stopped_before_compare: "Остановлено до того, как я успел сравнить сайты."
+  report_saved: "Полный разбор сохранён в {name}."
+  out_of_time_comparing: "Время этого чата вышло — сравниваю то, что успел прочитать."
+  out_of_time: "Время этого чата вышло."
+  reading_site: "Читаю {site} — сайт {index} из {total}"
+  reading: "Читаю {site}"
+  done: "готово"
+  cut_short: >-
+    Чтение прервали мои собственные ограничения, а не отсутствие материала на сайте —
+    {parts}.
+  not_opened: "не открыты страницы: {items}"
+  ended_early: "обход прекращён после {pages} стр. по своему же правилу ({rule})"
+
+# Почему сайт не попал в сравнение. Раньше строка начиналась со статуса кода
+# (`failed: …`) — читателю это ничего не говорит.
+exclusion:
+  en:
+    failed: "couldn't be read"
+    blocked: "blocked us"
+    not_found: "had nothing on the topic"
+    partial: "was only partly readable"
+    canceled: "was stopped"
+  ru:
+    failed: "не удалось прочитать"
+    blocked: "закрылся от нас"
+    not_found: "ничего по теме не нашлось"
+    partial: "прочитался только частично"
+    canceled: "остановлен"
+
+# Техническая причина → человеческая. Нераспознанное отбрасывается целиком: лучше
+# «не удалось прочитать» без деталей, чем стек Playwright в переписке.
+technical:
+  en:
+    timeout: "the site did not respond in time"
+    dns: "the address could not be resolved"
+    connection: "the connection failed"
+    browser_closed: "the browser was closed"
+    robots: "robots.txt does not allow it"
+    never_loaded: "the page never finished loading"
+    kept_reloading: "the page kept reloading"
+  ru:
+    timeout: "сайт не ответил за отведённое время"
+    dns: "адрес не разрешился"
+    connection: "соединение не установилось"
+    browser_closed: "браузер закрыли"
+    robots: "robots.txt это запрещает"
+    never_loaded: "страница так и не догрузилась"
+    kept_reloading: "страница всё время перезагружалась"
