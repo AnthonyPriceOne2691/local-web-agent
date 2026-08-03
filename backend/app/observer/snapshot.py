@@ -54,7 +54,14 @@ OBSERVE_JS = (
         return {kind, label, input_type: itype, name: at('name'),
                 disabled: !!el.disabled, value};
       }),
-    has_password_field: !!pick('input[type=password]'),
+    // Только ВИДИМОЕ поле пароля — тот же критерий, что у interactive выше. Скрытое
+    // модальное окно логина есть почти на каждом магазине, а у SPA сырой текст короткий,
+    // поэтому пара «есть password + страница тонкая» давала ложный login_wall: прогон
+    // demoblaze.com вставал на первой странице, SPA-fallback отключался (login_wall
+    // пропускает networkidle), каталог не рендерился и ответ заявлял, что цен на сайте
+    // нет (doc 26 § T-2b-1).
+    has_password_field: [...document.querySelectorAll('input[type=password]')]
+      .some(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }),
   };
 }"""
 )
