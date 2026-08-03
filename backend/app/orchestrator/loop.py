@@ -23,7 +23,7 @@ from app.navigation.intent import classify_intent
 from app.navigation.path_hints import PathHints
 from app.observer.links import normalize_url, origin_of
 from app.orchestrator.attended import AttendedGate, pause_with_window, reobserve_in_place
-from app.orchestrator.capture import dismiss_consent
+from app.orchestrator.capture import dismiss_consent, step_capturer
 from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.finalize import finalize_run
@@ -83,6 +83,8 @@ class CrawlOrchestrator:
         self._consent = ConsentHandler.load(settings.navigation_dir)
         self._routing = NavRouting.load(settings)  # лёгкая/тяжёлая nav-модель (doc 16)
         self._consent_click_used = False  # 1 попытка click на сайт (D-11)
+        # Скриншот шага для стадий, которые не знают про store (интеракция, attended).
+        self._capture = step_capturer(browser, store, self._dismiss_consent)
         self._vision = VisionAnalyzer(llm_client, settings)
 
     # ------------------------------------------------------------------ run
@@ -284,6 +286,7 @@ class CrawlOrchestrator:
                     step_index=st.step_index,
                     snapshots=st.snapshots,
                     visited=st.visited,
+                    capture=self._capture,
                 )
             )
             return StepOutcome.CONTINUE  # next_url is None → сразу PLAN c этой страницей
@@ -429,6 +432,7 @@ class CrawlOrchestrator:
             visited=st.visited,
             gate=gate,
             destructive_signals=self._enforcer.destructive_signals,
+            capture=self._capture,
         )  # I-H12
         if current is None:  # Tier 2 submit не подтверждён человеком
             return StepOutcome.STOP

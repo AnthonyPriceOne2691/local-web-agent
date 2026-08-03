@@ -12,7 +12,7 @@ from typing import Any
 
 from app.browser.base import BrowserSession
 from app.contracts.rules.navigation import label_is_destructive
-from app.orchestrator.attended import AttendedGate, reobserve_in_place
+from app.orchestrator.attended import AttendedGate, StepCapture, page_probe, reobserve_in_place
 from app.schemas.run import RunRecord
 from app.schemas.snapshot import AgentAction, InteractiveElement, PageSnapshot
 
@@ -46,6 +46,7 @@ async def _fill_form(
     step_index: int,
     snapshots: list[PageSnapshot],
     visited: set[str],
+    capture: StepCapture | None = None,
 ) -> PageSnapshot | None:
     """Заполнить все поля формы за один шаг и один раз перечитать страницу.
 
@@ -76,6 +77,7 @@ async def _fill_form(
         snapshots=snapshots,
         visited=visited,
         note=f"Tier 2: re-observe after fill_form ({len(action.fields)} field(s))",
+        capture=capture,
     )
 
 
@@ -90,6 +92,7 @@ async def _handoff_to_human(
     snapshots: list[PageSnapshot],
     visited: set[str],
     gate: AttendedGate | None,
+    capture: StepCapture | None = None,
 ) -> PageSnapshot | None:
     """Tier 3 (I-H12): агент кнопку не жмёт — пауза, жмёт человек, читаем исход.
 
@@ -100,7 +103,7 @@ async def _handoff_to_human(
         # Окно человеку показываем ДО паузы: до этого прогон мог идти headless
         # (doc 24 § Видимость окна). После не прячем — человек работает со страницей.
         await browser.reveal()
-    if gate is None or not await gate.handoff_action(record, desc):
+    if gate is None or not await gate.handoff_action(record, desc, page_probe(browser)):
         return None  # человек не завершил handoff → стоп
     # Окно к этому моменту могло быть закрыто (человек передумал и закрыл его —
     # нормальный поступок): тогда run заканчивается со внятной пометкой, а не
@@ -116,6 +119,7 @@ async def _handoff_to_human(
             snapshots=snapshots,
             visited=visited,
             note=f"Tier 3 handoff: re-observe after human action #{el.index}",
+            capture=capture,
         )
     except Exception as exc:
         logger.warning(
@@ -146,6 +150,7 @@ async def act_on_element(
     visited: set[str],
     gate: AttendedGate | None = None,
     destructive_signals: tuple[str, ...] = (),
+    capture: StepCapture | None = None,
 ) -> PageSnapshot | None:
     """Tier 1/2/3 (doc 25): click/fill по element_index, затем re-observe без goto.
 
@@ -164,6 +169,7 @@ async def act_on_element(
             step_index=step_index,
             snapshots=snapshots,
             visited=visited,
+            capture=capture,
         )
     idx = action.element_index
     if idx is None:  # контракт: сюда попадают только действия с element_index
@@ -184,6 +190,7 @@ async def act_on_element(
             snapshots=snapshots,
             visited=visited,
             gate=gate,
+            capture=capture,
         )
     if action.action == "click" and el is not None and _is_submit(el):
         desc = f"submit «{el.label or 'форма'}» на {current.url}"
@@ -215,4 +222,5 @@ async def act_on_element(
         snapshots=snapshots,
         visited=visited,
         note=f"Tier: re-observe after {action.action} #{idx}",
+        capture=capture,
     )

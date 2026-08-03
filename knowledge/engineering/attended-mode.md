@@ -58,6 +58,11 @@ implementation:
 Снимается рутина навигации, а не сам факт проверки —
 [no anti-bot bypass](/engineering/no-anti-bot-bypass.md).
 
+- **Скриншот шага снимается и после интеракции.** Re-observe после `fill_form`,
+  click и handoff идёт через тот же захват, что обычный OBSERVE (`step_capturer`):
+  именно эти кадры показывают, что человек и агент сделали со страницей, а в живом
+  прогоне Tier 3 скриншот был главным средством диагностики.
+
 # Related
 
 - Что требует какой паузы: [action tiers](/engineering/action-tiers.md)

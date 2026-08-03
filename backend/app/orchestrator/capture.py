@@ -48,6 +48,24 @@ async def maybe_screenshot(
         logger.warning("screenshot failed for %s (%s: %s)", snapshot.url, type(exc).__name__, exc)
 
 
+def step_capturer(
+    browser: BrowserSession,
+    store: RunStore,
+    dismiss: Callable[[RunRecord, str], Awaitable[None]],
+) -> Callable[[RunRecord, PageSnapshot, int], Awaitable[None]]:
+    """Замыкание «сними скриншот этого шага» для стадий, у которых нет store.
+
+    Нужно, потому что re-observe после интеракции (fill_form, click, handoff) шёл
+    вообще без снимка даже при `capture_screenshots: "always"` — а в живом прогоне
+    Tier 3 именно скриншот шага показывал, что реально было на странице.
+    """
+
+    async def capture(record: RunRecord, snapshot: PageSnapshot, step_index: int) -> None:
+        await maybe_screenshot(browser, store, dismiss, record, snapshot, step_index)
+
+    return capture
+
+
 async def dismiss_consent(
     consent: ConsentHandler,
     browser: BrowserSession,

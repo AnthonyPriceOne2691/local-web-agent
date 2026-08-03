@@ -109,6 +109,7 @@ class CompareSynthesizer:
             retry_note="Your previous reply was not valid JSON. JSON object only.",
             schema=schema,
             think=think if supports_think(self._s.synth_model) else None,
+            temperature=self._s.compare_temperature,  # воспроизводимость важнее разнообразия
             num_ctx=num_ctx,
             max_tokens=self._s.synth_max_tokens,
         )
