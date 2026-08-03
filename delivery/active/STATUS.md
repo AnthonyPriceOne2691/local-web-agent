@@ -22,7 +22,9 @@
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
 - **branch:** `trials/real-sites`
-- **blockers:** — (spec одобрен, «запускай с T-3» получено 2026-08-03)
+- **blockers:** T-2a и T-1 ждут участия владельца (логин на `saucedemo` вводит человек;
+  в T-1b человек жмёт финальную кнопку). Всё, что можно без него, сделано: T-3a, T-3c,
+  T-3b, T-2b закрыты, 9 дефектов найдено, 7 починены с тестами.
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
