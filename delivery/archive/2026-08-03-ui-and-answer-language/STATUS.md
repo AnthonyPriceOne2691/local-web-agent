@@ -1,13 +1,13 @@
 # Active delivery status
 
-- **slug:** trials-attended
+- **slug:** ui-and-answer-language
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** M
-- **phase:** specify
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
-- **human_ok_spec:** pending
-- **human_ok_plan:** pending
+- **human_ok_spec:** yes — human:anthony 2026-08-03 (сам перечислил дефекты списком)
+- **human_ok_plan:** yes — human:anthony 2026-08-03 (объём задан его списком)
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present
 - **ci-oracles:** tooling
@@ -21,10 +21,9 @@
        найденных дефектов), поэтому изоляция дешевле по-другому: ветка + merge_guard. -->
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **branch:** не отведена (ждём готовности владельца)
-- **blockers:** нужна готовность владельца — все оставшиеся испытания attended: логин на
-  `saucedemo` вводит человек (T-2a), в T-1b человек жмёт финальную кнопку, в T-1c на
-  настоящем магазине проверяется остановка агента. Без человека сделать нечего.
+- **branch:** `fix/ui-and-english-output` (имя ветки осталось от первой формулировки правила)
+- **blockers:** — (attended-испытания T-2a/T-1 отложены: владелец дал вперёд список
+  дефектов интерфейса и языка вывода; они не требуют его присутствия)
 - **waivers:** — (waiver транша 1 снят: main запушен, диф против `origin/main` пуст)
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
@@ -35,8 +34,7 @@
 **частично**) · `ui-liquid-glass` (S) · `real-site-calibration` (S) ·
 `protect-main-segments` (S) · `lint-contour` (S) · `scripts-canon` (S) ·
 `orchestrator-complexity` (M) · `post-refactor-live` (S) · `docs-index-sync` (S) ·
-`real-site-trials` транш 1 (M, waiver владельца на размер) · `ui-and-answer-language`
-(M) — все слиты через
+`real-site-trials` транш 1 (M, waiver владельца на размер) — все слиты через
 `merge_guard`; CI на main зелёный. Артефакты в `delivery/archive/`.
 
 ## Состояние гейтов и проверки
@@ -101,21 +99,6 @@ persist `cf_clearance` в `docs/06` помечен сделанным.
   при первой же правке стадий.
 - Длительность шагов `SYNTHESIZE` не сохраняется — разложение сессии по стадиям
   приходится считать остатком; мешает честному замеру синтеза.
-
-## Что слито 03.08 поставкой ui-and-answer-language
-
-Восемь дефектов интерфейса по списку владельца + правило языка. **Итог правила: ответ идёт
-на языке запроса**, и языку запроса следует не только проза модели, но и каркас, который
-сочиняет бэкенд (оценки, заметки «Читаю …», приписка про непрочитанное) — дефектом была
-**смесь**, а не русский текст. Подписи интерфейса остаются английскими, цитаты — дословно
-на языке страницы (S-H3). Фразы — `data/phrasing/chat_phrases.yaml`.
-
-Сверх списка: **layout не адаптировался вовсе** — на 430 px чат сжимался до ~150 px.
-Сделан адаптивный layout с переключателем панелей.
-
-Незакрытые хвосты этой поставки: английский прогон живьём не гонялся (закрыт тестом),
-тёмная тема и `prefers-reduced-motion` глазами не смотрелись, определение языка — только
-для пары ru/en, UI-автотестов нет.
 
 ## Контекст поставки trials-attended
 
