@@ -7,25 +7,34 @@ import contextlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
+from app.browser.trackers import TrackerBlocklist
 from app.observer.snapshot import INTERACTIVE_SELECTOR, OBSERVE_JS
 
 if TYPE_CHECKING:  # playwright тянется лениво в start(), типы нужны только чекеру
-    from playwright.async_api import Browser, BrowserContext, Page, Playwright
+    from playwright.async_api import Browser, BrowserContext, Page, Playwright, Request, Route
 
 logger = logging.getLogger(__name__)
 
 DESKTOP = {"width": 1440, "height": 900}
 
+# Сколько ждём DOMContentLoaded ПОСЛЕ того, как документ пришёл. Отдельный короткий
+# бюджет, а не весь page_timeout: событие держат сторонние `defer`-скрипты (аналитика),
+# и на их сетевой таймаут (30 s у обоих сайтов замера) ждать нечего — doc 26 § T-3a-1.
+DCL_BUDGET_MS = 5000
+
 
 class PlaywrightSession:
-    def __init__(self) -> None:
+    def __init__(self, *, trackers: TrackerBlocklist | None = None) -> None:
         self._pw: Playwright | None = None
         self._browser: Browser | None = None
         self._page: Page | None = None
         self._context: BrowserContext | None = None
         self._persist_path: str | None = None
         self._headless = True
+        self._trackers = trackers or TrackerBlocklist([])
+        self.blocked_trackers = 0  # для записи прогона: сколько запросов отклонили
 
     @property
     def _active(self) -> Page:
@@ -51,14 +60,56 @@ class PlaywrightSession:
         ctx_kwargs: dict[str, Any] = {"viewport": DESKTOP, "accept_downloads": False}
         if storage_state_path and Path(storage_state_path).exists():
             ctx_kwargs["storage_state"] = storage_state_path  # cookie прошлой сессии (doc 24)
-        self._context = await self._browser.new_context(**ctx_kwargs)
+        self._context = await self._open_context(ctx_kwargs)
         self._page = await self._context.new_page()
         if not headless:
             await self._close_blank_windows()
             await self._page.bring_to_front()
 
+    async def _open_context(self, ctx_kwargs: dict[str, Any]) -> BrowserContext:
+        """Контекст + фильтр сторонней аналитики (один путь для start и _relaunch)."""
+        if self._browser is None:
+            raise RuntimeError("browser session is not started — call start() first")
+        context = await self._browser.new_context(**ctx_kwargs)
+        if self._trackers.size:
+            await context.route("**/*", self._filter_request)
+        return context
+
+    async def _filter_request(self, route: Route, request: Request) -> None:
+        page_host = urlsplit(self._page.url).hostname or "" if self._page else ""
+        if self._trackers.blocks(request.url, page_host=page_host):
+            self.blocked_trackers += 1
+            await route.abort()
+            return
+        await route.continue_()
+
     async def goto(self, url: str, *, timeout_ms: int) -> str:
-        await self._active.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+        """Навигация: документ обязателен, DOMContentLoaded — по возможности (doc 03).
+
+        Раньше ждали `domcontentloaded` на весь бюджет и роняли переход по таймауту.
+        На реальных сайтах это теряло страницу целиком из-за **чужой** аналитики:
+        DOMContentLoaded ждёт и отложенных (`defer`) скриптов, поэтому один зависший
+        сторонний хост держит событие до сетевого таймаута. Замер T-3a (doc 26):
+        `simonwillison.net` — commit 0.7 s, DOMContentLoaded 31.0 s из-за
+        `static.cloudflareinsights.com`; `martinfowler.com` — 30.9 s из-за
+        `cloud.umami.is`. Оба сайта отдавали документ за секунду, и оба терялись.
+
+        Теперь на бюджет ждём только `commit` (документ пришёл — без него читать
+        нечего и падение честное), а на DOMContentLoaded даём короткий отдельный
+        бюджет. Не наступил — идём снимать готовый DOM: HTML к этому моменту уже
+        разобран, а пустой DOM подхватит SPA-fallback в OBSERVE.
+        """
+        await self._active.goto(url, wait_until="commit", timeout=timeout_ms)
+        # Ожидание DOMContentLoaded — best-effort: его отсутствие не причина терять страницу.
+        with contextlib.suppress(Exception):
+            await self._active.wait_for_load_state("domcontentloaded", timeout=min(DCL_BUDGET_MS, timeout_ms))
+        # Тело документа — уже не best-effort: без него читать нечего вовсе, поэтому ждём
+        # его на весь бюджет навигации, а не на короткий бюджет события. Замер T-3b: у
+        # habr.com body появлялся на 32.1 s (документ течёт всё это время) — таким сайтам
+        # нужен именно бюджет страницы. Не дождались — снапшот выйдет пустым, и это
+        # обработанный путь (SPA-fallback + ретрай), а не падение (doc 26 § T-3b-1).
+        with contextlib.suppress(Exception):
+            await self._active.wait_for_selector("body", state="attached", timeout=timeout_ms)
         await self._active.wait_for_timeout(1000)  # settle (doc 03)
         return self._active.url
 
@@ -184,13 +235,17 @@ class PlaywrightSession:
             "accept_downloads": False,
             "storage_state": state,
         }
-        self._context = await self._browser.new_context(**ctx_kwargs)
+        self._context = await self._open_context(ctx_kwargs)
         self._page = await self._context.new_page()
         if not headless:
             await self._close_blank_windows()
             await self._page.bring_to_front()
         if url.startswith(("http://", "https://")):
-            await self._page.goto(url, wait_until="domcontentloaded")
+            # Та же стратегия ожидания, что в goto: иначе перезапуск на сайте с
+            # зависшим трекером стоил бы 30 s на пустом месте (doc 03 § Wait strategy).
+            await self._page.goto(url, wait_until="commit")
+            with contextlib.suppress(Exception):
+                await self._page.wait_for_load_state("domcontentloaded", timeout=DCL_BUDGET_MS)
             await self._page.wait_for_timeout(500)
         return True
 

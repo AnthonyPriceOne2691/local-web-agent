@@ -197,3 +197,40 @@ async def test_cancel_between_sites(tmp_path):
     assert visits == ["https://a.com"]  # очередь очищена (doc 15 cancel semantics)
     assert session.status == "completed"  # один выживший → single-site ответ
     assert llm.calls == []
+
+
+# --- настройки обхода доходят до прогонов сессии (doc 26 § T-3a-2) ---
+
+
+async def test_session_run_takes_max_depth_from_settings(tmp_path):
+    """`max_depth` брался из дефолта RunConfig, а не из настроек.
+
+    Нашлось при попытке замерить глубину на реальных сайтах: оба плеча A/B
+    (`LWA_MAX_DEPTH=3` против дефолта) дали побитово одинаковую структуру обхода —
+    потому что research-путь настройку игнорировал, и замер не измерял ничего.
+    """
+    runner, run_store, session_store, _visits, _llm = make_runner(tmp_path, max_depth=4)
+    session = new_session()
+    session_store.save(session)
+
+    session = await runner.run_message(session, "Сравни: https://a.com https://b.com")
+
+    depths = [run_store.get(rid).config.max_depth for rid in session.run_ids]
+    assert depths == [4, 4], "настройка обхода должна доходить до каждого run'а сессии"
+
+
+async def test_plan_argument_still_wins_over_the_setting(tmp_path):
+    """Контроль рядом: у `max_pages` бюджет задаёт ПЛАН (intent-таблица meta_agent), и
+    аргумент плана старше настройки — правка глубины эту иерархию не должна ломать.
+
+    Именно поэтому глубина брала дефолт схемы: плана для неё нет, а к настройке
+    обращения не было — значение просто некому было подставить.
+    """
+    runner, run_store, session_store, _visits, _llm = make_runner(tmp_path, max_pages=7)
+    session = new_session()
+    session_store.save(session)
+
+    session = await runner.run_message(session, "Сравни: https://a.com https://b.com")
+
+    pages = [run_store.get(rid).config.max_pages for rid in session.run_ids]
+    assert pages == [10, 10], "multi_site_research задаёт 10 страниц планом"

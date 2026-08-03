@@ -13,6 +13,7 @@ from app.api.routes_health import router as health_router
 from app.api.routes_runs import router as runs_router
 from app.api.routes_sessions import router as sessions_router
 from app.browser.playwright_session import PlaywrightSession
+from app.browser.trackers import TrackerBlocklist
 from app.config import Settings, get_settings
 from app.contracts.enforcer import ContractEnforcer
 from app.llm.navigator import Navigator
@@ -48,10 +49,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if swept:
             print(f"startup sweep: {swept} orphaned record(s) → failed")
 
+        trackers = (
+            TrackerBlocklist.load(settings.data_dir) if settings.block_trackers else TrackerBlocklist([])
+        )
+
         def orchestrator_factory() -> CrawlOrchestrator:
             return CrawlOrchestrator(
                 settings=settings,
-                browser=PlaywrightSession(),
+                browser=PlaywrightSession(trackers=trackers),
                 navigator=Navigator(app.state.llm_client, settings),
                 synthesizer=Synthesizer(app.state.llm_client, settings),
                 llm_client=app.state.llm_client,

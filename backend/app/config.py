@@ -94,6 +94,12 @@ class Settings(BaseSettings):
     # Паролей НЕ храним — только cookie сессии, которую человек честно создал.
     persist_session: bool = False
 
+    # Сторонняя аналитика посещаемых сайтов не загружается (doc 03 § Трекеры): privacy —
+    # обход не отмечается в чужой аналитике от имени этой машины, и скорость — зависший
+    # трекер держал DOMContentLoaded 30 s (doc 26 § T-3a-1). Не обход anti-bot: отпечаток
+    # не подделывается. Выключается, если понадобится увидеть страницу «как есть».
+    block_trackers: bool = True
+
     # Google Docs sink (Tier 0, doc 25): OAuth-креды из референс-папки (gitignored). Облако —
     # только по явному действию с consent (cloud carve-out); google-либы — optional extra `gdocs`.
     gdocs_dir: Path = REPO_ROOT / "Gdocs-tabs editor"

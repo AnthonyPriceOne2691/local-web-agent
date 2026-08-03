@@ -1,6 +1,6 @@
 # 03 — Browser Pipeline
 
-> Local Web Agent · Design doc · **v0.8** · 2026-08-01
+> Local Web Agent · Design doc · **v0.9** · 2026-08-03
 
 ## Назначение
 
@@ -36,7 +36,7 @@ User task + start URL
 | **Navigation viewport** | **1440×900** (`desktop`, doc 22) | Stable nav, footer links, LLM snapshot |
 | User-Agent | Desktop Chromium default | Consistent with viewport |
 | Timeout navigation | 30 s | FR NFR-4.2 |
-| Wait strategy | `domcontentloaded` + optional 1 s settle | Balance speed vs SPA |
+| Wait strategy | `commit` на бюджет навигации + `domcontentloaded` на **5 s** + 1 s settle | Документ обязателен, событие — нет: DOMContentLoaded держат чужие `defer`-скрипты |
 | JavaScript | Enabled | Required for modern sites |
 | Images / fonts | Load (default) | Lazy-loaded blocks |
 | Cookies | Fresh context per run | No session persistence |
@@ -48,7 +48,8 @@ User task + start URL
 
 ```
 goto(url)
-  → wait domcontentloaded
+  → wait commit (бюджет навигации, 30 s)      # документ пришёл — иначе честное падение
+  → wait domcontentloaded (бюджет 5 s, best-effort)
   → wait 1000ms (settle)
   → if main_text length < 200:
         wait networkidle (timeout 10s)
@@ -250,3 +251,4 @@ Not in Phase 1 MVP (Playwright-only).
 | 2026-07-05 | **v0.6 (review):** canonical URL normalization rules (tracking params, tldextract); redirect policy I-H9; robots Crawl-delay + Sitemap discovery + UA policy; SPA fallback capture (форс-скриншот при пустом DOM для vision R2); версия шапки синхронизирована с changelog |
 | 2026-07-05 | **v0.7 (review-2):** landing-domain adopt на step 0 (переезд домена не убивает run); robots fetch 4xx/5xx семантика; trafilatura для article main-text (content_search, Phase 0 spike-решение) |
 | 2026-08-01 | **v0.8 (real-site прогон):** § robots.txt integration — чтение robots нашим httpx-клиентом с UA `LocalWebAgent/0.1`; контракт «4xx → allow» выполняется буквально, включая 401/403 (stdlib трактовал их как `disallow_all` и давал ложный `robots_disallow` на сайте с `Allow: /`); stdlib остаётся парсером директив |
+| 2026-08-03 | **v0.9 (испытание T-3a, doc 26):** § Wait strategy — бюджет навигации тратится на `commit` (документ), а DOMContentLoaded получает отдельный короткий бюджет **5 s** и больше не может уронить переход. Причина найдена замером: DOMContentLoaded ждёт и **отложенных** (`defer`) скриптов, поэтому один зависший сторонний хост держит событие до сетевого таймаута — `simonwillison.net` 31.0 s из-за `static.cloudflareinsights.com`, `martinfowler.com` 30.9 s из-за `cloud.umami.is`, при `commit` за 0.7 s у обоих. На старой стратегии это стоило **2 сайтов из 3** (0 страниц, run `failed`) и 46 % времени сессии. Недостижимый документ по-прежнему падает — на это есть отдельный тест |
