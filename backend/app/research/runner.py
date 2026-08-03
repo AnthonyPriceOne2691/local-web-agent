@@ -270,6 +270,10 @@ class ResearchRunner:
             start_url=args["url"],
             task=args.get("task") or session.title,
             max_pages=args.get("max_pages", self._s.max_pages),
+            # max_depth брался из дефолта RunConfig, а не из настроек — из-за этого
+            # `LWA_MAX_DEPTH` не действовал на research-сессии вовсе (нашлось при
+            # попытке замерить глубину: оба плеча A/B шли на одной глубине, doc 26 § T-3a-2).
+            max_depth=args.get("max_depth", self._s.max_depth),
             capture_screenshots=args.get("capture_screenshots", "auto"),
             vision_enabled=args.get("vision_enabled", "auto"),
             attended=session.config.attended,  # Phase 5 (doc 24)
