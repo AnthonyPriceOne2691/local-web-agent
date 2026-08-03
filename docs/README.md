@@ -32,7 +32,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.12** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions |
 | [25-action-framework.md](25-action-framework.md) | ✅ **v1.2** | Действия целиком: Tier 0 sinks (Google Docs + файл) · Tier 1 click · Tier 2 login/fill/submit · **Tier 3 handoff** (агент готовит, человек нажимает) — Phase 6–7 |
-| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.4** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (серия T-3: 8 дефектов) |
+| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.5** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3 + T-2b: 9 дефектов) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
