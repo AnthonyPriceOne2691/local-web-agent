@@ -3,11 +3,11 @@
 - **slug:** real-site-trials
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** M
-- **phase:** specify
+- **phase:** implement
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
-- **human_ok_spec:** pending
-- **human_ok_plan:** pending
+- **human_ok_spec:** human:anthony 2026-08-03
+- **human_ok_plan:** human:anthony 2026-08-03
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present
 - **ci-oracles:** tooling
@@ -22,7 +22,7 @@
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
 - **branch:** `trials/real-sites`
-- **blockers:** ждём `human_ok_spec` + явное «запускай» на подъём локальных моделей
+- **blockers:** — (spec одобрен, «запускай с T-3» получено 2026-08-03)
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
