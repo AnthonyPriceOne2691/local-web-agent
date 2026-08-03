@@ -103,6 +103,13 @@ class PlaywrightSession:
         # Ожидание DOMContentLoaded — best-effort: его отсутствие не причина терять страницу.
         with contextlib.suppress(Exception):
             await self._active.wait_for_load_state("domcontentloaded", timeout=min(DCL_BUDGET_MS, timeout_ms))
+        # Тело документа — уже не best-effort: без него читать нечего вовсе, поэтому ждём
+        # его на весь бюджет навигации, а не на короткий бюджет события. Замер T-3b: у
+        # habr.com body появлялся на 32.1 s (документ течёт всё это время) — таким сайтам
+        # нужен именно бюджет страницы. Не дождались — снапшот выйдет пустым, и это
+        # обработанный путь (SPA-fallback + ретрай), а не падение (doc 26 § T-3b-1).
+        with contextlib.suppress(Exception):
+            await self._active.wait_for_selector("body", state="attached", timeout=timeout_ms)
         await self._active.wait_for_timeout(1000)  # settle (doc 03)
         return self._active.url
 

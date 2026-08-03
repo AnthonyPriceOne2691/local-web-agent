@@ -14,13 +14,18 @@ INTERACTIVE_SELECTOR = "button, input:not([type=hidden]), select, textarea, [rol
 OBSERVE_JS = (
     """() => {
   const pick = sel => document.querySelector(sel);
-  const mainEl = pick('main') || pick('[role=main]') || pick('article') || document.body;
+  // `document.body` может отсутствовать: документ ещё течёт (readyState 'loading'), и
+  // тела в нём пока нет. Живой замер T-3b: у habr.com body появлялся на 32-й секунде,
+  // и снапшот падал `TypeError: reading 'innerText' of null`, унося весь run. Пустой
+  // снапшот — состояние обрабатываемое (SPA-fallback + ретрай), исключение — нет.
+  const mainEl = pick('main') || pick('[role=main]') || pick('article')
+    || document.body || document.documentElement;
   return {
     title: document.title || '',
     meta_description: (pick('meta[name=description]')?.content || ''),
     headings: [...document.querySelectorAll('h1,h2,h3')].slice(0, 20)
       .map(h => ({level: +h.tagName[1], text: (h.innerText || '').trim()})),
-    main_text: (mainEl.innerText || ''),
+    main_text: ((mainEl && mainEl.innerText) || ''),
     links: [...document.querySelectorAll('a[href]')].map(a => ({
       href: a.getAttribute('href') || '', text: (a.innerText || '').trim()
     })),
