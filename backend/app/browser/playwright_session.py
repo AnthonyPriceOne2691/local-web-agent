@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 DESKTOP = {"width": 1440, "height": 900}
 
+# Сколько ждём DOMContentLoaded ПОСЛЕ того, как документ пришёл. Отдельный короткий
+# бюджет, а не весь page_timeout: событие держат сторонние `defer`-скрипты (аналитика),
+# и на их сетевой таймаут (30 s у обоих сайтов замера) ждать нечего — doc 26 § T-3a-1.
+DCL_BUDGET_MS = 5000
+
 
 class PlaywrightSession:
     def __init__(self) -> None:
@@ -58,7 +63,25 @@ class PlaywrightSession:
             await self._page.bring_to_front()
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
-        await self._active.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+        """Навигация: документ обязателен, DOMContentLoaded — по возможности (doc 03).
+
+        Раньше ждали `domcontentloaded` на весь бюджет и роняли переход по таймауту.
+        На реальных сайтах это теряло страницу целиком из-за **чужой** аналитики:
+        DOMContentLoaded ждёт и отложенных (`defer`) скриптов, поэтому один зависший
+        сторонний хост держит событие до сетевого таймаута. Замер T-3a (doc 26):
+        `simonwillison.net` — commit 0.7 s, DOMContentLoaded 31.0 s из-за
+        `static.cloudflareinsights.com`; `martinfowler.com` — 30.9 s из-за
+        `cloud.umami.is`. Оба сайта отдавали документ за секунду, и оба терялись.
+
+        Теперь на бюджет ждём только `commit` (документ пришёл — без него читать
+        нечего и падение честное), а на DOMContentLoaded даём короткий отдельный
+        бюджет. Не наступил — идём снимать готовый DOM: HTML к этому моменту уже
+        разобран, а пустой DOM подхватит SPA-fallback в OBSERVE.
+        """
+        await self._active.goto(url, wait_until="commit", timeout=timeout_ms)
+        # Ожидание DOMContentLoaded — best-effort: его отсутствие не причина терять страницу.
+        with contextlib.suppress(Exception):
+            await self._active.wait_for_load_state("domcontentloaded", timeout=min(DCL_BUDGET_MS, timeout_ms))
         await self._active.wait_for_timeout(1000)  # settle (doc 03)
         return self._active.url
 

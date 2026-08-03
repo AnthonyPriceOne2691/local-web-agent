@@ -1,6 +1,6 @@
 # Design Documents Index
 
-> Local Web Agent · Design doc · **v1.1** · 2026-08-03
+> Local Web Agent · Design doc · **v1.2** · 2026-08-03
 
 Планирование проекта ведётся через design docs в этой папке: любое изменение дизайна = правка дока + запись в changelog + bump версии в шапке, и версии в шапке, индексе и changelog обязаны совпадать (инвариант [CLAUDE.md](../CLAUDE.md)).
 
@@ -13,7 +13,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [00-project-overview.md](00-project-overview.md) | ✅ **v0.4** | Two-layer arch; Research Chat UX; action-capable (Phase 6) |
 | [01-requirements.md](01-requirements.md) | ✅ **v0.6** | FR/NFR incl. FR-6/FR-7 (actions, Tier 0–3); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
-| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.8** | Playwright pipeline; robots своим UA; SPA fallback |
+| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.9** | Playwright pipeline; robots своим UA; SPA fallback; ожидание `commit` + короткий бюджет DOMContentLoaded |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.7** | Agent loop + VISION_BATCH; hop depth; landing domain |
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.12.1** | **Phases 0–7 DONE**; дальше — только backlog улучшений |
@@ -98,5 +98,6 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 | Дата | Изменение |
 |------|-----------|
+| 2026-08-03 | **v1.2:** doc 03 → v0.9 (стратегия ожидания навигации — находка испытания T-3a: чужая аналитика держала DOMContentLoaded 30 s и стоила 2 сайтов из 3) |
 | 2026-08-03 | **v1.1:** зарегистрирован [doc 26](26-real-site-trials.md) — протокол испытаний на реальных сайтах (магазин / SPA / новости, задачи RU+EN, отобранные сайты, журнал результатов). Строка «Дальше» в Project status теперь ссылается на него |
 | 2026-08-03 | **v1.0 (первая версионированная ревизия индекса):** плюс doc 06 → v0.12.1 (persist `cf_clearance` в § Phase 5+ помечен сделанным). У индекса не было ни версии, ни changelog — сам он нарушал § Conventions, поэтому его расхождение с доками ничем не ловилось. Синхронизированы версии пяти доков, где индекс отстал (01 v0.5.3→v0.6, 06 v0.10→v0.12, 13 v0.8.3→v0.9, 15 v0.7→v0.8, 25 🛠 v0.8→✅ v1.2); у всех 22 доков шапка и индекс сверены. Таблица **Project status** дополнена Phase 6 и Phase 7 и строкой «Дальше» (фаз больше нет, идут испытания на реальных сайтах); Phase 5 переведена из 🛠 в ✅ (живое подтверждение 2026-07-19). Отмечено, что открытых решений нет |
