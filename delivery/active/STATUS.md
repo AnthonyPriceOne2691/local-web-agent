@@ -3,7 +3,7 @@
 - **slug:** ui-and-english-output
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** M
-- **phase:** implement
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
 - **human_ok_spec:** yes — human:anthony 2026-08-03 (сам перечислил дефекты списком)

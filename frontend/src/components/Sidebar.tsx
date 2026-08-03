@@ -17,7 +17,7 @@ export default function Sidebar({ sessions, currentId, onSelect, onNew, onDelete
   const [confirming, setConfirming] = useState<string | null>(null);
 
   return (
-    <aside className="glass-panel flex w-64 shrink-0 flex-col overflow-hidden rounded-[var(--radius-glass)]">
+    <aside className="glass-panel flex w-full min-w-0 flex-col overflow-hidden rounded-[var(--radius-glass)] lg:w-64 lg:shrink-0">
       <div className="flex items-start gap-2 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold tracking-tight">Local Web Agent</div>
