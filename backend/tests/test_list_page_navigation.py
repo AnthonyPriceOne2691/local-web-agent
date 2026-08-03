@@ -150,3 +150,76 @@ def test_article_links_reach_the_queue_from_a_list_page():
     first_entry = next(i for i, h in enumerate(hrefs) if "/wiki/" in h)
     nav_positions = [i for i, h in enumerate(hrefs) if h.rstrip("/").endswith(("news", "hockey", "about"))]
     assert not nav_positions or first_entry < max(nav_positions)
+
+
+# --- лимит ссылок: он скрывал от агента содержимое страницы (T-3d) ---
+
+
+def test_topical_links_survive_the_cap_on_a_portal_sized_page():
+    """Замер T-3d: у реальных порталов 420–879 ссылок, и 98–99.5 % тематических лежали
+    за прежним лимитом 40 — а ссылки берутся в порядке DOM, где первыми идут шапка и
+    меню. Формула оценки не получала шанса: она работала по навигации."""
+    from app.observer.links import clean_links
+    from app.observer.snapshot import LINKS_CAP
+
+    nav = [{"href": f"{ORIGIN}/section-{i}", "text": f"Раздел {i}"} for i in range(40)]
+    articles = [
+        {
+            "href": f"{ORIGIN}/betting/wiki/{3067963 + i}-kak-delat-stavki-na-futbol",
+            "text": f"Как делать ставки на футбол — разбор {i}",
+        }
+        for i in range(10)
+    ]
+
+    cleaned = clean_links(f"{ORIGIN}/betting", nav + articles, ORIGIN, cap=LINKS_CAP)
+
+    assert any("/wiki/" in link["href"] for link in cleaned), (
+        "статьи снова обрезаны меню — агент не увидит содержимого страницы"
+    )
+    assert LINKS_CAP >= 900, (
+        "позиция контента у каждого сайта своя: на sports.ru статьи вики лежат на #345+, "
+        "поэтому лимит — предохранитель по памяти, а отбирает счёт"
+    )
+
+
+def test_content_link_survives_even_deep_in_dom_order():
+    """Главный урок T-3d: позиционный лимит режет контент, потому что позиция у каждого
+    сайта своя. Отбор — по счёту в очереди, а не по месту в DOM."""
+    from app.observer.links import clean_links
+    from app.observer.snapshot import LINKS_CAP
+
+    filler = [{"href": f"{ORIGIN}/menu/{i}", "text": f"Пункт {i}"} for i in range(900)]
+    deep_article = {
+        "href": f"{ORIGIN}/betting/stavochnaya-wiki/3268942-chto-takoe-fora-v-stavkax.html",
+        "text": "Что такое фора (-2) в ставках на спорт",
+    }
+
+    cleaned = clean_links(f"{ORIGIN}/betting", [*filler, deep_article], ORIGIN, cap=LINKS_CAP)
+    assert any("3268942" in link["href"] for link in cleaned)
+
+    queue = build_candidates(
+        snapshot=snap(
+            f"{ORIGIN}/betting",
+            title="Вики",
+            text="w " * 60,
+            links=[(link["href"], link["text"]) for link in cleaned],
+        ),
+        homepage=None,
+        intent="content_search",
+        task=TASK,
+        hints=HINTS,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[],
+        legal_probes=[],
+    )
+    assert any("3268942" in c.href for c in queue), "статья с позиции #900 обязана дойти до очереди"
+
+
+def test_cap_still_bounds_pathological_pages():
+    """Лимит остаётся: он защищает память и время, просто больше не режет содержимое."""
+    from app.observer.links import clean_links
+    from app.observer.snapshot import LINKS_CAP
+
+    many = [{"href": f"{ORIGIN}/p/{i}", "text": f"link {i}"} for i in range(LINKS_CAP * 3)]
+    assert len(clean_links(f"{ORIGIN}/", many, ORIGIN, cap=LINKS_CAP)) == LINKS_CAP
