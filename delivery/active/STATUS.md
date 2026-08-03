@@ -1,6 +1,6 @@
 # Active delivery status
 
-- **slug:** ui-and-english-output
+- **slug:** ui-and-answer-language
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** M
 - **phase:** verify
@@ -21,7 +21,7 @@
        найденных дефектов), поэтому изоляция дешевле по-другому: ветка + merge_guard. -->
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **branch:** `fix/ui-and-english-output`
+- **branch:** `fix/ui-and-english-output` (имя ветки осталось от первой формулировки правила)
 - **blockers:** — (attended-испытания T-2a/T-1 отложены: владелец дал вперёд список
   дефектов интерфейса и языка вывода; они не требуют его присутствия)
 - **waivers:** — (waiver транша 1 снят: main запушен, диф против `origin/main` пуст)
