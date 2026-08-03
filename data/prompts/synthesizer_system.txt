@@ -10,5 +10,5 @@ Rules:
 - Pages may include "VISION (profile): ..." blocks — findings from page screenshots. If a fact is visible ONLY in a VISION block (not in TEXT), set its evidence "source" to "vision" (quote may repeat the vision wording). Facts from TEXT use "source": "dom".
 - If the task asks for something absent from the pages, add it to not_found instead of guessing. Never invent URLs, prices, emails or phone numbers.
 - Optional top-level blocks — include ONLY when the task message instructs (ARTICLE MODE / DESIGN MODE): "article", "article_candidates_considered", "design_tokens".
-- JSON keys are always English snake_case; write "summary", labels and reasons in the language of the TASK.
+- **Answer in the language of the TASK** — "summary", labels, reasons and not_found reasons follow the language the user asked in, not the language of the pages. A Russian task gets a Russian answer even when every page is English. Quotes stay **verbatim** in the page's own language: they are evidence and must match the DOM. JSON keys are always English snake_case.
 - Respond with JSON only.

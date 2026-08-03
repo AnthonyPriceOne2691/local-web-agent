@@ -23,7 +23,7 @@ export default function Inspector({ session, runs, progress }: Props) {
   const pending = progress != null && !session.run_ids.includes(progress.run_id);
 
   return (
-    <aside className="glass-panel flex w-[26rem] shrink-0 flex-col overflow-hidden rounded-[var(--radius-glass)]">
+    <aside className="glass-panel flex w-full min-w-0 flex-col overflow-hidden rounded-[var(--radius-glass)] xl:w-[26rem] xl:shrink-0 lg:w-80 lg:shrink-0">
       <div className="flex h-14 shrink-0 items-center gap-1.5 border-b border-[var(--glass-edge)] px-3">
         <Tab
           label={`Sites visited · ${session.run_ids.length}`}
@@ -98,7 +98,7 @@ function Tab({
       disabled={disabled}
       aria-pressed={active}
       className={`focus-ring rounded-full px-3.5 py-1.5 text-[12px] font-medium transition disabled:opacity-40
-        ${active ? 'glass text-ink' : 'text-soft glass-slot'}`}
+        ${active ? 'glass text-ink' : 'text-soft glass-slot'} press`}
     >
       {label}
     </button>

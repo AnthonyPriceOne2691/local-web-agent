@@ -10,5 +10,5 @@ Rules:
 - Follow the rubric dimensions; base every claim on the provided extractions/articles and quote them in the narrative where decisive.
 - "winner" may be null when the rubric is a difference audit (design_diff) and no single winner makes sense.
 - rankings ordered best → worst, scores 0-100 overall; dimensions scores 0-10 per site keyed by site label (host).
-- JSON keys always English snake_case; narrative/summaries/reasons in the language of the TASK.
+- **Answer in the language of the TASK** — narrative, summaries and reasons follow the language the user asked in, not the language of the sites. Verbatim quotes keep their original language (they are evidence). JSON keys always English snake_case.
 - Respond with JSON only.

@@ -1,13 +1,13 @@
 # Active delivery status
 
-- **slug:** trials-attended
+- **slug:** ui-and-answer-language
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** M
-- **phase:** specify
+- **phase:** verify
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
-- **human_ok_spec:** pending
-- **human_ok_plan:** pending
+- **human_ok_spec:** yes — human:anthony 2026-08-03 (сам перечислил дефекты списком)
+- **human_ok_plan:** yes — human:anthony 2026-08-03 (объём задан его списком)
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present
 - **ci-oracles:** tooling
@@ -21,10 +21,9 @@
        найденных дефектов), поэтому изоляция дешевле по-другому: ветка + merge_guard. -->
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **branch:** не отведена (ждём готовности владельца)
-- **blockers:** нужна готовность владельца — все оставшиеся испытания attended: логин на
-  `saucedemo` вводит человек (T-2a), в T-1b человек жмёт финальную кнопку, в T-1c на
-  настоящем магазине проверяется остановка агента. Без человека сделать нечего.
+- **branch:** `fix/ui-and-english-output` (имя ветки осталось от первой формулировки правила)
+- **blockers:** — (attended-испытания T-2a/T-1 отложены: владелец дал вперёд список
+  дефектов интерфейса и языка вывода; они не требуют его присутствия)
 - **waivers:** — (waiver транша 1 снят: main запушен, диф против `origin/main` пуст)
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 

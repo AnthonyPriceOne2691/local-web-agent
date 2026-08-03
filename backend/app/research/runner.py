@@ -19,6 +19,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.config import Settings
+from app.reporting.phrasing import Phrases
+from app.reporting.phrasing import action_name as _action_name
+from app.reporting.phrasing import site_name as _site_name
 from app.research import actions
 from app.research.compare_synthesizer import CompareSynthesizer
 from app.research.llm_planner import LlmPlanner
@@ -29,9 +32,6 @@ from app.research.meta_agent import (
     parse_urls,
     strip_urls,
 )
-from app.research.phrasing import action_name as _action_name
-from app.research.phrasing import exclusion_reason
-from app.research.phrasing import site_name as _site_name
 from app.research.report import build_comparison_report
 from app.schemas.research import (
     ComparisonResult,
@@ -100,7 +100,8 @@ class ResearchRunner:
 
         session.status = "running_tools"
         self._sessions.save(session)
-        crawled = await self._crawl_each(session, plan, len(urls), started, cancel_event)
+        say = self._phrases(task)
+        crawled = await self._crawl_each(session, plan, len(urls), started, cancel_event, say)
         return await self._compare_stage(session, crawled, task, plan, cancel_event)
 
     def _urls_within_cap(self, session: SessionRecord, message: str) -> list[str]:
@@ -126,6 +127,10 @@ class ResearchRunner:
                     call.args["rubric"] = session.config.rubric_override
         return plan
 
+    def _phrases(self, task: str) -> Phrases:
+        """Словарь фраз на языке запроса (doc 17 § Язык ответа)."""
+        return Phrases.load(self._s.data_dir, task)
+
     async def _crawl_each(
         self,
         session: SessionRecord,
@@ -133,6 +138,7 @@ class ResearchRunner:
         total: int,
         started: float,
         cancel_event: asyncio.Event | None,
+        say: Phrases,
     ) -> list[RunRecord]:
         """Сайты по очереди (D-7), с cooldown между ними; бюджет и отмена — на границе."""
         crawled: list[RunRecord] = []
@@ -140,12 +146,14 @@ class ResearchRunner:
             if call.name != "crawl_site":
                 continue
             if self._session_expired(started):
-                self._note(session, "Out of time for this chat — comparing what I managed to read.")
+                self._note(session, say.say("out_of_time_comparing"))
                 break
             if cancel_event is not None and cancel_event.is_set():
                 break
             site = _site_name(call.args["url"])
-            self._note(session, f"Reading {site} — site {len(crawled) + 1} of {total}")  # M-S1
+            self._note(
+                session, say.say("reading_site", site=site, index=len(crawled) + 1, total=total)
+            )  # M-S1
             record = await self._crawl_site(session, call, cancel_event)
             crawled.append(record)
             session.run_ids.append(record.id)
@@ -184,7 +192,9 @@ class ResearchRunner:
             if call.name == "compare_results":
                 compare_call = call  # enforced: максимум один, последним
             elif call.name == "crawl_site":
-                if not await self._crawl_one_of(session, call, crawled, n_crawls, started, cancel_event):
+                if not await self._crawl_one_of(
+                    session, call, crawled, n_crawls, started, cancel_event, self._phrases(message)
+                ):
                     break  # бюджет сессии исчерпан
             else:
                 reply_blocks += self._run_side_action(session, call, spec)
@@ -193,7 +203,9 @@ class ResearchRunner:
             records = self._records_for_compare(session, compare_call, crawled)
             task = compare_call.args.get("comparison_task") or strip_urls(message) or message
             return await self._compare_stage(session, records, task, [compare_call], cancel_event)
-        reply = "\n\n".join(b for b in (decision.reply.strip(), *reply_blocks) if b) or "done"
+        reply = "\n\n".join(b for b in (decision.reply.strip(), *reply_blocks) if b) or self._phrases(
+            message
+        ).say("done")
         return self._finish(session, "completed", reply)
 
     async def _crawl_one_of(
@@ -204,12 +216,13 @@ class ResearchRunner:
         n_crawls: int,
         started: float,
         cancel_event: asyncio.Event | None,
+        say: Phrases,
     ) -> bool:
         """Один сайт из плана планнера. `False` = бюджет сессии исчерпан, дальше не идём."""
         if self._session_expired(started):
-            self._note(session, "Out of time for this chat.")
+            self._note(session, say.say("out_of_time"))
             return False
-        self._note(session, f"Reading {_site_name(call.args['url'])}")  # M-S1
+        self._note(session, say.say("reading", site=_site_name(call.args["url"])))  # M-S1
         record = await self._crawl_site(session, call, cancel_event)
         crawled.append(record)
         session.run_ids.append(record.id)
@@ -317,12 +330,13 @@ class ResearchRunner:
         plan: list[ToolCall],
         cancel_event: asyncio.Event | None,
     ) -> SessionRecord:
+        say = self._phrases(task)
         survivors = [r for r in crawled if r.status in COMPARABLE_STATUSES and r.result]
         survivor_urls = {r.config.start_url for r in survivors}
         excluded = [
             ExcludedSite(
                 start_url=r.config.start_url,
-                reason=exclusion_reason(r.status, r.metadata.get("blocked_by"), r.error_message),
+                reason=say.exclusion_reason(r.status, r.metadata.get("blocked_by"), r.error_message),
             )
             # сайт, перекраленный успешно (re-crawl через LLM-план), не excluded
             for r in crawled
@@ -332,21 +346,22 @@ class ResearchRunner:
 
         if not survivors:  # 0 выживших (doc 24 § Partial failure)
             return self._finish(
-                session, "failed", "None of the sites worked out: " + "; ".join(e.reason for e in excluded)
+                session,
+                "failed",
+                say.say("none_worked", items="; ".join(e.reason for e in excluded)),
             )
         if compare_call is None or len(survivors) < 2:  # M-H4: single-site ответ
             first_result = survivors[0].result
-            reply = (first_result.summary if first_result else "") or "done"
+            reply = (first_result.summary if first_result else "") or say.say("done")
             if excluded:
-                reply += "\n\nLeft out: " + "; ".join(
-                    f"{_site_name(e.start_url)} — {e.reason}" for e in excluded
-                )
+                items = "; ".join(f"{_site_name(e.start_url)} — {e.reason}" for e in excluded)
+                reply += "\n\n" + say.say("left_out", items=items)
             return self._finish(session, "completed", reply)
 
         session.status = "comparing"
         self._sessions.save(session)
         if cancel_event is not None and cancel_event.is_set():
-            return self._finish(session, "failed", "Stopped before I could compare the sites.")
+            return self._finish(session, "failed", say.say("stopped_before_compare"))
         comparison, compare_stats = await self._compare.compare(
             task=task,
             rubric_id=compare_call.args.get("rubric", "generic_merge"),
@@ -363,7 +378,7 @@ class ResearchRunner:
         report = build_comparison_report(session, comparison, survivors)
         report_path = self._sessions.artifacts_dir(session.id) / "comparison_report.md"
         report_path.write_text(report, encoding="utf-8")
-        return self._finish(session, "completed", self._chat_reply(comparison, report_path.name))
+        return self._finish(session, "completed", self._chat_reply(comparison, report_path.name, say))
 
     # ------------------------------------------------------------ helpers
     def _cooldown_s(self, n_sites: int) -> float:
@@ -386,17 +401,20 @@ class ResearchRunner:
         return session
 
     @staticmethod
-    def _chat_reply(comparison: ComparisonResult, report_name: str) -> str:
+    def _chat_reply(comparison: ComparisonResult, report_name: str, say: Phrases) -> str:
+        """Ответ в чат. Каркас берётся из словаря языка запроса — иначе наши строки
+        («How they scored:») стояли бы английскими над русской прозой модели, и именно
+        эта смесь была дефектом (doc 17 § Язык ответа)."""
         lines = []
         if comparison.winner:
-            lines.append(f"Best of the bunch: {comparison.winner.label} — {comparison.winner.reason}")
+            lines.append(say.say("winner", label=comparison.winner.label, reason=comparison.winner.reason))
         if comparison.rankings:
             scores = " · ".join(f"{_site_name(r.url)} {r.score}/100" for r in comparison.rankings)
-            lines.append(f"How they scored: {scores}")
+            lines.append(say.say("scored", scores=scores))
         if comparison.narrative:
             lines.append(comparison.narrative[:600])
         if comparison.excluded:
-            left_out = "; ".join(f"{_site_name(e.start_url)} — {e.reason}" for e in comparison.excluded)
-            lines.append(f"Left out: {left_out}")
-        lines.append(f"The full write-up is saved as {report_name}.")
+            items = "; ".join(f"{_site_name(e.start_url)} — {e.reason}" for e in comparison.excluded)
+            lines.append(say.say("left_out", items=items))
+        lines.append(say.say("report_saved", name=report_name))
         return "\n\n".join(lines)
