@@ -60,4 +60,23 @@ async def run_synthesis(
         task=record.config.task, snapshots=snapshots, intent=record.intent, unreached=unreached
     )
     record.steps[-1].llm_stats = stats
-    return result
+    return note_unreached(result, unreached)
+
+
+def note_unreached(result: ExtractionResult, unreached: list[str]) -> ExtractionResult:
+    """Дописать в summary, чего агент не открыл. Кодом, а не просьбой к модели.
+
+    Замер на живом прогоне: запрет в промпте («не называй это отсутствием
+    содержания») сработал на **одном сайте из двух** — `martinfowler.com` честно
+    сказал «not reached fully» и снизил confidence, а `blog.rust-lang.org` всё равно
+    заявил, что разбора релизов нет. Тот же урок, что в synth-speed: формулировка
+    слушается через раз, поэтому важное гарантируется кодом (doc 25 § T-2 —
+    enforcement, а не доверие LLM).
+    """
+    if not unreached:
+        return result
+    listed = ", ".join(unreached[:5])
+    more = f" (+{len(unreached) - 5})" if len(unreached) > 5 else ""
+    note = f"Not reached (stopped by own limits, not absent from the site): {listed}{more}."
+    summary = f"{result.summary.rstrip()} {note}".strip() if result.summary else note
+    return result.model_copy(update={"summary": summary})

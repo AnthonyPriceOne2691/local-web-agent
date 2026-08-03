@@ -99,3 +99,43 @@ def test_prompt_forbids_claiming_absence_when_pages_were_missed():
         unreached=[],
     )
     assert "NOT REACHED" not in without, "чистый прогон не должен получать лишний блок"
+
+
+# --- гарантия кодом: промпт слушается через раз, приписка не зависит от модели ---
+
+
+def test_summary_always_says_what_was_not_reached():
+    """Живой замер: запрет в промпте сработал на 1 сайте из 2 — поэтому приписка кодом."""
+    from app.orchestrator.synthesize import note_unreached
+    from app.schemas.extraction import ExtractionResult
+
+    result = ExtractionResult(
+        status="completed",
+        summary="The site does not explain how releases are handled.",
+    )
+    noted = note_unreached(result, ["https://blog.rust-lang.org/releases/latest"])
+
+    assert "Not reached" in noted.summary
+    assert "https://blog.rust-lang.org/releases/latest" in noted.summary
+    assert "not absent from the site" in noted.summary
+    assert result.summary in noted.summary, "ответ модели сохраняется, приписка добавляется"
+
+
+def test_clean_result_is_untouched():
+    from app.orchestrator.synthesize import note_unreached
+    from app.schemas.extraction import ExtractionResult
+
+    result = ExtractionResult(status="completed", summary="All good.")
+    assert note_unreached(result, []) is result
+
+
+def test_long_unreached_list_is_capped_in_the_note():
+    from app.orchestrator.synthesize import note_unreached
+    from app.schemas.extraction import ExtractionResult
+
+    urls = [f"https://x.test/{i}" for i in range(8)]
+    noted = note_unreached(ExtractionResult(status="completed", summary="s"), urls)
+
+    assert "https://x.test/4" in noted.summary
+    assert "https://x.test/5" not in noted.summary, "длинный список режется"
+    assert "(+3)" in noted.summary, "но количество отброшенных названо"
