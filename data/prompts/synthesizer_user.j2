@@ -13,6 +13,12 @@ The "article" block IS the answer here — do NOT restate its contents as "facts
 {% endif %}{% endif %}{% if intent == "design_audit" %}
 DESIGN MODE (design_audit): also add "design_tokens": {"primary_colors": ["#hex", ...], "fonts": ["..."], "notes": "layout/structure observations"} — build it from the VISION blocks and page structure.
 {% endif %}
+{% if unreached %}
+NOT REACHED — the agent identified these pages as relevant but was stopped by its own limits (hop depth, page budget, robots), NOT by the site lacking content:
+{% for url in unreached %}- {{ url }}
+{% endfor %}
+Therefore: never state that the site does not cover the topic, or that no detailed material exists, when the material may live on a page above. Say plainly that it was not reached, and lower confidence instead of claiming absence. Absence of evidence you were prevented from collecting is not evidence of absence.
+{% endif %}
 PAGES ({{ pages_count }}):
 
 {{ pages_block }}

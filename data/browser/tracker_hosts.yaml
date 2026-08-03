@@ -1,0 +1,49 @@
+# Сторонние хосты аналитики и трекинга, которые браузер агента НЕ загружает.
+#
+# Зачем: privacy-first означает и то, что обход чужих сайтов не отмечается в их
+# аналитике от имени этой машины. Плюс скорость — зависший трекер держал
+# DOMContentLoaded 30 s и стоил 2 сайтов из 3 в испытании T-3a (doc 26).
+#
+# Границы, важные для чтения этого файла:
+#   • это НЕ обход anti-bot: отпечаток не подделывается, защита не обманывается,
+#     блокируется только чужая телеметрия, к контенту не относящаяся;
+#   • блокировать по ТИПУ ресурса (script) нельзя — на SPA без своих скриптов
+#     страницы нет вовсе, поэтому список именно хостовый;
+#   • совпадение по суффиксу домена: `umami.is` покрывает `cloud.umami.is`.
+#     Хост сайта под обходом никогда не блокируется, даже если попал в список.
+#
+# Проверено живьём (T-3a): первые два — те самые, что держали навигацию.
+hosts:
+  - static.cloudflareinsights.com   # Cloudflare Web Analytics beacon
+  - umami.is                        # umami (cloud.umami.is)
+  - google-analytics.com
+  - www.google-analytics.com
+  - analytics.google.com
+  - googletagmanager.com
+  - stats.g.doubleclick.net
+  - doubleclick.net
+  - connect.facebook.net
+  - facebook.com/tr                 # pixel-эндпоинт (совпадение по началу пути)
+  - static.hotjar.com
+  - script.hotjar.com
+  - cdn.mxpnl.com                   # Mixpanel
+  - cdn.segment.com
+  - api.segment.io
+  - plausible.io
+  - cdn.amplitude.com
+  - api.amplitude.com
+  - browser.sentry-cdn.com
+  - js.sentry-cdn.com
+  - clarity.ms
+  - www.clarity.ms
+  - matomo.cloud
+  - stats.wp.com                    # WordPress.com Stats (Jetpack)
+  - pagead2.googlesyndication.com
+  - securepubads.g.doubleclick.net
+  - ads.linkedin.com
+  - snap.licdn.com
+  - static.ads-twitter.com
+  - analytics.tiktok.com
+  - mc.yandex.ru                    # Яндекс.Метрика
+  - top-fwz1.mail.ru                # top.mail.ru
+  - vk.com/rtrg

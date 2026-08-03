@@ -75,8 +75,20 @@ class Synthesizer:
         return False, SynthesisOutput.model_json_schema(), self._s.synth_summary_cap
 
     async def synthesize(
-        self, *, task: str, snapshots: list[PageSnapshot], intent: str = "generic"
+        self,
+        *,
+        task: str,
+        snapshots: list[PageSnapshot],
+        intent: str = "generic",
+        unreached: list[str] | None = None,
     ) -> tuple[ExtractionResult, dict[str, Any]]:
+        """`unreached` — страницы, которые агент счёл нужными, но не открыл из-за
+        своих же лимитов (doc 26 § T-3a-2). Без этого списка модель описывает
+        исчерпание бюджета как отсутствие содержания на сайте: на живом прогоне
+        она с `confidence: high` заявила, что в блоге Rust «нет подробного разбора
+        релизов» — при том, что анонсы релизов там основной жанр, а статья лежала
+        на третьем хопе при `max_depth: 2`.
+        """
         think, schema, cap = self._mode(intent)
         user = self._user_tpl.render(
             task=task,
@@ -84,6 +96,7 @@ class Synthesizer:
             pages_count=len(snapshots),
             pages_block=build_pages_block(snapshots, intent),
             summary_cap=cap,
+            unreached=unreached or [],
         )
         raw, content, stats = await chat_json(
             self._client,

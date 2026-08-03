@@ -7,11 +7,13 @@ import contextlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
+from app.browser.trackers import TrackerBlocklist
 from app.observer.snapshot import INTERACTIVE_SELECTOR, OBSERVE_JS
 
 if TYPE_CHECKING:  # playwright тянется лениво в start(), типы нужны только чекеру
-    from playwright.async_api import Browser, BrowserContext, Page, Playwright
+    from playwright.async_api import Browser, BrowserContext, Page, Playwright, Request, Route
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +26,15 @@ DCL_BUDGET_MS = 5000
 
 
 class PlaywrightSession:
-    def __init__(self) -> None:
+    def __init__(self, *, trackers: TrackerBlocklist | None = None) -> None:
         self._pw: Playwright | None = None
         self._browser: Browser | None = None
         self._page: Page | None = None
         self._context: BrowserContext | None = None
         self._persist_path: str | None = None
         self._headless = True
+        self._trackers = trackers or TrackerBlocklist([])
+        self.blocked_trackers = 0  # для записи прогона: сколько запросов отклонили
 
     @property
     def _active(self) -> Page:
@@ -56,11 +60,28 @@ class PlaywrightSession:
         ctx_kwargs: dict[str, Any] = {"viewport": DESKTOP, "accept_downloads": False}
         if storage_state_path and Path(storage_state_path).exists():
             ctx_kwargs["storage_state"] = storage_state_path  # cookie прошлой сессии (doc 24)
-        self._context = await self._browser.new_context(**ctx_kwargs)
+        self._context = await self._open_context(ctx_kwargs)
         self._page = await self._context.new_page()
         if not headless:
             await self._close_blank_windows()
             await self._page.bring_to_front()
+
+    async def _open_context(self, ctx_kwargs: dict[str, Any]) -> BrowserContext:
+        """Контекст + фильтр сторонней аналитики (один путь для start и _relaunch)."""
+        if self._browser is None:
+            raise RuntimeError("browser session is not started — call start() first")
+        context = await self._browser.new_context(**ctx_kwargs)
+        if self._trackers.size:
+            await context.route("**/*", self._filter_request)
+        return context
+
+    async def _filter_request(self, route: Route, request: Request) -> None:
+        page_host = urlsplit(self._page.url).hostname or "" if self._page else ""
+        if self._trackers.blocks(request.url, page_host=page_host):
+            self.blocked_trackers += 1
+            await route.abort()
+            return
+        await route.continue_()
 
     async def goto(self, url: str, *, timeout_ms: int) -> str:
         """Навигация: документ обязателен, DOMContentLoaded — по возможности (doc 03).
@@ -207,13 +228,17 @@ class PlaywrightSession:
             "accept_downloads": False,
             "storage_state": state,
         }
-        self._context = await self._browser.new_context(**ctx_kwargs)
+        self._context = await self._open_context(ctx_kwargs)
         self._page = await self._context.new_page()
         if not headless:
             await self._close_blank_windows()
             await self._page.bring_to_front()
         if url.startswith(("http://", "https://")):
-            await self._page.goto(url, wait_until="domcontentloaded")
+            # Та же стратегия ожидания, что в goto: иначе перезапуск на сайте с
+            # зависшим трекером стоил бы 30 s на пустом месте (doc 03 § Wait strategy).
+            await self._page.goto(url, wait_until="commit")
+            with contextlib.suppress(Exception):
+                await self._page.wait_for_load_state("domcontentloaded", timeout=DCL_BUDGET_MS)
             await self._page.wait_for_timeout(500)
         return True
 
