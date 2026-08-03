@@ -1,9 +1,9 @@
 # Active delivery status
 
-- **slug:** next-up
+- **slug:** docs-index-sync
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
-- **phase:** specify
+- **phase:** implement
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
 - **human_ok_spec:** n/a
@@ -17,7 +17,8 @@
 - **worktree:** none
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **blockers:** приоритет не выбран — слот открыт по остатку, а не решён
+- **branch:** `docs/index-sync`
+- **blockers:** —
 - **waivers:** —
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
 
