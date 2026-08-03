@@ -18,7 +18,7 @@ from app.llm.model_router import NavRouting
 from app.llm.navigator import Navigator
 from app.llm.ollama_client import OllamaClient
 from app.llm.synthesizer import Synthesizer
-from app.navigation.candidate_queue import build_candidates
+from app.navigation.candidate_queue import RELEVANT_TAGS, build_candidates
 from app.navigation.intent import classify_intent
 from app.navigation.path_hints import PathHints
 from app.observer.links import normalize_url, origin_of
@@ -45,8 +45,6 @@ logger = logging.getLogger(__name__)
 DRIFT_HARD_FOR_LOW_TEMP = 3  # hard violations ≥ 3/run → nav temperature 0.4 → 0.2
 DRIFT_IH6_FOR_TOP5 = 2  # fabricated URL ≥ 2 → shrink candidate list to top 5
 DRIFT_MIN_RECOVERIES = 2  # recovery success < 50% (при ≥2 попытках) → fallback-only
-# G-S1 early stop: «релевантный» кандидат = сигнальный тег, не shallow-бонус
-RELEVANT_TAGS = ("slug", "task-kw", "homepage+intent", "probe", "sitemap", "legal-contact")
 EARLY_STOP_STALE_PAGES = 3
 
 
