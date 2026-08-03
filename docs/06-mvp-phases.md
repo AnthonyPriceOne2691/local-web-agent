@@ -1,6 +1,6 @@
 # 06 — MVP Phases & Delivery Plan
 
-> Local Web Agent · Design doc · **v0.12** · 2026-07-30
+> Local Web Agent · Design doc · **v0.12.1** · 2026-08-03
 
 ## Engineering standards (все фазы)
 
@@ -224,7 +224,7 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | Item | Priority | Effort |
 |------|----------|--------|
 | **Attended-режим (anti-bot challenge, human-in-the-loop)** | ✅ **DONE 2026-07-19** — doc 24 § Attended; видимый браузер + `waiting_user` + resume + SSE `challenge_wait` + Chat UI карточка + CLI `--attended`; 135 тестов |
-| Persist `cf_clearance` между сессиями (attended follow-up) | P2 | S |
+| Persist `cf_clearance` между сессиями (attended follow-up) | ✅ **DONE 2026-07-20 (Phase 6)** — `storage_state` по хостам в `runs/profiles/<host>.json`, `Settings.persist_session` opt-in; вход/проверка один раз на домен, пока cookie жив. Паролей не храним (doc 25 § persist-session) |
 | Screenshot gallery in Web UI | P2 | S |
 | Structured schema input (`--schema`) | P1 | S |
 | Regex assist pre-pass | P1 | S |
@@ -279,4 +279,5 @@ Benchmark ──▶ Crawl Worker ──▶ Research CLI    ──▶  Chat UI
 | 2026-07-19 | **v0.10: Phase 5 attended-режим** — human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим): видимый браузер, статус `waiting_user`, resume-эндпоинты, SSE `challenge_wait`, Chat UI карточка-пауза + тумблер, CLI `--attended`; D-12 lock учитывает `waiting_user`; 135 тестов. Fingerprint-спуфинг/обход детекта — вне scope навсегда (контракт no anti-bot bypass) |
 | 2026-07-19 | **v0.9: Phase 4 ✅ DONE** — `planner: llm` реализован (`research/llm_planner.py`, doc 24 v0.6: rules fast-path + LLM для диалога, M-H1..M-H3 пост-валидация) и exit-прогоны пройдены целиком из Chat UI в браузере: UC-2 9.9 мин (winner 95>70>40), UC-1 18.1 мин (partial M-H4 вживую: 8906 synth-таймаут → excluded, затем добран follow-up'ом через планнер до 4/4: 88/75/65/50). Фиксы: error_message при пустом str(exc), stale excluded при re-crawl. 129 тестов |
 | 2026-07-20 | **v0.11: секция Phase 6–7 Action Framework** (объёмы/exit-критерии, дизайн в doc 25): Phase 6 ✅ DONE (Tier 0/1/2 + persist + registry, doc 25 v0.9), Phase 7 Tier 3 handoff 🛠 (I-H12 + `handoff_action`, референс `store_checkout`, doc 25 v1.0) |
+| 2026-08-03 | **v0.12.1:** § Phase 5+ — строка «Persist `cf_clearance` между сессиями» помечена сделанной: persist-session реализован в Phase 6 (`storage_state` по хостам, opt-in), а в бэклоге оставался P2 |
 | 2026-07-30 | **v0.12: Phase 7 ✅ DONE** — Tier 3 handoff подтверждён живым exit-прогоном на фикстуре `store_checkout`: `fill_form` → выбор «Оплатить заказ» → пауза `handoff` → человек нажал → агент зафиксировал `WX9-1337`. Девять дефектов, найденных прогоном (значения полей в снапшоте, batch-fill, режимные пометки элементов, формулировка выбора, прогрев модели, окно браузера, устойчивость к закрытию, один необратимый шаг за прогон) — исправлены, doc 25 v1.1. 200 тестов |
