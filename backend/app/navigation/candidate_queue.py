@@ -25,7 +25,15 @@ P4_REST = 5
 BUCKET_COUNT = 6
 
 # Причины, по которым ссылка считается «со смыслом» и уходит в P0, а не в хвост.
-SIGNAL_TAGS = ("slug", "task-kw", "homepage+intent")
+# `entry`/`headline` добавлены после T-3d (doc 26): без них ссылки на сами статьи
+# оказывались в хвосте P4 и вылетали за top_k, поэтому агент ходил только по разделам,
+# а модель предлагала URL вне очереди (I-H6).
+SIGNAL_TAGS = ("slug", "task-kw", "homepage+intent", "entry", "headline")
+
+# Релевантный кандидат для G-S1 (early stop) — сигнальный тег ИЛИ источник-проба.
+# Живёт рядом с SIGNAL_TAGS, а не в orchestrator: это один словарь причин, и раньше
+# два кортежа расходились — тег `entry` пришлось бы добавлять в двух местах.
+RELEVANT_TAGS = (*SIGNAL_TAGS, "probe", "sitemap", "legal-contact")
 
 
 def _fresh_links(links: list[dict[str, str]], origin: str, visited: set[str]) -> list[dict[str, str]]:

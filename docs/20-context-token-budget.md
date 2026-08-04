@@ -1,6 +1,6 @@
 # 20 — Context & Token Budget
 
-> Local Web Agent · Design doc · **v0.3** · 2026-07-31
+> Local Web Agent · Design doc · **v0.4** · 2026-08-04
 
 ## Назначение
 
@@ -30,7 +30,7 @@ Priority order when building snapshot for LLM:
 | 1 | task (in system) | — |
 | 2 | `title` + `meta_description` | 500 |
 | 3 | `headings[]` | 2000 total |
-| 4 | `links[]` (unvisited first) | 40 links × ~80 chars |
+| 4 | `links[]` -> **top-10 кандидатов очереди** | 10 × ~80 chars (снапшот держит до 1200 ссылок, но в промпт идёт только очередь — doc 21 v0.8) |
 | 5 | `main_text` | **fill remainder** up to 6000 chars |
 | 6 | visited summary | 800 |
 
@@ -137,3 +137,4 @@ Ollama ≥ 0.9: `think: true` → рассуждения приходят отд
 | 2026-07-05 | **v0.2 (review):** non-Latin токен-поправка (3 chars/token, prompt_eval_count калибровка, тихая обрезка num_ctx); COMPARE budget для N>3 (excerpt cap 8K или num_ctx 24576); think-param вместо strip_thinking |
 | 2026-07-05 | **v0.2.1 (review-2):** PLAN budget — top-10 candidates (было 15), итог ~3150 tokens |
 | 2026-07-31 | **v0.3 (замер синтеза):** § R1 thinking tokens дополнена разложением времени — 87–97 % синтеза это генерация, вход стоит 3–7 s из 37–174 s. Следствие: урезание входных cap'ов не ускоряет синтез (они про полноту фактов), рычаг — выход (doc 16 § Быстрый синтез) |
+| 2026-08-04 | **v0.4 (испытание T-3d):** уточнена строка бюджета по ссылкам. В промпт навигатора уходит **top-10 очереди кандидатов**, а не «40 ссылок снапшота»: сам снапшот теперь держит до 1200 ссылок (предохранитель по памяти, doc 03 v0.10), потому что позиционный лимит скрывал от агента содержимое страницы. Токен-бюджет промпта при этом не изменился |

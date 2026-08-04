@@ -378,7 +378,9 @@ class ResearchRunner:
         report = build_comparison_report(session, comparison, survivors)
         report_path = self._sessions.artifacts_dir(session.id) / "comparison_report.md"
         report_path.write_text(report, encoding="utf-8")
-        return self._finish(session, "completed", self._chat_reply(comparison, report_path.name, say))
+        return self._finish(
+            session, "completed", self._chat_reply(comparison, report_path.name, say, survivors)
+        )
 
     # ------------------------------------------------------------ helpers
     def _cooldown_s(self, n_sites: int) -> float:
@@ -401,10 +403,27 @@ class ResearchRunner:
         return session
 
     @staticmethod
-    def _chat_reply(comparison: ComparisonResult, report_name: str, say: Phrases) -> str:
+    def _incomplete_sites(survivors: list[RunRecord]) -> list[str]:
+        """Сайты, где обход обрезали СВОИ лимиты: глубина/бюджет (`unreached`) или
+        early stop. Признак тот же, что у приписки в разборе сайта (`note_limits`)."""
+        return [
+            _site_name(r.config.start_url)
+            for r in survivors
+            if r.metadata.get("unreached") or r.metadata.get("early_stop")
+        ]
+
+    @staticmethod
+    def _chat_reply(
+        comparison: ComparisonResult, report_name: str, say: Phrases, survivors: list[RunRecord]
+    ) -> str:
         """Ответ в чат. Каркас берётся из словаря языка запроса — иначе наши строки
         («How they scored:») стояли бы английскими над русской прозой модели, и именно
-        эта смесь была дефектом (doc 17 § Язык ответа)."""
+        эта смесь была дефектом (doc 17 § Язык ответа).
+
+        Оговорка про неполный обход добавляется **кодом**: живой прогон T-3f показал, что
+        она есть в разборе каждого сайта, но в сравнении теряется, и итоговый ответ подаёт
+        своё же ограничение как свойство сайта («материалов по теме нет»).
+        """
         lines = []
         if comparison.winner:
             lines.append(say.say("winner", label=comparison.winner.label, reason=comparison.winner.reason))
@@ -413,6 +432,9 @@ class ResearchRunner:
             lines.append(say.say("scored", scores=scores))
         if comparison.narrative:
             lines.append(comparison.narrative[:600])
+        incomplete = ResearchRunner._incomplete_sites(survivors)
+        if incomplete:
+            lines.append(say.say("reading_cut", items=", ".join(incomplete)))
         if comparison.excluded:
             items = "; ".join(f"{_site_name(e.start_url)} — {e.reason}" for e in comparison.excluded)
             lines.append(say.say("left_out", items=items))

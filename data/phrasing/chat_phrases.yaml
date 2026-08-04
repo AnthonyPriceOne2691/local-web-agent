@@ -28,6 +28,12 @@ en:
     {parts}.
   not_opened: "pages not opened: {items}"
   ended_early: "crawl ended early after {pages} page(s) by own rule ({rule})"
+  # Та же оговорка, но в ИТОГОВОМ ответе: до T-3f она жила только в разборе каждого
+  # сайта, а человек читает сообщение сравнения — и видел «ничего не найдено» там,
+  # где обход оборвался на 3 страницах из 12 (doc 26 § T-3f).
+  reading_cut: >-
+    I did not read everything: {items} — so "nothing found" here can mean "not read
+    far enough", not "not on the site".
 
 ru:
   winner: "Лучший из всех: {label} — {reason}"
@@ -46,6 +52,9 @@ ru:
     {parts}.
   not_opened: "не открыты страницы: {items}"
   ended_early: "обход прекращён после {pages} стр. по своему же правилу ({rule})"
+  reading_cut: >-
+    Прочитал не всё: {items} — поэтому «ничего не найдено» здесь может значить «не
+    дочитал», а не «на сайте нет».
 
 # Почему сайт не попал в сравнение. Раньше строка начиналась со статуса кода
 # (`failed: …`) — читателю это ничего не говорит.

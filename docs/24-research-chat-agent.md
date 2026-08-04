@@ -1,6 +1,6 @@
 # 24 — Research Chat Agent (multi-site + compare)
 
-> Local Web Agent · Design doc · **v0.12** · 2026-08-01
+> Local Web Agent · Design doc · **v0.13** · 2026-08-04
 
 ## Назначение
 
@@ -304,6 +304,20 @@ User batch of 4 URLs → 4 sequential runs → 1 compare pass.
 
 Blocked-сайт **не** ретраится автоматически (no bypass); пользователь может прислать замену follow-up сообщением (Phase 4).
 
+### Неполный обход обязан быть виден в ИТОГОВОМ ответе (T-3f)
+
+Приписка «читал не всё» существовала только в разборе каждого сайта (`note_limits`,
+doc 26 § T-3a-2). Живой прогон T-3f показал, что этого мало: обход обрезала глубина
+(`G-H2`) на **3 страницах из 12** на всех трёх сайтах, приписка встала в per-site summary,
+а в итоговом сообщении сравнения — том единственном, которое читает человек, — стояло
+«на legalbet.ru и sports.ru вообще не найдены материалы по теме». Своё же ограничение
+подавалось как свойство сайта, и оценки 20/10/5 это закрепляли.
+
+Поэтому `_chat_reply` добавляет строку `reading_cut` **кодом**, если у любого выжившего
+сайта есть `metadata.unreached` (глубина/бюджет/robots) или `early_stop`. Признак тот же,
+что у per-site приписки — один источник правды, два адресата. Просить об этом модель
+сравнения нельзя по тому же уроку: формулировка слушается через раз.
+
 ### Session limits
 
 | Param | Default | Why |
@@ -459,3 +473,4 @@ Separate from crawl ABC — membership + пер-action enforce в Action registr
 | 2026-07-20 | **v0.11 (Action registry):** § Tool registry / § Planner / § Contracts — `KNOWN_TOOLS`/`PLANNER_TOOLS` заменены реестром `research/actions/` (doc 25 v0.9, A-H1/A-H2): membership + пер-action enforce через реестр в обоих путях; блок tools meta-промпта из `data/prompts/tools/` (`{TOOLS_BLOCK}`); reply-block действия исполняются execute-хуками (`run_details`/`list_runs`/`gdocs_export`/`file_export`). Новый tool `export_file` — локальный markdown-экспорт в artifacts сессии (без consent) |
 | 2026-07-19 | **v0.6 (Phase 4 ✅ DONE):** § Planner — `planner: llm` реализован (`research/llm_planner.py` + `data/prompts/meta_planner_*`): rules fast-path при URL в сообщении, LLM для диалога без URL; пост-валидация M-H1..M-H3 (URL только из истории сессии, run_id только из runs сессии, невалидный JSON → фоллбек-reply); `get_run_result`/`list_session_runs` возвращены для LLM-пути, `compare_results` принимает run_ids прошлых runs (re-compare/re-crawl без потери сессии). Проверено на реальной модели из Chat UI: follow-up ответ из comparison-контекста; re-crawl упавшего сайта по фразе без URL + re-compare 4/4. Excluded-семантика уточнена: перекраленный успешно URL не остаётся в excluded[] |
 | 2026-08-01 | **v0.12 (real-site прогон):** новая секция **§ Видимость окна ≠ «человек доступен»** — `attended` больше не означает `headless=False` на весь прогон: окно показывается только на паузу и прячется после resume там, где это безопасно (challenge/login); для задач-действий открывается сразу, потому что перезапуск потерял бы заполненную форму. Механика `reveal()`/`conceal()` — честный перезапуск с переносом cookie, а не «скрытие окна»; признак задачи-действия берётся из общего словаря `action_keywords` |
+| 2026-08-04 | **v0.13 (живой прогон T-3f, doc 26):** новая секция **§ Неполный обход обязан быть виден в итоговом ответе** — приписка «читал не всё» жила только в разборе каждого сайта, а человек читает сообщение сравнения: при обходе, обрезанном глубиной на 3 страницах из 12, в чат ушло «материалов по теме вообще не найдено». Теперь `_chat_reply` добавляет строку `reading_cut` кодом по тому же признаку, что per-site приписка (`metadata.unreached` или `early_stop`) |
