@@ -1,6 +1,6 @@
 # 15 — API & CLI Spec
 
-> Local Web Agent · Design doc · **v0.8** · 2026-07-20
+> Local Web Agent · Design doc · **v0.9** · 2026-08-05
 
 ## Base URL
 
@@ -152,10 +152,17 @@ Delete run + artifacts. 204. 409 если run активен (сначала can
 ### POST /sessions
 
 ```json
-{ "title": "optional" }
+{ "title": "optional", "rubric": null, "attended": false, "max_depth": null }
 ```
 
-**Response 201:** `{ "session_id": "..." }`
+**Response 201:** `{ "session_id": "...", "max_depth": 2 }`
+
+`max_depth` (0..10, `null` = как настроен процесс — `LWA_MAX_DEPTH`) задаёт глубину обхода
+**на сессию** и в ответе возвращается **действующим числом**. Причина в замере, а не в
+удобстве: глубина приходила только из окружения сервера, поэтому два прогона одной и той же
+команды разошлись (2 против 3) и сорвали A/B — увидеть это можно было лишь в `config_json`
+записи прогона (doc 26 § T-3f-1). CLI печатает это число строкой `Session started: … (hop
+depth N)`.
 
 ### POST /sessions/{session_id}/messages
 
@@ -277,9 +284,15 @@ agent research \
 | `--output` | stdout | ComparisonResult JSON |
 | `--report` | none | comparison_report.md path |
 | `--max-pages` | per intent | Override per-site page budget |
+| `--max-depth` | настройка процесса | Глубина обхода на сессию; действующее число печатается при старте |
 | `--wait` | true | Block until session complete |
 
 Equivalent to one chat message without UI (doc 24).
+
+`--max-depth` появился после сорванного замера: у команды флага не было, глубина приходила из
+процесса API, и два прогона «одной и той же команды» шли на разной глубине (doc 26 § T-3f-1).
+Поэтому CLI и печатает `Session started: <id> (hop depth N)` — число видно там, где оператор
+смотрит, а не только в `config_json` записи прогона.
 
 ### agent sessions (Phase 3)
 
@@ -359,3 +372,4 @@ MVP: CLI polls `GET /runs/{id}` every 2 s.
 | 2026-07-19 | **v0.6 (Phase 4 impl):** SSE `/sessions/{id}/events` реализован poll-паттерном поверх store; протокол уточнён — события `status`/`message`/`crawl_progress`/`done` + heartbeat (вместо черновых tool_start/compare_start: tool_start = `message` role=tool, compare_start = `status: comparing`), реконнект `?since_messages=N`. Новая ручка `GET /sessions/{id}/report` (text/markdown). `steps/{step_index}/screenshot` реализован; step_index = позиция в steps[]. Статика Chat UI: mount `frontend/dist` на `/` (same-origin, без CORS); dev — Vite proxy |
 | 2026-07-19 | **v0.7 (Phase 5 attended):** `POST /runs/{id}/resume` + `POST /sessions/{id}/resume` (снять паузу `waiting_user`); SSE-событие `challenge_wait`; CLI `--attended`; `POST /sessions` принимает `attended`. Human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим) |
 | 2026-07-20 | **v0.8 (Tier 3 handoff, doc 25):** `challenge_wait` payload +`action?` (описание подготовленного шага); `kind` пополнен `confirm_submit` (Tier 2, был с v0.6 doc 24) и `handoff` (Tier 3 — человек жмёт финальную кнопку сам в видимом браузере) |
+| 2026-08-05 | **v0.9 (глубина перестала быть тихой):** `POST /sessions` принимает `max_depth` (0..10, `null` = настройка процесса) и возвращает **действующее** число; у CLI `agent research` появился `--max-depth`, а строка старта печатает `(hop depth N)`. Причина в сорванном замере: глубина приходила только из окружения сервера, два прогона одной команды разошлись 2 против 3 (doc 26 § T-3f-1) |

@@ -78,6 +78,10 @@ class SessionConfig(BaseModel):
     rubric_override: str | None = None
     canceled_by_restart: bool = False
     attended: bool = False  # Phase 5: attended-режим на anti-bot challenge (doc 24)
+    # Глубина обхода на сессию. `None` = взять из настроек процесса. Появилось после
+    # T-3f: у CLI флага не было, глубина приходила из процесса API, и два прогона одной
+    # команды разошлись (2 против 3) — замер сорвался тихо (doc 26 § T-3f-1).
+    max_depth: int | None = Field(default=None, ge=0, le=10)
 
 
 class SessionRecord(BaseModel):

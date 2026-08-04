@@ -37,6 +37,8 @@ en:
   # Сайт прочитан, а ответ не собрался — это не «сайт не читается» (T-3h).
   read_but_no_answer: "read {pages} page(s), but the answer never came together — {detail}"
   no_page_opened: "not a single page opened"
+  # Прочитанное не выбрасываем, даже если ответ не собрался (T-3h).
+  pages_read_no_answer: "Pages read: {pages} ({items}). The answer never came together."
 
 ru:
   winner: "Лучший из всех: {label} — {reason}"
@@ -60,6 +62,7 @@ ru:
     дочитал», а не «на сайте нет».
   read_but_no_answer: "прочитано {pages} стр., но ответ не собрался — {detail}"
   no_page_opened: "ни одна страница не открылась"
+  pages_read_no_answer: "Прочитано страниц: {pages} ({items}). Ответ не собрался."
 
 # Почему сайт не попал в сравнение. Раньше строка начиналась со статуса кода
 # (`failed: …`) — читателю это ничего не говорит.

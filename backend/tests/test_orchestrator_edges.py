@@ -3,6 +3,7 @@ fallback exhausted, screenshot/consent сбои (coverage-гейт ≥90%, doc 1
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from app.orchestrator.robots import RobotsPolicy
@@ -173,6 +174,49 @@ async def test_screenshot_failure_does_not_kill_run(tmp_path):
     )
     record = await orch.run(record_for(f"{ORIGIN}/", task="Find the price"))
     assert record.status == "not_found"  # run выжил без скриншота
+
+
+async def test_synthesis_timeout_does_not_throw_away_the_pages_read(tmp_path):
+    """Живой прогон T-3h: `legalbet.ru` прочитал 4 страницы, включая целевую статью, и упал
+    на синтезе таймаутом локальной модели — прогон ушёл в `failed`, а прочитанное пропало
+    целиком, будто сайт не читался (doc 26 § T-3h).
+
+    Прогон остаётся `failed` (иначе сайт без фактов полезет в сравнение и получит оценку),
+    но страницы обязаны остаться в записи: их читали, и в отчёте это должно быть видно.
+    """
+
+    class TimingOutSynth:
+        async def synthesize(self, **_kwargs):
+            raise httpx.ReadTimeout("timed out")
+
+    browser = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Home", text="Words about betting " * 30, links=[(f"{ORIGIN}/wiki", "Как ставить")]
+            ),
+            f"{ORIGIN}/wiki": page_raw(title="Wiki", text="How to bet on football " * 40),
+        }
+    )
+    orch, store, _ = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "navigate", "url": f"{ORIGIN}/wiki", "reasoning": "article"},
+            {"action": "stop", "reasoning": "read enough"},
+        ],
+    )
+    orch._synthesizer = TimingOutSynth()  # type: ignore[assignment]
+
+    record = await orch.run(record_for(f"{ORIGIN}/", task="Найди статью про ставки на футбол"))
+
+    assert record.status == "failed"  # в сравнение не попадёт
+    assert record.metadata.get("failed_stage") == "SYNTHESIZE"
+    assert record.pages_visited == 2
+    assert record.result is not None, "прочитанное выброшено — именно этот дефект и чинится"
+    assert record.result.pages_visited == 2
+    assert f"{ORIGIN}/wiki" in (record.result.summary or "")
+    # То же состояние обязано лежать в store, а не только в объекте в памяти.
+    assert store.get(record.id).result is not None
 
 
 async def test_consent_failure_marked_not_fatal(tmp_path):

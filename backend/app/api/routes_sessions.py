@@ -27,6 +27,9 @@ class CreateSession(BaseModel):
     max_sites: int | None = None
     rubric: str | None = None
     attended: bool = False
+    # Глубина обхода: `None` = как настроен процесс. Явное поле нужно, чтобы замер не
+    # зависел от того, с какими переменными поднят сервер (doc 26 § T-3f-1).
+    max_depth: int | None = Field(default=None, ge=0, le=10)
 
 
 class UserMessage(BaseModel):
@@ -40,12 +43,16 @@ async def create_session(body: CreateSession, request: Request) -> dict[str, Any
         max_sites=body.max_sites or state.settings.max_sites_per_session,
         rubric_override=body.rubric,
         attended=body.attended,
+        max_depth=body.max_depth,
     )
     record = SessionRecord(
         id=uuid.uuid4().hex[:12], title=body.title, config=config, created_at=datetime.now(UTC).isoformat()
     )
     state.session_store.save(record)
-    return {"session_id": record.id}
+    # Действующая глубина возвращается **числом**: пока её приходилось искать в
+    # `config_json` записи прогона, два прогона одной команды разошлись по глубине и
+    # сорвали замер тихо (doc 26 § T-3f-1).
+    return {"session_id": record.id, "max_depth": config.max_depth or state.settings.max_depth}
 
 
 @router.post("/sessions/{session_id}/messages", status_code=202)

@@ -34,6 +34,7 @@ from app.orchestrator.run_state import Prepared, RunState, StepOutcome
 from app.orchestrator.states import State
 from app.orchestrator.synthesize import run_synthesis
 from app.orchestrator.vision_batch import run_vision_batch
+from app.reporting.phrasing import Phrases
 from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
 from app.storage.run_store import RunStore
@@ -134,7 +135,13 @@ class CrawlOrchestrator:
             )
         except Exception as exc:
             logger.exception("crawl run %s crashed at %s", record.id, record.current_url)
-            failed = fail_run(record, exc, store=self._store)
+            failed = fail_run(
+                record,
+                exc,
+                store=self._store,
+                snapshots=st.snapshots,
+                say=Phrases.load(self._s.data_dir, record.config.task),
+            )
             await self._safe_close()
             return failed
 

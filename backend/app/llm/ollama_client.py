@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import partial
 from typing import Any
 
 import httpx
@@ -42,6 +43,7 @@ class OllamaClient:
         max_tokens: int = 1024,
         keep_alive: str | int = "10m",
         images: list[str] | None = None,
+        timeout_s: float | None = None,
     ) -> tuple[str, dict[str, Any]]:
         user_msg: dict[str, Any] = {"role": "user", "content": user}
         if images:  # multimodal (doc 23): base64 PNG в images[]
@@ -60,10 +62,18 @@ class OllamaClient:
             body["format"] = schema
         if think is not None and supports_think(model):
             body["think"] = think
-        r = await self._client.post(f"{self.base_url}/api/chat", json=body)
+        # Свой бюджет на вызов: у стадий он разный. Замер 28 синтезов на реальных
+        # сайтах — медиана 92.5 s, максимум 250.2 s при общем бюджете 300 s; с шумом
+        # wall-time ±25 % самый тяжёлый случай его перешагивает, что и случилось в
+        # T-3h (потеряны 4 прочитанные страницы). Навигации такой запас не нужен.
+        post = partial(self._client.post, f"{self.base_url}/api/chat")
+        kwargs: dict[str, Any] = {"json": body}
+        if timeout_s is not None:
+            kwargs["timeout"] = timeout_s
+        r = await post(**kwargs)
         if r.status_code == 400 and "think" in body:  # старый Ollama / модель без think
             body.pop("think")
-            r = await self._client.post(f"{self.base_url}/api/chat", json=body)
+            r = await post(**kwargs)
         r.raise_for_status()
         data = r.json()
         message = data.get("message", {})

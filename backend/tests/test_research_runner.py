@@ -253,6 +253,20 @@ async def test_session_run_takes_max_depth_from_settings(tmp_path):
     assert depths == [4, 4], "настройка обхода должна доходить до каждого run'а сессии"
 
 
+async def test_session_depth_wins_over_the_process_setting(tmp_path):
+    """Глубина, заданная на сессию (`--max-depth` у CLI, поле у API), должна побеждать
+    настройку процесса: именно её невидимость сорвала A/B в T-3f — два прогона одной
+    команды разошлись 2 против 3, потому что глубина приходила из окружения сервера."""
+    runner, run_store, session_store, _visits, _llm = make_runner(tmp_path, max_depth=4)
+    session = new_session(max_depth=2)
+    session_store.save(session)
+
+    session = await runner.run_message(session, "Сравни: https://a.com https://b.com")
+
+    depths = [run_store.get(rid).config.max_depth for rid in session.run_ids]
+    assert depths == [2, 2]
+
+
 async def test_plan_argument_still_wins_over_the_setting(tmp_path):
     """Контроль рядом: у `max_pages` бюджет задаёт ПЛАН (intent-таблица meta_agent), и
     аргумент плана старше настройки — правка глубины эту иерархию не должна ломать.

@@ -194,6 +194,9 @@ def research(
     ),
     output: Path | None = typer.Option(None, "--output", help="ComparisonResult JSON to file"),
     report: Path | None = typer.Option(None, "--report", help="copy comparison_report.md here"),
+    max_depth: int | None = typer.Option(
+        None, "--max-depth", help="crawl hop depth; default = server setting (LWA_MAX_DEPTH)"
+    ),
     api_url: str = typer.Option(API_DEFAULT, "--api-url"),
 ) -> None:
     """Multi-site research (doc 24): sequential crawls + compare. Один chat-message без UI."""
@@ -201,7 +204,9 @@ def research(
     message = f"{task}\n" + "\n".join(u.strip() for u in urls.split(",") if u.strip())
     with httpx.Client(base_url=api_url, timeout=60) as client:
         try:
-            sid = client.post("/sessions", json={"rubric": rubric}).json()["session_id"]
+            body = {"rubric": rubric, "max_depth": max_depth}
+            created = client.post("/sessions", json=body).json()
+            sid, depth = created["session_id"], created.get("max_depth")
             r = client.post(f"/sessions/{sid}/messages", json={"content": message})
         except httpx.HTTPError as exc:
             console.print(f"[red]API unreachable:[/red] {exc}")
@@ -210,7 +215,9 @@ def research(
             console.print(f"[red]409:[/red] {r.json()['detail']}")
             raise typer.Exit(2)
         r.raise_for_status()
-        console.print(f"Session started: [bold]{sid}[/bold]")
+        # Глубина печатается всегда: она приходит из процесса API, и её невидимость уже
+        # один раз сорвала A/B (два прогона одной команды разошлись 2 против 3).
+        console.print(f"Session started: [bold]{sid}[/bold] (hop depth {depth})")
         seen_msgs = 0
         status = "running_tools"
         while status in ("active", "running_tools", "comparing"):

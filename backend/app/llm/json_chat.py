@@ -27,6 +27,7 @@ async def chat_json(
     num_ctx: int = 16384,
     max_tokens: int = 4096,
     keep_alive: str | int = 0,  # swap discipline: nav → synth (doc 14)
+    timeout_s: float | None = None,
 ) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
     """`(raw, content, stats)`; `raw is None` → JSON не получен и после повтора.
 
@@ -44,6 +45,7 @@ async def chat_json(
         num_ctx=num_ctx,
         max_tokens=max_tokens,
         keep_alive=keep_alive,
+        timeout_s=timeout_s,
     )
     raw = extract_json(content)
     if raw is not None:
@@ -58,5 +60,6 @@ async def chat_json(
         num_ctx=num_ctx,
         max_tokens=max_tokens,
         keep_alive=keep_alive,
+        timeout_s=timeout_s,
     )
     return extract_json(content), content, stats

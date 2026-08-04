@@ -33,6 +33,25 @@ class FakeRunner:
         return session
 
 
+async def test_session_creation_reports_the_effective_hop_depth(api_client):  # noqa: F811
+    """Глубина приходила из процесса API, и её невидимость сорвала A/B: два прогона одной
+    и той же команды разошлись (2 против 3), а увидеть это можно было только в
+    `config_json` записи прогона (doc 26 § T-3f-1). Теперь она возвращается числом и её
+    можно задать на сессию."""
+    client, app = api_client
+
+    default = (await client.post("/sessions", json={})).json()
+    assert default["max_depth"] == app.state.settings.max_depth
+
+    explicit = (await client.post("/sessions", json={"max_depth": 3})).json()
+    assert explicit["max_depth"] == 3
+    sid = explicit["session_id"]
+    assert (await client.get(f"/sessions/{sid}")).json()["config"]["max_depth"] == 3
+
+    # Вне диапазона — отказ схемой, а не молча принятая ерунда.
+    assert (await client.post("/sessions", json={"max_depth": 99})).status_code == 422
+
+
 async def test_sessions_api_lifecycle(api_client):  # noqa: F811
     client, app = api_client
     app.state.research_runner_factory = lambda: FakeRunner(app.state.session_store)
