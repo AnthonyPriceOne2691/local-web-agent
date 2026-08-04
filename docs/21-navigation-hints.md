@@ -1,6 +1,6 @@
 # 21 — Navigation Hints (deterministic site access)
 
-> Local Web Agent · Design doc · **v0.7** · 2026-07-18
+> Local Web Agent · Design doc · **v0.8** · 2026-08-04
 > **Референс (боевой опыт):** Linkbuilding CRM — [CONTACT_SCRAPER_FALLBACK_DESIGN.md](../../../Shared%20Works/internal/seo/hide-linkbuilding-application-crm/Linkbuilding%20Automatization%20P/docs/CONTACT_SCRAPER_FALLBACK_DESIGN.md) (SEOLB-499, прогон 991 GEO-донора, 2026-07-03/04)
 
 ## Назначение
@@ -179,22 +179,59 @@ INIT (после robots.txt):
 
 ---
 
-## Link scoring (extends doc 04)
+## Link scoring (extends doc 04) — v0.8 после испытания T-3d
 
 ```
 score(link, intent) =
-  +15  if link on homepage AND (text or href matches intent keywords)
-  +12  if href path matches path_hints slug for intent
-  +10  if link.text matches task keywords verbatim
-  +8   if intent=contact AND href matches legal slug (path_hints.contact_legal)
-  +5   if href path matches generic intent keywords
-  +3   if shorter path depth
-  -8   if href matches crawl_forbidden.txt AND intent ≠ contact
-  -10  if href ∈ (login, signup, cart, checkout) unless task asks
-  -5   if similar path prefix already visited
+  # СОДЕРЖАНИЕ (тема главнее формы)
+  +20  if тема задачи есть в тексте ссылки ИЛИ в словах пути (`/stavki-na-futbol`)
+  +8   if форма записи И тема совпала           (форма разрешает ничью между
+  +4   if форма записи без темы                  тематическими, но не заменяет её)
+  +6   if текст похож на заголовок (>=4 слов, >=25 симв.) и мы ищем статью
+  -4   if текста нет вовсе И темы нет            (модель не может о ней судить)
+  # ВХОД В РАЗДЕЛ (работает только пока раздел ещё не найден)
+  +15  if на главной И (текст или href совпал с ключевиками интента)
+  +12  if на главной И href совпал со слугом словаря
+  +8   if intent=contact И href совпал с юридическим слугом
+  +3   if малая глубина пути И это НЕ поиск статьи
+  # ШТРАФЫ
+  -8   if href юридический И intent != contact
+  -10  if href in (login, signup, cart, checkout)
 ```
 
-LLM PLAN получает **top 10** scored candidates (href + text + score + reason), не все 40 links.
+**Форма записи** (`entry`): дата в пути, числовой id, длинный слуг из 3+ слов, `.html`.
+Признаки структурные — они описывают форму URL записи, одинаковую у блогов, новостных
+лент и вики, а не подогнаны под конкретные сайты.
+
+### Почему веса именно такие (замер T-3d, doc 26)
+
+Три реальных портала со статьями про ставки: агент прошёл раздел -> раздел -> раздел, не
+открыл ни одной статьи и заявил, что статей нет. Две причины, обе измерены:
+
+1. **`slug` и `shallow` достаются страницам-спискам**, а ссылка на статью получала 0:
+   её заголовок не совпадал с задачей буквально, а путь — ни с одним слугом. Поэтому
+   слуг и малая глубина теперь работают только пока раздел не найден: внутри раздела они
+   уводили в соседний раздел (news -> бонусы -> букмекеры).
+2. **Первая попытка починки дала форме больше веса, чем теме** (`entry` +12 против
+   `task-kw` +10) — и агента потянуло в турниры, теги и видео: они тоже «длинный слуг из
+   трёх слов». В top-10 стояли шесть ссылок с пустым текстом, о которых модель не может
+   сказать ничего. Отсюда правило: **тема главная, форма только разрешает ничью**, а
+   нечитаемая ссылка получает штраф.
+
+Тема ищется **с начала слова и по префиксу >=4 символов** (`matching`): «ставки» обязано
+ловить «ставках». И ищется не только в тексте ссылки, но и **в словах пути** — на живом
+прогоне половина кандидатов имела пустой текст.
+
+### Отбор — по счёту, а не по позиции в DOM
+
+LLM PLAN получает **top 10** scored candidates (href + text + score + reason).
+
+Сколько ссылок доходит до оценки — предохранитель по памяти (`LINKS_CAP`), **не** отбор.
+Замер T-3d показал, почему позиционный лимит неверен в принципе: ссылки берутся в порядке
+DOM, а позиция содержимого у каждого сайта своя. У `sports.ru/betting/stavochnaya-wiki`
+420 ссылок; при лимите 40 в вход попадали только шапка и меню (50 из 52 тематических
+отброшены), при лимите 300 — всё равно мимо, потому что ссылки на статьи лежат на
+позициях #345-#351. **Любое фиксированное N режет контент на каком-нибудь сайте.**
 
 ---
 
@@ -347,3 +384,4 @@ Gate: hints mode ≤ same pages, ≥ same success on localized fixtures.
 | 2026-07-05 | **v0.5 (review):** Sitemap tier P2.5 (robots `Sitemap:` → CandidateQueue) — закрывает пагинацию/infinite-scroll для UC-2; page_budget = max_pages (уточнение); RSS и site-search probe в backlog; `blog:` slugs добавлены в path_hints.yaml |
 | 2026-07-05 | **v0.6 (review-2):** RU+EN intent keywords (casefold+substring, стемы) — EN-only роняло русские задачи в generic; hop depth для slug/sitemap кандидатов (D-13); content_search — до 3 article candidates вместо первой попавшейся |
 | 2026-07-18 | **v0.7 (Phase 2 exit-бенчмарк):** docs-класс расширен на contributor-страницы — keywords `develop`/`contribut` (стемы: developer/development/contribute/contributing) + RU `разработ`/`вклад`, slugs `/dev`, `/contribute`, `/contributing` (кейс python.org: «contribute to CPython development» падал в generic). Sitemap P2.5 и полный F1 tier реализованы; стоп-слова task-keywords для sitemap-фильтра (about/find/article… не сигнал в `<loc>`) |
+| 2026-08-04 | **v0.8 (испытание T-3d, doc 26):** § Link scoring переписан — **тема главнее формы**. Причина измерена: на трёх реальных порталах агент ходил раздел -> раздел -> раздел и не открыл ни одной статьи, потому что `slug`/`shallow` достаются спискам, а ссылка на статью получала 0. Слуг и малая глубина теперь работают только пока раздел не найден; введены `entry` (форма URL записи), `headline` (заголовок против навигационной подписи) и штраф за ссылку без читаемого текста; тема ищется префиксом >=4 символов и **в словах пути** тоже. Отдельно записано, что первая попытка починки дала форме больше веса, чем теме, и агента потянуло в турниры/теги/видео. § Отбор — по счёту, а не по позиции в DOM: позиционный лимит неверен в принципе (у `sports.ru` статьи на позициях #345-#351, любое фиксированное N режет контент) |

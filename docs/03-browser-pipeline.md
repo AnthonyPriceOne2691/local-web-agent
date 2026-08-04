@@ -1,6 +1,6 @@
 # 03 — Browser Pipeline
 
-> Local Web Agent · Design doc · **v0.9** · 2026-08-03
+> Local Web Agent · Design doc · **v0.10** · 2026-08-04
 
 ## Назначение
 
@@ -69,7 +69,7 @@ goto(url)
 | `meta_description` | `<meta name="description">` | 300 chars |
 | `headings` | `h1, h2, h3` innerText | max 20 items, 200 chars each |
 | `main_text` | heuristic: `main`, `[role=main]`, `article`, else `body`; **content_search Phase 2: `trafilatura`** (см. ниже) | **8000 chars** (see doc 20) |
-| `links` | `a[href]` visible text + resolved href | max **40** links per page |
+| `links` | `a[href]` visible text + resolved href | **предохранитель по памяти** `LINKS_CAP` (1200), не отбор: отбирает счёт очереди (doc 21) — позиционный лимит скрывал контент |
 | `breadcrumbs` | `[aria-label=breadcrumb]`, `.breadcrumb` | optional, 500 chars |
 | `screenshot` | Playwright PNG after settle (if enabled) | see [22-page-screenshots.md](22-page-screenshots.md) |
 
@@ -252,3 +252,4 @@ Not in Phase 1 MVP (Playwright-only).
 | 2026-07-05 | **v0.7 (review-2):** landing-domain adopt на step 0 (переезд домена не убивает run); robots fetch 4xx/5xx семантика; trafilatura для article main-text (content_search, Phase 0 spike-решение) |
 | 2026-08-01 | **v0.8 (real-site прогон):** § robots.txt integration — чтение robots нашим httpx-клиентом с UA `LocalWebAgent/0.1`; контракт «4xx → allow» выполняется буквально, включая 401/403 (stdlib трактовал их как `disallow_all` и давал ложный `robots_disallow` на сайте с `Allow: /`); stdlib остаётся парсером директив |
 | 2026-08-03 | **v0.9 (испытание T-3a, doc 26):** § Wait strategy — бюджет навигации тратится на `commit` (документ), а DOMContentLoaded получает отдельный короткий бюджет **5 s** и больше не может уронить переход. Причина найдена замером: DOMContentLoaded ждёт и **отложенных** (`defer`) скриптов, поэтому один зависший сторонний хост держит событие до сетевого таймаута — `simonwillison.net` 31.0 s из-за `static.cloudflareinsights.com`, `martinfowler.com` 30.9 s из-за `cloud.umami.is`, при `commit` за 0.7 s у обоих. На старой стратегии это стоило **2 сайтов из 3** (0 страниц, run `failed`) и 46 % времени сессии. Недостижимый документ по-прежнему падает — на это есть отдельный тест |
+| 2026-08-04 | **v0.10 (испытание T-3d):** лимит ссылок снапшота перестал быть отбором и стал предохранителем по памяти (`LINKS_CAP` 40 -> 1200). Причина: ссылки берутся в порядке DOM, позиция содержимого у каждого сайта своя — у `sports.ru/betting/stavochnaya-wiki` 420 ссылок и статьи на позициях #345-#351, поэтому при лимите 40 (и при 300) в вход агента попадали только шапка и меню. Отбор делает счёт очереди кандидатов (doc 21 v0.8); в промпт по-прежнему уходит top-10, синтез ссылок снапшота не читает |
