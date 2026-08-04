@@ -152,6 +152,113 @@ def test_article_links_reach_the_queue_from_a_list_page():
     assert not nav_positions or first_entry < max(nav_positions)
 
 
+# --- тема в транслитерированном пути (hop-1: узкое место первого хопа) ---
+
+
+def test_task_topic_matches_a_transliterated_path():
+    """Дыра правки T-3d: она учила искать тему **в словах пути**, но у русских сайтов путь
+    записан латиницей, а задача приходит по-русски — и `task-kw` не срабатывал вообще.
+
+    Замер: `sports.ru/betting/stavochnaya-wiki` (эталонная вики про ставки) стояла #134 из
+    731 со счётом 11, потому что текст ссылки пуст, а путь латинский. 10-е место на том же
+    корне стоило 37 — то есть в промпт она не попадала никогда.
+    """
+    for href in (
+        "https://www.sports.ru/betting/stavochnaya-wiki",  # ставки → stav|ochnaya
+        "https://legalbet.ru/shkola-bettinga/stavki-na-futbol",  # ставки + футбол
+        "https://www.championat.com/bets/article-3964176-kak-stavit-stavki-na-futbol",
+    ):
+        _score, reason = scored(href)  # текст ссылки пустой — судить можно только по пути
+        assert "task-kw" in reason, href
+
+
+def test_service_words_of_the_task_are_not_a_topic_signal():
+    """Обратная сторона транслитерации: служебные слова задачи («найди», «статью», «сайте»)
+    иначе начинают ловить чужие пути — `статью` → `stat` совпало бы с `/stat/football`,
+    то есть страница статистики стала бы «по теме». Словарь стоп-слов уже был в
+    sitemap-фильтре; теперь он один на двух потребителей."""
+    for href in (
+        "https://www.championat.com/stat/football",  # статью → stat
+        "https://www.sports.ru/football/team/spartak-moskva",  # ни одного слова задачи
+        "https://legalbet.ru/sajt-obzor",  # сайте → sajt
+    ):
+        _score, reason = scored(href)
+        assert "task-kw" not in reason, href
+
+
+def test_prefix_matching_admits_its_false_positives():
+    """Граница метода, названная честно: тема ищется префиксом от 4 символов и правую
+    границу слова не проверяет — поэтому «ставки» совпадает и с «Ставрополем». Это
+    **уже** так для кириллицы (`matching`: половина словаря — стемы), транслитерация
+    новый класс ошибки не вносит. Тест держит это как известное свойство, а не как баг:
+    если кто-то решит ужесточить, он увидит, что цена — `stavochnaya` (эталонная вики
+    `sports.ru`), которая по полному слову не совпадёт.
+    """
+    assert "task-kw" in scored("https://www.sports.ru/football/team/stavropol")[1]
+    assert "task-kw" in scored("https://x.test/p", "Ставрополь — трансферы")[1]
+
+
+def test_cyrillic_link_text_still_matches_without_translit():
+    """Транслитерация — добавка, а не замена: русский текст ссылки должен ловиться как был."""
+    assert "task-kw" in scored("https://x.test/p/1", "Всё о ставках на футбол")[1]
+
+
+# --- обучающий жанр против промо (hop-1) ---
+
+
+def test_learning_genre_is_recognized():
+    """Замер hop-1: обучающий раздел — это то, что задача «как делать ставки» и просит, но
+    формула его ничем не отличала от новости. Признак структурный (жанр раздела), а не
+    список этих трёх сайтов: `wiki`, `school`, `academy`, `guide` встречаются у всех."""
+    for href in (
+        "https://legalbet.ru/shkola-bettinga",
+        "https://www.sports.ru/betting/stavochnaya-wiki",
+        "https://www.championat.com/bets/_study.html",
+        "https://x.test/academy/betting-basics",
+        "https://x.test/ru/obuchenie/stavki",
+    ):
+        assert "learn" in scored(href)[1], href
+
+
+def test_learning_genre_reinforces_the_topic_but_does_not_replace_it():
+    """Найдено замером сразу после первой версии правки: при безусловном весе жанра
+    `championat.com/guide/lifestyle` (жанр есть, темы нет, текст пуст) поднялся на #9 корня
+    и вытеснил статью про ставки. Это ровно ошибка T-3d «форма выше темы», повторённая на
+    другом признаке, поэтому вес жанра двойной — как у формы записи."""
+    on_topic = scored("https://legalbet.ru/shkola-bettinga/stavki-na-futbol")[0]
+    off_topic = scored("https://www.championat.com/guide/lifestyle")[0]
+    assert on_topic > off_topic
+    # Жанр без темы даёт мало, но не ноль: хаб может называться `/school` без слов задачи.
+    assert scored("https://x.test/school/x")[0] > scored("https://x.test/section/x")[0]
+
+
+def test_learning_genre_only_while_hunting_an_article():
+    """У контактной задачи жанр ни при чём — иначе он начнёт двигать очередь там, где
+    ищут телефон."""
+    assert "learn" not in scored("https://x.test/wiki/page", intent="contact")[1]
+
+
+def test_promo_pages_are_penalized_but_not_when_the_task_asks_for_them():
+    """На корне `legalbet.ru` девять из top-10 были бонусные промо («розыгрыш 200000 рублей
+    фрибетами за ставки на теннис»): у них есть и тема, и форма записи, и длинный заголовок,
+    поэтому они обходили обучающий раздел.
+
+    Штраф обязан выключаться, когда промо и есть запрос: «найди бонусы букмекеров» —
+    законный сценарий, и ломать его нельзя.
+    """
+    promo = "https://legalbet.ru/bonus/liga-stavok-rozigrish-200000-rublej-fribetami"
+    assert "promo" in scored(promo, "Бонус Лиги Ставок: розыгрыш фрибетов за ставки")[1]
+
+    for_bonus_task = score_link(
+        {"href": promo, "text": "Бонус Лиги Ставок: розыгрыш фрибетов"},
+        intent="content_search",
+        task="Найди бонусы букмекеров и сравни, где фрибет выгоднее",
+        hints=HINTS,
+        on_homepage=True,
+    )[1]
+    assert "promo" not in for_bonus_task
+
+
 # --- штрафы: признак ищется в пути, а не во всём URL (T-3e) ---
 
 
