@@ -54,6 +54,8 @@ class ScriptedOrchestrator:
                 facts=[Fact(key="k", value=f"v-{url}")],
             )
             record.pages_visited = 2
+            if outcome == "cut":  # обход обрезали свои лимиты (глубина/бюджет/early stop)
+                record.metadata["unreached"] = [f"{url}/deeper-page"]
         self._store.save(record)
         return record
 
@@ -140,6 +142,36 @@ async def test_partial_failure_excluded_and_partial_status(tmp_path):
     assert [e.start_url for e in comparison.excluded] == ["https://c.com"]
     assert "captcha" in comparison.excluded[0].reason
     assert "Не вошли: c.com" in session.messages[-1].content  # сообщение русское
+
+
+async def test_final_answer_admits_the_crawl_was_incomplete(tmp_path):
+    """Живой прогон T-3f (doc 26): обход обрезала глубина на **3 страницах из 12** на всех
+    трёх сайтах, приписка «прочитал не всё» встала в разбор каждого сайта — а человек
+    читает **итоговое** сообщение, и там было «вообще не найдены материалы по теме».
+
+    Оговорка обязана дойти до ответа, который читают: иначе своё же ограничение подаётся
+    как свойство сайта. Тот же класс, что T-3a-2, но уровнем выше — в сравнении.
+    """
+    runner, _, session_store, _, _ = make_runner(tmp_path, behavior={"https://b.com": "cut"})
+    session = new_session()
+    session_store.save(session)
+    session = await runner.run_message(session, "дизайн отличия https://a.com https://b.com")
+
+    reply = session.messages[-1].content
+    assert "Прочитал не всё" in reply, reply
+    assert "b.com" in reply
+    # Сайт, прочитанный полностью, в оговорку не попадает — иначе она перестанет значить.
+    cut_line = next(line for line in reply.splitlines() if "Прочитал не всё" in line)
+    assert "a.com" not in cut_line
+
+
+async def test_final_answer_stays_clean_when_nothing_was_cut(tmp_path):
+    """Негативный контроль: без обрезки оговорки в ответе быть не должно."""
+    runner, _, session_store, _, _ = make_runner(tmp_path)
+    session = new_session()
+    session_store.save(session)
+    session = await runner.run_message(session, "дизайн отличия https://a.com https://b.com")
+    assert "Прочитал не всё" not in session.messages[-1].content
 
 
 async def test_single_survivor_answers_without_compare(tmp_path):
