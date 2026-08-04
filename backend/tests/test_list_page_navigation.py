@@ -152,6 +152,38 @@ def test_article_links_reach_the_queue_from_a_list_page():
     assert not nav_positions or first_entry < max(nav_positions)
 
 
+# --- штрафы: признак ищется в пути, а не во всём URL (T-3e) ---
+
+
+def test_penalties_do_not_fire_on_the_host_name():
+    """Найдено офлайн-оракулом на корне `legalbet.ru`: штраф `legal-avoid` (−8) стоял у
+    **каждой** ссылки сайта, потому что подстрока `/legal` совпадает внутри `//legalbet`.
+
+    Тот же класс ошибки, что `ui` внутри `g-ui-de` (T-3a): признак сравнивался с целым
+    URL вместо пути. Здесь он бьёт по любому сайту, чьё имя начинается со слова из
+    словаря, — а имена букмекерских обзорников как раз такие.
+    """
+    for href in (
+        "https://legalbet.ru/shkola-bettinga/stavki-na-futbol",  # /legal в имени хоста
+        "https://cartier.com/watches/santos-de-cartier-2026",  # /cart в имени хоста
+        "https://logincorp.example/blog/kak-delat-stavki-na-futbol",  # /login в имени хоста
+        "https://terms-of-sport.example/wiki/3067963-kak-delat-stavki",  # /terms в имени хоста
+    ):
+        _score, reason = scored(href, "Как делать ставки на футбол: разбор")
+        assert "legal-avoid" not in reason, href
+        assert "forbidden" not in reason, href
+
+
+def test_penalties_still_fire_on_the_real_path():
+    """Обратная сторона: настоящие юридические и служебные страницы штраф получают."""
+    assert "legal-avoid" in scored("https://x.test/privacy-policy", "Privacy")[1]
+    assert "legal-avoid" in scored("https://x.test/terms", "Terms")[1]
+    assert "forbidden" in scored("https://x.test/cart", "Корзина")[1]
+    assert "forbidden" in scored("https://x.test/account/login", "Войти")[1]
+    # У интента contact юридические страницы — цель, а не помеха (прежнее поведение).
+    assert "legal-avoid" not in scored("https://x.test/privacy", "Privacy", intent="contact")[1]
+
+
 # --- лимит ссылок: он скрывал от агента содержимое страницы (T-3d) ---
 
 

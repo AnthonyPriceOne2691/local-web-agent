@@ -1,6 +1,6 @@
 # Design Documents Index
 
-> Local Web Agent · Design doc · **v1.5** · 2026-08-04
+> Local Web Agent · Design doc · **v1.6** · 2026-08-04
 
 Планирование проекта ведётся через design docs в этой папке: любое изменение дизайна = правка дока + запись в changelog + bump версии в шапке, и версии в шапке, индексе и changelog обязаны совпадать (инвариант [CLAUDE.md](../CLAUDE.md)).
 
@@ -27,12 +27,12 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.4** | 500 LOC, SOLID, DRY, coverage; контур ruff + mypy на scripts/ |
 | [19-phase0-benchmark-results.md](19-phase0-benchmark-results.md) | ✅ **v1.0 DONE** | Все гейты ✅; qwen3 single-model рекомендация |
 | [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.4** | Token budget; non-Latin; compare N>3; вход синтеза ≠ латентность |
-| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.8** | + content_search, sitemap P2.5, RU keywords; **тема главнее формы**, отбор по счёту, а не по позиции в DOM |
+| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.9** | + content_search, sitemap P2.5, RU keywords; **тема главнее формы**, отбор по счёту, а не по позиции в DOM; штрафы смотрят путь, а не весь URL |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.12** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions |
 | [25-action-framework.md](25-action-framework.md) | ✅ **v1.2** | Действия целиком: Tier 0 sinks (Google Docs + файл) · Tier 1 click · Tier 2 login/fill/submit · **Tier 3 handoff** (агент готовит, человек нажимает) — Phase 6–7 |
-| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.8** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3, T-2b, T-3d: 11 дефектов) |
+| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.9** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3, T-2b, T-3d, T-3e: 12 дефектов) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -98,6 +98,7 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 | Дата | Изменение |
 |------|-----------|
+| 2026-08-04 | **v1.6:** doc 21 -> v0.9, doc 26 -> v0.9 (T-3e: офлайн-замер всей цепочки — правка T-3d проверялась на хопе 2, а прогон умирал на хопе 1; штрафы формулы смотрят путь, а не весь URL; блокер прогона — VPN-тоннель машины) |
 | 2026-08-04 | **v1.5:** doc 21 -> v0.8, doc 03 -> v0.10, doc 20 -> v0.4 (испытание T-3d: тема главнее формы; лимит ссылок — предохранитель по памяти, отбор по счёту) |
 | 2026-08-03 | **v1.4:** doc 16 → v0.10 и doc 17 → v0.7 (язык ответа = язык запроса; каркас ответа следует тому же языку, подписи интерфейса остаются английскими) |
 | 2026-08-03 | **v1.3:** doc 16 → v0.9 и doc 17 → v0.6 (язык вывода — английский всегда; служебный текст не показывается человеку; раскрытие карточек и движение) |

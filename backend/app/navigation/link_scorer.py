@@ -146,12 +146,20 @@ def _section_signals(
     return score, tags
 
 
-def _penalties(href: str, *, intent: str) -> tuple[int, list[str]]:
+def _penalties(path: str, *, intent: str) -> tuple[int, list[str]]:
+    """Штрафы ищутся в **пути**, а не во всём URL: `/legal` совпадало внутри
+    `//legalbet.ru`, и каждая ссылка сайта-обзорника букмекеров теряла 8 очков как
+    юридическая страница (найдено офлайн-оракулом, doc 26 § T-3e). Так же ловились
+    `//cartier` на `/cart` и `//logincorp` на `/login`.
+
+    Запрос сознательно не смотрим: штраф про то, что страница **является** корзиной или
+    входом, а не про параметр `?next=/login` у обычной ссылки.
+    """
     score, tags = 0, []
-    if any(s in href for s in LEGAL_SUBSTR) and intent != "contact":
+    if any(s in path for s in LEGAL_SUBSTR) and intent != "contact":
         score -= 8
         tags.append("legal-avoid")
-    if any(s in href for s in FORBIDDEN_SUBSTR):
+    if any(s in path for s in FORBIDDEN_SUBSTR):
         score -= 10
         tags.append("forbidden")
     return score, tags
@@ -166,7 +174,7 @@ def score_link(
 
     content = _content_signals(text, path, task, hunting_article=intent == "content_search")
     section = _section_signals(text, href, path, intent=intent, hints=hints, on_homepage=on_homepage)
-    penalty = _penalties(href, intent=intent)
+    penalty = _penalties(path, intent=intent)
 
     score = content[0] + section[0] + penalty[0]
     tags = section[1] + content[1] + penalty[1]
