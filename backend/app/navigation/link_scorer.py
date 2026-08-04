@@ -30,10 +30,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from functools import lru_cache
+from typing import Any, NamedTuple
 from urllib.parse import urlparse
 
-from app.navigation.matching import matches_keyword
+from app.navigation.matching import any_keyword, matches_keyword, task_words, transliterate
 from app.navigation.path_hints import PathHints
 
 FORBIDDEN_SUBSTR = ("/login", "/signin", "/signup", "/register", "/cart", "/checkout", "/wp-admin")
@@ -56,6 +57,17 @@ W_ENTRY_PLAIN = 4
 W_ENTRY_ON_TOPIC = 8
 W_HEADLINE = 6
 W_BLIND = -4  # ссылка без текста и без темы: модель не может о ней судить
+# Жанр «обучающее» ниже темы (20), но выше формы записи (8): он отвечает на «как делать X»,
+# а форма отвечает только «это запись, а не раздел». Промо штрафуется как раз потому, что
+# тему оно проходит, а ответа не содержит — замер hop-1 (doc 26 § T-3g).
+#
+# Двойной вес — по той же причине, что у формы записи: **жанр усиливает тему, но не
+# заменяет её**. Замер: при одном весе безусловно `championat.com/guide/lifestyle` (жанр
+# есть, темы нет, текст пуст) поднялся на #9 и вытеснил статью про ставки из top-10 — ровно
+# та ошибка «форма выше темы», которая уже была сделана в T-3d.
+W_LEARN_ON_TOPIC = 10
+W_LEARN_PLAIN = 4
+W_PROMO = -10
 
 
 def _looks_like_entry(path: str) -> bool:
@@ -81,18 +93,47 @@ def _path_words(path: str) -> str:
     return path.replace("-", " ").replace("_", " ").replace("/", " ")
 
 
-def _task_hit(text: str, task: str) -> bool:
-    """Слово задачи в тексте ссылки: с начала слова и по префиксу (стем-подобно)."""
-    for word in task.casefold().split():
-        stripped = word.strip(".,:;!?()«»\"'")
-        if len(stripped) <= 3:
-            continue
-        if matches_keyword(text, stripped) or matches_keyword(text, stripped[:_MIN_TASK_PREFIX]):
+def _task_hit(text: str, words: tuple[str, ...]) -> bool:
+    """Слово задачи в тексте: с начала слова и по префиксу (стем-подобно)."""
+    for word in words:
+        if matches_keyword(text, word) or matches_keyword(text, word[:_MIN_TASK_PREFIX]):
             return True
     return False
 
 
-def _content_signals(text: str, path: str, task: str, *, hunting_article: bool) -> tuple[int, list[str]]:
+class TaskGenre(NamedTuple):
+    """Жанровые словари, уже разобранные под конкретную задачу."""
+
+    learn: tuple[str, ...]
+    promo: tuple[str, ...]  # пусто, когда промо и есть запрос пользователя
+
+
+@lru_cache(maxsize=256)
+def _task_genre(task: str, learn: tuple[str, ...], promo: tuple[str, ...]) -> TaskGenre:
+    """Штраф промо выключается, если о промо и спрашивают («найди бонусы букмекеров»).
+    Транслит проверяется тоже: запрос может прийти латиницей («najdi bonusy»)."""
+    low = task.casefold()
+    asks_promo = any_keyword(low, promo) or any_keyword(transliterate(low), promo)
+    return TaskGenre(learn=learn, promo=() if asks_promo else promo)
+
+
+@lru_cache(maxsize=256)
+def _task_forms(task: str, stopwords: frozenset[str]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Значимые слова задачи и их транслитерация. Кэш по задаче: на портале сотни ссылок,
+    и разбирать одну и ту же задачу для каждой — впустую."""
+    words = task_words(task, stopwords)
+    return words, tuple(transliterate(w) for w in words)
+
+
+def _content_signals(
+    text: str,
+    path: str,
+    task: str,
+    *,
+    hunting_article: bool,
+    stopwords: frozenset[str],
+    genre: TaskGenre,
+) -> tuple[int, list[str]]:
     """Сигналы про СОДЕРЖАНИЕ: тема, форма записи, заголовок, нечитаемость.
 
     Порядок весов здесь и есть политика: тема главная, форма только разрешает ничью
@@ -100,7 +141,10 @@ def _content_signals(text: str, path: str, task: str, *, hunting_article: bool) 
     в турниры, теги и видео).
     """
     score, tags = 0, []
-    on_topic = _task_hit(text, task) or _task_hit(_path_words(path), task)
+    words, translit = _task_forms(task, stopwords)
+    path_words = _path_words(path)
+    # Транслит сопоставляется только с путём: текст ссылки на русском ловится словами как есть.
+    on_topic = _task_hit(text, words) or _task_hit(path_words, words) or _task_hit(path_words, translit)
     if on_topic:
         score += W_TASK
         tags.append("task-kw")
@@ -115,6 +159,31 @@ def _content_signals(text: str, path: str, task: str, *, hunting_article: bool) 
     if not text.strip() and not on_topic:
         score += W_BLIND
         tags.append("blind")
+    if hunting_article:
+        score, tags = _genre_signals(score, tags, text, path_words, genre=genre, on_topic=on_topic)
+    return score, tags
+
+
+def _genre_signals(
+    score: int, tags: list[str], text: str, path_words: str, *, genre: TaskGenre, on_topic: bool
+) -> tuple[int, list[str]]:
+    """Обучающий жанр против промо — только при охоте за статьёй.
+
+    Задача «как делать ставки на футбол» просит **обучающий** материал, а формула не
+    отличала его ни от новости, ни от бонусной акции: у промо есть и тема («ставки»), и
+    форма записи, и длинный заголовок, поэтому на корне букмекерского обзорника промо
+    занимало девять мест из десяти (замер hop-1, doc 26 § T-3g).
+
+    Штраф промо снимается, если промо и есть запрос пользователя: «найди бонусы
+    букмекеров» — законный сценарий, и ломать его нельзя.
+    """
+    haystack = f"{text} {path_words}"
+    if any_keyword(haystack, genre.learn):
+        score += W_LEARN_ON_TOPIC if on_topic else W_LEARN_PLAIN
+        tags.append("learn")
+    if genre.promo and any_keyword(haystack, genre.promo):
+        score += W_PROMO
+        tags.append("promo")
     return score, tags
 
 
@@ -172,7 +241,14 @@ def score_link(
     text = (link.get("text") or "").casefold()
     path = urlparse(href).path or "/"
 
-    content = _content_signals(text, path, task, hunting_article=intent == "content_search")
+    content = _content_signals(
+        text,
+        path,
+        task,
+        hunting_article=intent == "content_search",
+        stopwords=hints.task_stopwords,
+        genre=_task_genre(task, hints.learn_markers, hints.promo_markers),
+    )
     section = _section_signals(text, href, path, intent=intent, hints=hints, on_homepage=on_homepage)
     penalty = _penalties(path, intent=intent)
 

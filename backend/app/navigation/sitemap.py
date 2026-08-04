@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.navigation.matching import task_words
 from app.navigation.path_hints import PathHints
 from app.observer.links import normalize_url, same_site
 
@@ -23,32 +24,9 @@ SITEMAP_TIMEOUT_S = 8.0
 CONTENT_PATH_MARKERS = ("/blog", "/article", "/news", "/guides", "/post")
 
 _LOC = re.compile(r"<loc>\s*([^<]+?)\s*</loc>", re.IGNORECASE)
-_WORD = re.compile(r"[a-zа-яё0-9]{4,}", re.IGNORECASE)
-# служебные слова задач — не сигнал в <loc> (RU+EN)
-_STOPWORDS = frozenset(
-    {
-        "find",
-        "article",
-        "about",
-        "with",
-        "from",
-        "what",
-        "where",
-        "this",
-        "that",
-        "page",
-        "site",
-        "website",
-        "найди",
-        "найти",
-        "статью",
-        "статья",
-        "сайт",
-        "сайте",
-        "текст",
-        "guide",
-    }
-)
+# Служебные слова задач («найди статью на сайте») — не сигнал в <loc>. Словарь переехал в
+# `data/navigation/path_hints.yaml` (`task_stopwords`): у него появился второй потребитель —
+# оценка ссылок, и копия в коде разошлась бы с ним.
 
 
 def sitemap_enabled(use_sitemap: str, intent: str) -> bool:
@@ -102,7 +80,9 @@ async def _fetch_locs(client: httpx.AsyncClient, url: str, *, allow_nested: bool
 
 def _rank_by_intent(urls: list[str], *, intent: str, task: str, hints: PathHints) -> list[str]:
     if intent == "content_search":
-        keywords = {w.lower() for w in _WORD.findall(task)} - _STOPWORDS
+        # Словарь служебных слов — общий с оценкой ссылок (`data/navigation/path_hints.yaml`):
+        # он жил здесь в коде, и второй потребитель завёл бы копию.
+        keywords = set(task_words(task, hints.task_stopwords))
 
         def score(url: str) -> int:
             path = urlparse(url).path.lower()
