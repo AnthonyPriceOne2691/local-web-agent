@@ -54,6 +54,18 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _nav_error(record: RunRecord) -> str:
+    """Причина, по которой страница не открылась, записана шагом OBSERVE (`nav_error: …`),
+    а в `error_message` её нет вовсе: прогон закончился штатно, просто без страниц. Живой
+    прогон T-3h — двум сайтам из трёх человек получил «не удалось прочитать» без единой
+    подробности, хотя причина (`Page.goto: Timeout 30000ms`) лежала в записи."""
+    for step in reversed(record.steps):
+        note = step.note or ""
+        if note.startswith("nav_error:"):
+            return note
+    return ""
+
+
 class ResearchRunner:
     def __init__(
         self,
@@ -336,7 +348,13 @@ class ResearchRunner:
         excluded = [
             ExcludedSite(
                 start_url=r.config.start_url,
-                reason=say.exclusion_reason(r.status, r.metadata.get("blocked_by"), r.error_message),
+                reason=say.exclusion_reason(
+                    r.status,
+                    r.metadata.get("blocked_by"),
+                    r.error_message or _nav_error(r),
+                    stage=str(r.metadata.get("failed_stage") or ""),
+                    pages_read=r.pages_visited,
+                ),
             )
             # сайт, перекраленный успешно (re-crawl через LLM-план), не excluded
             for r in crawled

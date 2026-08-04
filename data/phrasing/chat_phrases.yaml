@@ -34,6 +34,9 @@ en:
   reading_cut: >-
     I did not read everything: {items} — so "nothing found" here can mean "not read
     far enough", not "not on the site".
+  # Сайт прочитан, а ответ не собрался — это не «сайт не читается» (T-3h).
+  read_but_no_answer: "read {pages} page(s), but the answer never came together — {detail}"
+  no_page_opened: "not a single page opened"
 
 ru:
   winner: "Лучший из всех: {label} — {reason}"
@@ -55,6 +58,8 @@ ru:
   reading_cut: >-
     Прочитал не всё: {items} — поэтому «ничего не найдено» здесь может значить «не
     дочитал», а не «на сайте нет».
+  read_but_no_answer: "прочитано {pages} стр., но ответ не собрался — {detail}"
+  no_page_opened: "ни одна страница не открылась"
 
 # Почему сайт не попал в сравнение. Раньше строка начиналась со статуса кода
 # (`failed: …`) — читателю это ничего не говорит.
@@ -83,6 +88,9 @@ technical:
     robots: "robots.txt does not allow it"
     never_loaded: "the page never finished loading"
     kept_reloading: "the page kept reloading"
+    # Локальная модель — не сайт. До T-3h её таймаут выдавался за молчание сайта.
+    llm_timeout: "the local model did not answer in time"
+    llm_failed: "the local model could not put an answer together"
   ru:
     timeout: "сайт не ответил за отведённое время"
     dns: "адрес не разрешился"
@@ -91,3 +99,5 @@ technical:
     robots: "robots.txt это запрещает"
     never_loaded: "страница так и не догрузилась"
     kept_reloading: "страница всё время перезагружалась"
+    llm_timeout: "локальная модель не ответила за отведённое время"
+    llm_failed: "локальная модель не смогла собрать ответ"

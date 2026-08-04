@@ -136,6 +136,39 @@ def test_blocker_names_pass_through():
     assert say(RU_TASK).exclusion_reason("blocked", "captcha", None) == "закрылся от нас — captcha"
 
 
+# --- причина исключения обязана называть, кто именно не справился (T-3h) ---
+
+
+def test_site_that_was_read_but_failed_at_synthesis_is_not_called_unreadable():
+    """Живой прогон T-3h: `legalbet.ru` прочитал **4 страницы**, включая целевую статью, и
+    упал на синтезе (`httpx.ReadTimeout` от локальной модели). Человеку сказали «не удалось
+    прочитать — сайт не ответил за отведённое время»: неверно дважды — страницы прочитаны, и
+    не ответила **модель**, а не сайт."""
+    ru = say(RU_TASK).exclusion_reason("failed", None, "ReadTimeout", stage="SYNTHESIZE", pages_read=4)
+    assert "4" in ru and "модель" in ru
+    assert "сайт не ответил" not in ru
+
+    en = say(EN_TASK).exclusion_reason("failed", None, "ReadTimeout", stage="SYNTHESIZE", pages_read=4)
+    assert "4" in en and "model" in en
+    assert not _has_cyrillic(en)
+
+
+def test_site_where_no_page_opened_says_exactly_that():
+    """Тот же прогон: `sports.ru` и `championat.com` дали 0 страниц (`Page.goto: Timeout`), и
+    человек получил «не удалось прочитать» дважды без единой подробности."""
+    reason = say(RU_TASK).exclusion_reason(
+        "failed", None, "nav_error: Page.goto: Timeout 30000ms exceeded", pages_read=0
+    )
+    assert "ни одна страница не открылась" in reason
+    assert "сайт не ответил за отведённое время" in reason
+
+
+def test_ordinary_failure_wording_is_unchanged():
+    """Негативный контроль: без контекста стадии формулировка та же, что была."""
+    assert say(RU_TASK).exclusion_reason("failed", None, None) == "не удалось прочитать"
+    assert say(EN_TASK).exclusion_reason("blocked", "captcha", None) == "blocked us — captcha"
+
+
 # --- промпты ---
 
 

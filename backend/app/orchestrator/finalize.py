@@ -25,6 +25,27 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def fail_run(record: RunRecord, exc: BaseException, *, store: RunStore) -> RunRecord:
+    """Прогон упал: записать причину так, чтобы её можно было объяснить человеку.
+
+    Тема та же, что у `finalize_run` — чем прогон закончился, поэтому живёт здесь (и
+    `loop.py` держится в пределах 500 LOC, doc 18).
+
+    Кроме сообщения пишется **стадия падения**: без неё `httpx.ReadTimeout` от локальной
+    модели неотличим от молчания сайта, а прогон при этом мог прочитать страницы. Живой
+    прогон T-3h: 4 страницы прочитаны, включая целевую статью, а сайт был подан человеку
+    как «не удалось прочитать — сайт не ответил» (doc 24 § Причина исключения).
+    """
+    record.status = "failed"
+    # str(httpx.ReadTimeout) пуст — без имени типа excluded[] нечитаем (M-H4)
+    record.error_message = (str(exc) or type(exc).__name__)[:500]
+    # `CrawlStep.state` — строка (StrEnum пишется значением), поэтому без `.value`.
+    record.metadata["failed_stage"] = record.steps[-1].state if record.steps else "prepare"
+    record.finished_at = _now()
+    store.save(record)
+    return record
+
+
 def finalize_run(
     record: RunRecord,
     result: ExtractionResult,

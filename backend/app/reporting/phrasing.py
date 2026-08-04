@@ -85,12 +85,44 @@ class Phrases:
             raise KeyError(f"chat_phrases.yaml: нет фразы '{key}'")
         return str(template).format(**kwargs)
 
-    def exclusion_reason(self, status: str, blocked_by: str | None, error: str | None) -> str:
-        """Одно предложение: что случилось с сайтом и, если известно, из-за чего."""
+    def exclusion_reason(
+        self,
+        status: str,
+        blocked_by: str | None,
+        error: str | None,
+        *,
+        stage: str = "",
+        pages_read: int | None = None,
+    ) -> str:
+        """Одно предложение: что случилось с сайтом и, если известно, из-за чего.
+
+        Стадия и число прочитанных страниц нужны, чтобы не врать про виновника. Живой
+        прогон T-3h: `legalbet.ru` прочитал **4 страницы**, включая целевую статью, и упал
+        на синтезе таймаутом **локальной модели** — а человеку было сказано «не удалось
+        прочитать — сайт не ответил за отведённое время». Неверно дважды.
+
+        `pages_read=None` — «неизвестно», и тогда формулировка прежняя. Ноль и неизвестность
+        различаются сознательно: с общим дефолтом `0` приписка «ни одна страница не
+        открылась» полезла бы в каждое сообщение, включая те, где страницы читались.
+        """
         table = (self._table.get("exclusion") or {}).get(self.lang) or {}
         what = table.get(status) or status.replace("_", " ")
         detail = self.humanize_detail(blocked_by or error)
+        if stage == "SYNTHESIZE" and pages_read:
+            low = (error or "").casefold()
+            cause = self._technical("llm_timeout") if "timeout" in low else ""
+            cause = cause or detail or self._technical("llm_failed")
+            return self.say("read_but_no_answer", pages=pages_read, detail=cause)
+        if status == "failed" and pages_read == 0 and not blocked_by:
+            nothing = self.say("no_page_opened")
+            return f"{what} — {nothing}" + (f", {detail}" if detail else "")
         return f"{what} — {detail}" if detail else what
+
+    def _technical(self, key: str) -> str:
+        """Причина из таблицы `technical` на языке запроса. Отдельно от `say`: там блок
+        языка, а причины лежат своим словарём, и путать их — источник KeyError."""
+        table = (self._table.get("technical") or {}).get(self.lang) or {}
+        return str(table.get(key) or "")
 
     def humanize_detail(self, detail: str | None) -> str:
         """Короткая человеческая причина или пусто. Стеки и внутренние типы не проходят.

@@ -26,7 +26,7 @@ from app.orchestrator.attended import AttendedGate, pause_with_window, reobserve
 from app.orchestrator.capture import dismiss_consent, step_capturer
 from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
-from app.orchestrator.finalize import finalize_run
+from app.orchestrator.finalize import fail_run, finalize_run
 from app.orchestrator.interaction import REPEAT_LIMITS, act_on_element, action_signature
 from app.orchestrator.observe import navigate_and_observe
 from app.orchestrator.robots import RobotsPolicy
@@ -134,13 +134,9 @@ class CrawlOrchestrator:
             )
         except Exception as exc:
             logger.exception("crawl run %s crashed at %s", record.id, record.current_url)
-            record.status = "failed"
-            # str(httpx.ReadTimeout) пуст — без имени типа excluded[] нечитаем (M-H4)
-            record.error_message = (str(exc) or type(exc).__name__)[:500]
-            record.finished_at = _now()
-            self._store.save(record)
+            failed = fail_run(record, exc, store=self._store)
             await self._safe_close()
-            return record
+            return failed
 
         await self._safe_close()
         return finalize_run(
