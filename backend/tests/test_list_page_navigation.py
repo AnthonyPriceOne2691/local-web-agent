@@ -39,9 +39,21 @@ SECTION_PAGES = (
 )
 
 
-def scored(href: str, text: str = "", *, on_homepage: bool = False, intent: str = "content_search"):
+def scored(
+    href: str,
+    text: str = "",
+    *,
+    on_homepage: bool = False,
+    intent: str = "content_search",
+    page_context: str = "",
+):
     return score_link(
-        {"href": href, "text": text}, intent=intent, task=TASK, hints=HINTS, on_homepage=on_homepage
+        {"href": href, "text": text},
+        intent=intent,
+        task=TASK,
+        hints=HINTS,
+        on_homepage=on_homepage,
+        page_context=page_context,
     )
 
 
@@ -201,6 +213,49 @@ def test_prefix_matching_admits_its_false_positives():
 def test_cyrillic_link_text_still_matches_without_translit():
     """Транслитерация — добавка, а не замена: русский текст ссылки должен ловиться как был."""
     assert "task-kw" in scored("https://x.test/p/1", "Всё о ставках на футбол")[1]
+
+
+# --- выбор ВНУТРИ раздела: различает то, чего нет в контексте страницы ---
+
+
+def test_subject_not_in_page_context_breaks_the_tie_inside_a_section():
+    """Замер на хабе `legalbet.ru/shkola-bettinga/`: эталонная статья про футбол стояла #26
+    из 212, а top-12 занимали «Как делать ставки в БК X» — все со счётом 44 против 38.
+    Признаки совпадали полностью (тема, жанр, форма записи), слов задачи совпало столько же
+    (2 против 2), и единственное различие работало **против** ответа: у эталона короткая
+    точная подпись «Ставки на футбол», поэтому он не получал `headline`.
+
+    Разделяющее правило нашлось без параметров: стоя в разделе «Школа ставок: обучение как
+    делать ставки», слова «делать» и «ставки» знают **все** ссылки раздела — они уже в
+    контексте самой страницы. Различает то слово задачи, которого в контексте нет.
+    """
+    hub = "https://legalbet.ru/shkola-bettinga/ Школа ставок на спорт: обучение как делать ставки"
+    etalon = scored(
+        "https://legalbet.ru/shkola-bettinga/stavki-na-futbol", "Ставки на футбол", page_context=hub
+    )
+    neighbour = scored(
+        "https://legalbet.ru/shkola-bettinga/kak-delat-stavki-v-bk-leon-instruktciya",
+        "Как делать ставки в БК «Леон»",
+        page_context=hub,
+    )
+    assert "subject" in etalon[1], etalon
+    assert "subject" not in neighbour[1], neighbour
+    assert etalon[0] > neighbour[0], (
+        f"эталон {etalon[0]} обязан обойти соседа {neighbour[0]}: он про футбол, а тот про БК"
+    )
+
+
+def test_without_page_context_scoring_is_unchanged():
+    """Негативный контроль: без контекста страницы признак не начисляется вовсе — иначе
+    правка меняла бы счёт везде, включая первый шаг с корня."""
+    assert "subject" not in scored("https://x.test/a/stavki-na-futbol", "Ставки на футбол")[1]
+
+
+def test_word_already_in_page_context_stops_discriminating():
+    """Обратная сторона правила: если слово задачи есть в контексте страницы, оно ничего не
+    различает и бонуса не даёт — иначе бонус получили бы **все** ссылки раздела."""
+    ctx = "https://x.test/football/ Футбол: новости"
+    assert "subject" not in scored("https://x.test/football/match-1", "Футбол: матч", page_context=ctx)[1]
 
 
 # --- обучающий жанр против промо (hop-1) ---

@@ -58,12 +58,25 @@ def _scored(
     on_homepage: bool,
     prefix: str = "",
     positive_only: bool = False,
+    page_context: str = "",
 ) -> list[Candidate]:
     """Ссылки → кандидаты со счётом. `prefix` в reason сохраняет источник ссылки:
-    без него нельзя отличить ссылку с текущей страницы от homepage или F1-пробы."""
+    без него нельзя отличить ссылку с текущей страницы от homepage или F1-пробы.
+
+    `page_context` — где стоит агент (URL + заголовок текущей страницы). Он нужен правилу
+    «различает то слово задачи, которого в контексте нет» (doc 21 § Выбор внутри раздела) и
+    передаётся только ссылкам **текущей** страницы: у кэша homepage и проб контекст другой.
+    """
     out: list[Candidate] = []
     for link in links:
-        score, reason = score_link(link, intent=intent, task=task, hints=hints, on_homepage=on_homepage)
+        score, reason = score_link(
+            link,
+            intent=intent,
+            task=task,
+            hints=hints,
+            on_homepage=on_homepage,
+            page_context=page_context,
+        )
         if positive_only and score <= 0:
             continue
         out.append(Candidate(href=link["href"], text=link["text"], score=score, reason=prefix + reason))
@@ -118,6 +131,7 @@ def build_candidates(
         task=task,
         hints=hints,
         on_homepage=is_home,
+        page_context=f"{snapshot.url} {snapshot.title or ''}",
     ):
         tier = P0_PAGE_SIGNAL if any(tag in cand.reason for tag in SIGNAL_TAGS) else P4_REST
         buckets[tier].append(cand)
