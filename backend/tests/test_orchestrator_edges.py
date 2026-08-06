@@ -219,6 +219,45 @@ async def test_synthesis_timeout_does_not_throw_away_the_pages_read(tmp_path):
     assert store.get(record.id).result is not None
 
 
+async def test_not_found_page_does_not_become_content(tmp_path):
+    """Проверка эталонов руками (doc 26): по записанному URL статьи лежала 404-страница
+    сайта — с меню и текстом «Запрашиваемая страница не найдена». Человек видит это сразу,
+    агент читал её как содержание сайта и отдавал в синтез.
+
+    Ожидание: страница остаётся посещённой (второй раз туда не идём), но **в синтез не
+    попадает**, а обход продолжается с прежней страницы — тот же ход, что при неудачной
+    навигации.
+    """
+    browser = FakeBrowserSession(
+        {
+            f"{ORIGIN}/": page_raw(
+                title="Home",
+                text="Betting guides and articles " * 30,
+                links=[(f"{ORIGIN}/gone", "Ставки на футбол")],
+            ),
+            f"{ORIGIN}/gone": page_raw(title="404 - Not found", text="Запрашиваемая страница не найдена"),
+        }
+    )
+    orch, store, _ = make_orchestrator(
+        tmp_path,
+        browser,
+        [
+            {"action": "navigate", "url": f"{ORIGIN}/gone", "reasoning": "похоже на статью"},
+            {"action": "stop", "reasoning": "больше нечего"},
+            NOT_FOUND_SYNTH,
+        ],
+    )
+
+    record = await orch.run(record_for(f"{ORIGIN}/", task="Найди статью про ставки на футбол"))
+
+    notes = [s.note or "" for s in record.steps]
+    assert any("not_found" in n for n in notes), notes
+    saved = store.get(record.id)
+    assert saved.result is not None
+    # Единственная прочитанная страница — главная: 404 в синтез не ушла.
+    assert saved.result.pages_visited == 1, "404-страница попала в содержание"
+
+
 async def test_consent_failure_marked_not_fatal(tmp_path):
     class BrokenConsent(FakeBrowserSession):
         async def eval_js(self, script: str):

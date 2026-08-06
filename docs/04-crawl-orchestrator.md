@@ -1,6 +1,6 @@
 # 04 — Crawl Orchestrator
 
-> Local Web Agent · Design doc · **v0.7** · 2026-08-02
+> Local Web Agent · Design doc · **v0.8** · 2026-08-06
 
 ## Назначение
 
@@ -187,7 +187,7 @@ Pick highest score unvisited same-domain link → navigate.
 start_url: https://example.com
 task: "Find enterprise pricing and contact email for sales"
 max_pages: 10
-max_depth: 2
+max_depth: 3          # дефолт поднят 2 → 3 (doc 26 § Проверка эталона)
 same_domain_only: true
 allowed_domains: []          # empty = derive from start_url
 rate_limit_ms: 1000
@@ -268,3 +268,4 @@ submit-confirm (doc 25 § Tier 3).
 | 2026-07-05 | **v0.5 (review):** extract_now семантика определена (назад в PLAN без re-OBSERVE + loop guard #11); policies #12 redirect re-check, #13 cancel flag; config: use_sitemap, dismiss_cookie_banners |
 | 2026-07-05 | **v0.6 (review-2):** max_depth = **hop depth**, не path-сегменты (иначе ломались UC-2 и sitemap tier); INIT landing-domain rule (редирект первой навигации переопределяет allowed_domains); max_article_candidates |
 | 2026-08-02 | **v0.7:** § Реализация — стадии как функции, `RunState` + `StepOutcome`; поведение не менялось (поставка `orchestrator-complexity`) |
+| 2026-08-06 | **v0.8:** дефолт `max_depth` 2 → 3 (doc 26 § Проверка эталона: обучающие статьи на реальных порталах лежат на 2–3 хопах, при 2 путь недостижим по построению) |

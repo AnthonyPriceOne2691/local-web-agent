@@ -13,7 +13,7 @@ class RunConfig(BaseModel):
     start_url: str
     task: str = Field(min_length=1, max_length=2000)  # contract P-2
     max_pages: int = Field(default=10, ge=1, le=50)
-    max_depth: int = Field(default=2, ge=0, le=10)  # hop depth (D-13)
+    max_depth: int = Field(default=3, ge=0, le=10)  # hop depth (D-13); 2 → 3, doc 26
     rate_limit_ms: int = Field(default=1000, ge=0)
     respect_robots: bool = True
     capture_screenshots: Literal["auto", "always", "never"] = "auto"

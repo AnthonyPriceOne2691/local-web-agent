@@ -28,7 +28,7 @@ from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.finalize import fail_run, finalize_run
 from app.orchestrator.interaction import REPEAT_LIMITS, act_on_element, action_signature
-from app.orchestrator.observe import navigate_and_observe
+from app.orchestrator.observe import drop_dead_page, navigate_and_observe
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.run_state import Prepared, RunState, StepOutcome
 from app.orchestrator.states import State
@@ -86,7 +86,6 @@ class CrawlOrchestrator:
         self._capture = step_capturer(browser, store, self._dismiss_consent)
         self._vision = VisionAnalyzer(llm_client, settings)
 
-    # ------------------------------------------------------------------ run
     # ------------------------------------------------------------------ run
     async def run(
         self,
@@ -265,6 +264,8 @@ class CrawlOrchestrator:
         record.current_url = snapshot.url
         if snapshot.status in ("captcha", "login_wall"):  # blocker (doc 04)
             return await self._handle_blocker(record, st, gate)
+        if snapshot.status == "error":  # «страница не найдена» — это не содержание
+            return drop_dead_page(record, st, self._store)
         self._store.save(record)
         return StepOutcome.PROCEED
 

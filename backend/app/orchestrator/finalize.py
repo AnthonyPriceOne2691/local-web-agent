@@ -99,7 +99,10 @@ def finalize_run(
     result.run_id = record.id
     result.task = cfg.task
     result.start_url = cfg.start_url
-    result.pages_visited = len(visited)
+    # Страницы, на которых стоит ответ, а не все открытые: 404-страница расходует бюджет
+    # (её мы правда запросили), но содержанием не является и в ответ не входит — иначе
+    # «прочитано 2 стр.» там, где прочитана одна (doc 26 § Проверка эталона).
+    result.pages_visited = len(snapshots) or len(visited)
     result.duration_seconds = round(time.perf_counter() - started_perf, 1)
     result.generated_at = _now()
     if record.metadata.get("blocked_by"):

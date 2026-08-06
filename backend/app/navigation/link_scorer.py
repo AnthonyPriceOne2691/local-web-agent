@@ -76,7 +76,7 @@ W_PROMO = -10
 W_SUBJECT = 8
 
 
-def _looks_like_entry(path: str) -> bool:
+def looks_like_entry(path: str) -> bool:
     """Похож ли путь на отдельную запись (статью), а не на раздел."""
     if path.endswith((".html", ".htm")):
         return True
@@ -185,7 +185,7 @@ def _content_signals(
     if on_topic:
         score += W_TASK
         tags.append("task-kw")
-    if _looks_like_entry(path):
+    if looks_like_entry(path):
         score += W_ENTRY_ON_TOPIC if (hunting_article and on_topic) else W_ENTRY_PLAIN
         tags.append("entry")
     if hunting_article and _looks_like_headline(text):

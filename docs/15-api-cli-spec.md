@@ -1,6 +1,6 @@
 # 15 — API & CLI Spec
 
-> Local Web Agent · Design doc · **v0.9** · 2026-08-05
+> Local Web Agent · Design doc · **v0.10** · 2026-08-06
 
 ## Base URL
 
@@ -55,7 +55,7 @@ Start async crawl (background task).
   "start_url": "https://example.com",
   "task": "Find enterprise pricing and sales contact",
   "max_pages": 10,
-  "max_depth": 2,
+  "max_depth": 3,
   "same_domain_only": true,
   "rate_limit_ms": 1000,
   "respect_robots": true,
@@ -155,7 +155,7 @@ Delete run + artifacts. 204. 409 если run активен (сначала can
 { "title": "optional", "rubric": null, "attended": false, "max_depth": null }
 ```
 
-**Response 201:** `{ "session_id": "...", "max_depth": 2 }`
+**Response 201:** `{ "session_id": "...", "max_depth": 3 }`
 
 `max_depth` (0..10, `null` = как настроен процесс — `LWA_MAX_DEPTH`) задаёт глубину обхода
 **на сессию** и в ответе возвращается **действующим числом**. Причина в замере, а не в
@@ -373,3 +373,4 @@ MVP: CLI polls `GET /runs/{id}` every 2 s.
 | 2026-07-19 | **v0.7 (Phase 5 attended):** `POST /runs/{id}/resume` + `POST /sessions/{id}/resume` (снять паузу `waiting_user`); SSE-событие `challenge_wait`; CLI `--attended`; `POST /sessions` принимает `attended`. Human-in-the-loop прохождение anti-bot challenge (doc 24 § Attended-режим) |
 | 2026-07-20 | **v0.8 (Tier 3 handoff, doc 25):** `challenge_wait` payload +`action?` (описание подготовленного шага); `kind` пополнен `confirm_submit` (Tier 2, был с v0.6 doc 24) и `handoff` (Tier 3 — человек жмёт финальную кнопку сам в видимом браузере) |
 | 2026-08-05 | **v0.9 (глубина перестала быть тихой):** `POST /sessions` принимает `max_depth` (0..10, `null` = настройка процесса) и возвращает **действующее** число; у CLI `agent research` появился `--max-depth`, а строка старта печатает `(hop depth N)`. Причина в сорванном замере: глубина приходила только из окружения сервера, два прогона одной команды разошлись 2 против 3 (doc 26 § T-3f-1) |
+| 2026-08-06 | **v0.10:** дефолт `max_depth` в примерах 2 → 3 вслед за настройкой (doc 26 § Проверка эталона) |

@@ -215,6 +215,78 @@ def test_cyrillic_link_text_still_matches_without_translit():
     assert "task-kw" in scored("https://x.test/p/1", "Всё о ставках на футбол")[1]
 
 
+# --- подраздел текущей страницы: ход вглубь, который делает человек ---
+
+
+def test_subsection_of_the_current_page_reaches_the_queue():
+    """Проверка эталона руками (doc 26): я дошёл до статьи ходом корень → «Ставочная вики»
+    → **«Виды спорта»** → статья. У агента ссылка на подраздел стояла **#33 из 374** — за
+    пределами top-10, а `I-H6` дальше очереди не пускает, поэтому этот ход был ему закрыт.
+
+    Страница-хаб забита записями с высоким счётом (все со статьями «Стратегии ставок на …»),
+    и подраздел по счёту с ними не тягается: у него нет ни формы записи, ни заголовка. Значит
+    место в очереди ему надо **резервировать**, а не добирать очками — иначе агент видит
+    только соседние статьи и вглубь не идёт никогда.
+    """
+    entries = [
+        (f"{ORIGIN}/betting/wiki/{3128156 + i}-luchshie-strategii-stavok-na-total", f"Стратегии ставок {i}")
+        for i in range(20)
+    ]
+    subsections = [
+        (f"{ORIGIN}/betting/wiki/vidy-sporta", "Виды спорта"),
+        (f"{ORIGIN}/betting/wiki/vidy-stavok", "Виды ставок"),
+    ]
+    snapshot = snap(
+        f"{ORIGIN}/betting/wiki",
+        title="Ставочная вики: как делать ставки",
+        text="Обширный источник знаний о ставках " * 20,
+        links=entries + subsections,
+    )
+    queue = build_candidates(
+        snapshot=snapshot,
+        homepage=None,
+        intent="content_search",
+        task=TASK,
+        hints=HINTS,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[],
+        legal_probes=[],
+    )
+    hrefs = [c.href for c in queue]
+    assert any("vidy-" in h for h in hrefs), f"подраздела нет в очереди: {hrefs}"
+    # Записи страницы при этом остаются: слот резервируется, а не отдаётся весь список.
+    assert sum(1 for h in hrefs if "-luchshie-" in h) >= 7
+
+
+def test_entry_is_not_mistaken_for_a_subsection():
+    """Статья по пути тоже «глубже» текущей страницы — но это запись, а не подраздел, и
+    резервировать под неё слот не нужно: она попадает в очередь по счёту."""
+    from app.navigation.link_scorer import looks_like_entry
+
+    assert looks_like_entry("/betting/wiki/3128156-luchshie-strategii-stavok")
+    assert not looks_like_entry("/betting/wiki/vidy-sporta")
+
+
+def test_homepage_has_no_subsections_to_reserve():
+    """На главной «подраздел» — это любой раздел сайта, и резервировать было бы нечего:
+    правило про ход **вглубь текущей** страницы."""
+    links = [(f"{ORIGIN}/betting", "Ставки"), (f"{ORIGIN}/football", "Футбол")]
+    queue = build_candidates(
+        snapshot=snap(f"{ORIGIN}/", title="Главная", text="site " * 40, links=links),
+        homepage=None,
+        intent="content_search",
+        task=TASK,
+        hints=HINTS,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[],
+        legal_probes=[],
+    )
+    assert [c.href for c in queue]  # очередь есть
+    assert not any("subsection" in c.reason for c in queue)
+
+
 # --- выбор ВНУТРИ раздела: различает то, чего нет в контексте страницы ---
 
 

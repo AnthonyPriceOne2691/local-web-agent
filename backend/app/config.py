@@ -71,7 +71,11 @@ class Settings(BaseSettings):
 
     # Crawl defaults (doc 04)
     max_pages: int = 10
-    max_depth: int = 2  # hop depth, D-13
+    # hop depth (D-13). Дефолт поднят 2 → 3 по проверке эталонов руками (doc 26 § Проверка
+    # эталона): у обоих сайтов, где обучающая статья реально есть, она лежит на 2–3 хопах
+    # от корня (`sports.ru`: корень → вики → «Виды спорта» → статья), и при 2 путь был
+    # недостижим **по построению** — сколько навигацию ни улучшай.
+    max_depth: int = 3
     rate_limit_ms: int = 1000
     page_timeout_ms: int = 30000
     respect_robots: bool = True
