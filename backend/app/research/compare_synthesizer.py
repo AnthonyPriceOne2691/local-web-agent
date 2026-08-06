@@ -112,6 +112,9 @@ class CompareSynthesizer:
             temperature=self._s.compare_temperature,  # воспроизводимость важнее разнообразия
             num_ctx=num_ctx,
             max_tokens=self._s.synth_max_tokens,
+            # Стадия `compare` весит 36–41 % реальной сессии — бюджет ей нужен тот же, что
+            # синтезу: у общего 300 s запаса на тяжёлый случай нет (замер, doc 20).
+            timeout_s=self._s.synth_timeout_s,
         )
         if raw is None:
             return (ComparisonResult(status="failed", narrative=strip_thinking(content)[:500]), stats)

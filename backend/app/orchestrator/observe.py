@@ -19,6 +19,7 @@ from app.observer.blockers import looks_like_challenge
 from app.observer.snapshot import build_snapshot
 from app.orchestrator.capture import SPA_TEXT_THRESHOLD, maybe_screenshot
 from app.orchestrator.robots import RobotsPolicy
+from app.orchestrator.run_state import RunState, StepOutcome
 from app.orchestrator.states import State
 from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import PageSnapshot
@@ -130,3 +131,26 @@ async def _raw_with_spa_fallback(browser: BrowserSession, final_url: str) -> dic
         # снапшот всё равно снимаем. Уровень debug, а не warning.
         logger.debug("networkidle wait skipped for %s (%s)", final_url, type(exc).__name__)
     return await browser.raw_snapshot()
+
+
+def drop_dead_page(record: RunRecord, st: RunState, store: RunStore) -> StepOutcome:
+    """404 не идёт ни в синтез, ни в PLAN: её ссылки — шаблон сайта, а не содержание.
+
+    Найдено проверкой эталонов руками (doc 26 § Проверка эталона): по записанному в журнале
+    URL статьи лежала 404-страница с меню и футером, и агент читал её как содержание сайта.
+    Ход тот же, что при неудачной навигации: страница остаётся посещённой (второй раз туда
+    не пойдём и бюджет она потратила честно), а PLAN продолжается с прежней страницы.
+    """
+    dead = st.snapshots.pop()  # remember() добавил её строкой выше
+    record.steps.append(
+        CrawlStep(
+            index=st.step_index,
+            state=State.OBSERVE,
+            url=dead.url,
+            note="not_found: страница не найдена, в содержание не берём",
+        )
+    )
+    st.current = st.snapshots[-1] if st.snapshots else None
+    record.pages_visited = len(st.visited)
+    store.save(record)
+    return StepOutcome.CONTINUE if st.current is not None else StepOutcome.STOP

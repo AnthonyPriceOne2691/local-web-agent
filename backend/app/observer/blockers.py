@@ -25,6 +25,19 @@ _CAPTCHA_SIGNALS = (
     "unusual traffic",
 )
 _LOGIN_URL_HINTS = ("/login", "/signin", "/sign-in")
+# Страница «не найдено». Найдено проверкой эталонов руками (doc 26 § Проверка эталона):
+# записанный URL статьи отдавал 404-страницу сайта — с меню, футером и текстом
+# «Запрашиваемая страница не найдена», — и агент читал её как содержание.
+_NOT_FOUND_SIGNALS = (
+    "404",
+    "страница не найдена",
+    "страницы не существует",
+    "такой страницы нет",
+    "page not found",
+    "not found",
+    "page doesn't exist",
+    "no longer available",
+)
 
 
 # full-page anti-bot challenge = «тонкая» страница-заглушка; реальная страница с
@@ -44,6 +57,11 @@ def detect_status(*, url: str, main_text: str, title: str, has_password_field: b
     is_login_url = any(h in url.lower() for h in _LOGIN_URL_HINTS)
     if is_login_url or (has_password_field and thin):
         return "login_wall"
+    # «Не найдено» проверяется ПОСЛЕ блокеров: anti-bot заглушка тоже тонкая, но её
+    # проходит человек, а 404 не проходит никто. Тот же thin-guard: статья про ошибку 404
+    # содержанием остаётся.
+    if thin and any(s in body for s in _NOT_FOUND_SIGNALS):
+        return "error"
     return "ok"
 
 

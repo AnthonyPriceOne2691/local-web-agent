@@ -39,9 +39,21 @@ SECTION_PAGES = (
 )
 
 
-def scored(href: str, text: str = "", *, on_homepage: bool = False, intent: str = "content_search"):
+def scored(
+    href: str,
+    text: str = "",
+    *,
+    on_homepage: bool = False,
+    intent: str = "content_search",
+    page_context: str = "",
+):
     return score_link(
-        {"href": href, "text": text}, intent=intent, task=TASK, hints=HINTS, on_homepage=on_homepage
+        {"href": href, "text": text},
+        intent=intent,
+        task=TASK,
+        hints=HINTS,
+        on_homepage=on_homepage,
+        page_context=page_context,
     )
 
 
@@ -201,6 +213,121 @@ def test_prefix_matching_admits_its_false_positives():
 def test_cyrillic_link_text_still_matches_without_translit():
     """Транслитерация — добавка, а не замена: русский текст ссылки должен ловиться как был."""
     assert "task-kw" in scored("https://x.test/p/1", "Всё о ставках на футбол")[1]
+
+
+# --- подраздел текущей страницы: ход вглубь, который делает человек ---
+
+
+def test_subsection_of_the_current_page_reaches_the_queue():
+    """Проверка эталона руками (doc 26): я дошёл до статьи ходом корень → «Ставочная вики»
+    → **«Виды спорта»** → статья. У агента ссылка на подраздел стояла **#33 из 374** — за
+    пределами top-10, а `I-H6` дальше очереди не пускает, поэтому этот ход был ему закрыт.
+
+    Страница-хаб забита записями с высоким счётом (все со статьями «Стратегии ставок на …»),
+    и подраздел по счёту с ними не тягается: у него нет ни формы записи, ни заголовка. Значит
+    место в очереди ему надо **резервировать**, а не добирать очками — иначе агент видит
+    только соседние статьи и вглубь не идёт никогда.
+    """
+    entries = [
+        (f"{ORIGIN}/betting/wiki/{3128156 + i}-luchshie-strategii-stavok-na-total", f"Стратегии ставок {i}")
+        for i in range(20)
+    ]
+    subsections = [
+        (f"{ORIGIN}/betting/wiki/vidy-sporta", "Виды спорта"),
+        (f"{ORIGIN}/betting/wiki/vidy-stavok", "Виды ставок"),
+    ]
+    snapshot = snap(
+        f"{ORIGIN}/betting/wiki",
+        title="Ставочная вики: как делать ставки",
+        text="Обширный источник знаний о ставках " * 20,
+        links=entries + subsections,
+    )
+    queue = build_candidates(
+        snapshot=snapshot,
+        homepage=None,
+        intent="content_search",
+        task=TASK,
+        hints=HINTS,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[],
+        legal_probes=[],
+    )
+    hrefs = [c.href for c in queue]
+    assert any("vidy-" in h for h in hrefs), f"подраздела нет в очереди: {hrefs}"
+    # Записи страницы при этом остаются: слот резервируется, а не отдаётся весь список.
+    assert sum(1 for h in hrefs if "-luchshie-" in h) >= 7
+
+
+def test_entry_is_not_mistaken_for_a_subsection():
+    """Статья по пути тоже «глубже» текущей страницы — но это запись, а не подраздел, и
+    резервировать под неё слот не нужно: она попадает в очередь по счёту."""
+    from app.navigation.link_scorer import looks_like_entry
+
+    assert looks_like_entry("/betting/wiki/3128156-luchshie-strategii-stavok")
+    assert not looks_like_entry("/betting/wiki/vidy-sporta")
+
+
+def test_homepage_has_no_subsections_to_reserve():
+    """На главной «подраздел» — это любой раздел сайта, и резервировать было бы нечего:
+    правило про ход **вглубь текущей** страницы."""
+    links = [(f"{ORIGIN}/betting", "Ставки"), (f"{ORIGIN}/football", "Футбол")]
+    queue = build_candidates(
+        snapshot=snap(f"{ORIGIN}/", title="Главная", text="site " * 40, links=links),
+        homepage=None,
+        intent="content_search",
+        task=TASK,
+        hints=HINTS,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[],
+        legal_probes=[],
+    )
+    assert [c.href for c in queue]  # очередь есть
+    assert not any("subsection" in c.reason for c in queue)
+
+
+# --- выбор ВНУТРИ раздела: различает то, чего нет в контексте страницы ---
+
+
+def test_subject_not_in_page_context_breaks_the_tie_inside_a_section():
+    """Замер на хабе `legalbet.ru/shkola-bettinga/`: эталонная статья про футбол стояла #26
+    из 212, а top-12 занимали «Как делать ставки в БК X» — все со счётом 44 против 38.
+    Признаки совпадали полностью (тема, жанр, форма записи), слов задачи совпало столько же
+    (2 против 2), и единственное различие работало **против** ответа: у эталона короткая
+    точная подпись «Ставки на футбол», поэтому он не получал `headline`.
+
+    Разделяющее правило нашлось без параметров: стоя в разделе «Школа ставок: обучение как
+    делать ставки», слова «делать» и «ставки» знают **все** ссылки раздела — они уже в
+    контексте самой страницы. Различает то слово задачи, которого в контексте нет.
+    """
+    hub = "https://legalbet.ru/shkola-bettinga/ Школа ставок на спорт: обучение как делать ставки"
+    etalon = scored(
+        "https://legalbet.ru/shkola-bettinga/stavki-na-futbol", "Ставки на футбол", page_context=hub
+    )
+    neighbour = scored(
+        "https://legalbet.ru/shkola-bettinga/kak-delat-stavki-v-bk-leon-instruktciya",
+        "Как делать ставки в БК «Леон»",
+        page_context=hub,
+    )
+    assert "subject" in etalon[1], etalon
+    assert "subject" not in neighbour[1], neighbour
+    assert etalon[0] > neighbour[0], (
+        f"эталон {etalon[0]} обязан обойти соседа {neighbour[0]}: он про футбол, а тот про БК"
+    )
+
+
+def test_without_page_context_scoring_is_unchanged():
+    """Негативный контроль: без контекста страницы признак не начисляется вовсе — иначе
+    правка меняла бы счёт везде, включая первый шаг с корня."""
+    assert "subject" not in scored("https://x.test/a/stavki-na-futbol", "Ставки на футбол")[1]
+
+
+def test_word_already_in_page_context_stops_discriminating():
+    """Обратная сторона правила: если слово задачи есть в контексте страницы, оно ничего не
+    различает и бонуса не даёт — иначе бонус получили бы **все** ссылки раздела."""
+    ctx = "https://x.test/football/ Футбол: новости"
+    assert "subject" not in scored("https://x.test/football/match-1", "Футбол: матч", page_context=ctx)[1]
 
 
 # --- обучающий жанр против промо (hop-1) ---

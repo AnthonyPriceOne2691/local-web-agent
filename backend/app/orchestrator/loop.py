@@ -28,12 +28,13 @@ from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.finalize import fail_run, finalize_run
 from app.orchestrator.interaction import REPEAT_LIMITS, act_on_element, action_signature
-from app.orchestrator.observe import navigate_and_observe
+from app.orchestrator.observe import drop_dead_page, navigate_and_observe
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.run_state import Prepared, RunState, StepOutcome
 from app.orchestrator.states import State
 from app.orchestrator.synthesize import run_synthesis
 from app.orchestrator.vision_batch import run_vision_batch
+from app.reporting.phrasing import Phrases
 from app.schemas.run import CrawlStep, RunRecord
 from app.schemas.snapshot import AgentAction, Candidate, PageSnapshot
 from app.storage.run_store import RunStore
@@ -86,7 +87,6 @@ class CrawlOrchestrator:
         self._vision = VisionAnalyzer(llm_client, settings)
 
     # ------------------------------------------------------------------ run
-    # ------------------------------------------------------------------ run
     async def run(
         self,
         record: RunRecord,
@@ -134,7 +134,13 @@ class CrawlOrchestrator:
             )
         except Exception as exc:
             logger.exception("crawl run %s crashed at %s", record.id, record.current_url)
-            failed = fail_run(record, exc, store=self._store)
+            failed = fail_run(
+                record,
+                exc,
+                store=self._store,
+                snapshots=st.snapshots,
+                say=Phrases.load(self._s.data_dir, record.config.task),
+            )
             await self._safe_close()
             return failed
 
@@ -258,6 +264,8 @@ class CrawlOrchestrator:
         record.current_url = snapshot.url
         if snapshot.status in ("captcha", "login_wall"):  # blocker (doc 04)
             return await self._handle_blocker(record, st, gate)
+        if snapshot.status == "error":  # «страница не найдена» — это не содержание
+            return drop_dead_page(record, st, self._store)
         self._store.save(record)
         return StepOutcome.PROCEED
 

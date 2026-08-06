@@ -1,6 +1,6 @@
 # 01 — Requirements
 
-> Local Web Agent · Design doc · **v0.6** · 2026-07-20
+> Local Web Agent · Design doc · **v0.7** · 2026-08-06
 
 ## Функциональные требования
 
@@ -24,7 +24,7 @@
 | ID | Требование | MVP | Priority |
 |----|------------|-----|----------|
 | FR-1.1 | **Max pages** per run (default 10, configurable) | ✅ | P0 |
-| FR-1.2 | **Max depth** from start URL (default 2) — **hop depth**: навигационные переходы, не сегменты URL-пути (doc 04 policy #2) | ✅ | P0 |
+| FR-1.2 | **Max depth** from start URL (default **3**, поднят с 2 — doc 26 § Проверка эталона) — **hop depth**: навигационные переходы, не сегменты URL-пути (doc 04 policy #2) | ✅ | P0 |
 | FR-1.3 | **Same-domain only** by default; cross-domain — opt-in flag | ✅ | P0 |
 | FR-1.4 | Respect **robots.txt** (fetch + parse; disallow → skip; **Crawl-delay honored, cap 10 s**) | ✅ | P0 |
 | FR-1.5 | **Rate limit**: min delay between page loads (default 1 s) | ✅ | P0 |
@@ -227,3 +227,4 @@
 | 2026-07-20 | **v0.5.2 (Tier 2 fill):** FR-7.4 — fill текстовых полей реализован (агент вписывает текст; I-H11: не password). Next — submit под attended-подтверждением |
 | 2026-07-20 | **v0.5.3 (Tier 2 submit — submit-формы завершены):** FR-7.4 — submit под attended-подтверждением (человек подтверждает в чате перед отправкой; без attended reject). Tier 2 = login+fill+submit ✅ |
 | 2026-07-20 | **v0.6 (Phase 6 закрыта + Tier 3 handoff):** FR-7.1 registry ✅, FR-7.2 sinks ✅ (Google Docs + файл). **FR-7.5 Tier 3 реализован (Phase 7)**: handoff — агент готовит (fill/раскрытия), финальную кнопку жмёт человек в видимом браузере (I-H12: unattended reject, attended пауза-handoff); подтверждения в чате для необратимого недостаточно — отличие от Tier 2 |
+| 2026-08-06 | **v0.7 (проверка эталона руками, doc 26):** FR-1.2 — дефолт `max_depth` поднят **2 → 3**. Причина измерена, а не выбрана: у обоих сайтов, где обучающая статья реально есть, она лежит на 2–3 хопах от корня (`sports.ru`: корень → вики → «Виды спорта» → статья), и при глубине 2 путь был недостижим **по построению** |

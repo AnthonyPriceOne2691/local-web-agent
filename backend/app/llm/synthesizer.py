@@ -110,6 +110,7 @@ class Synthesizer:
             think=think if supports_think(self._s.synth_model) else None,
             num_ctx=self._s.synth_num_ctx,
             max_tokens=self._s.synth_max_tokens,
+            timeout_s=self._s.synth_timeout_s,
         )
         if raw is None:
             return (

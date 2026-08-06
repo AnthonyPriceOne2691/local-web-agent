@@ -1,6 +1,6 @@
 # Design Documents Index
 
-> Local Web Agent · Design doc · **v1.9** · 2026-08-04
+> Local Web Agent · Design doc · **v2.3** · 2026-08-06
 
 Планирование проекта ведётся через design docs в этой папке: любое изменение дизайна = правка дока + запись в changelog + bump версии в шапке, и версии в шапке, индексе и changelog обязаны совпадать (инвариант [CLAUDE.md](../CLAUDE.md)).
 
@@ -11,28 +11,28 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | Doc | Status | Description |
 |-----|--------|-------------|
 | [00-project-overview.md](00-project-overview.md) | ✅ **v0.4** | Two-layer arch; Research Chat UX; action-capable (Phase 6) |
-| [01-requirements.md](01-requirements.md) | ✅ **v0.6** | FR/NFR incl. FR-6/FR-7 (actions, Tier 0–3); SSRF, cancel, D-12, hop depth |
+| [01-requirements.md](01-requirements.md) | ✅ **v0.7** | FR/NFR incl. FR-6/FR-7 (actions, Tier 0–3); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
-| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.10** | Playwright pipeline; robots своим UA; SPA fallback; ожидание `commit` + короткий бюджет DOMContentLoaded |
-| [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.7** | Agent loop + VISION_BATCH; hop depth; landing domain |
+| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.11** | Playwright pipeline; robots своим UA; SPA fallback; ожидание `commit` + короткий бюджет DOMContentLoaded |
+| [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.8** | Agent loop + VISION_BATCH; hop depth; landing domain |
 | [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.12.1** | **Phases 0–7 DONE**; дальше — только backlog улучшений |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.6** | SQLite + research sessions реализованы; legacy-импорт; sweep |
 | [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.9** | ABC; I-H10 click / I-H11 fill safety; submit под attended-confirm; **I-H12** destructive → handoff |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.6** | qwen3 канон; лёгкая 8b на DOM-решения; VLM; fallback-пара |
-| [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.8** | + SSE events, report, статика UI, attended resume/`challenge_wait` (kinds: challenge/login/confirm_submit/handoff) |
-| [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.10** | Params: structured outputs, think; маршрутизация nav-моделей; быстрый синтез; **язык ответа = язык запроса** |
+| [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.10** | + SSE events, report, статика UI, attended resume/`challenge_wait` (kinds: challenge/login/confirm_submit/handoff) |
+| [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.11** | Params: structured outputs, think; маршрутизация nav-моделей; быстрый синтез; **язык ответа = язык запроса** |
 | [17-ui-screens.md](17-ui-screens.md) | ✅ **v0.7** | CLI flows; Chat UI: liquid glass + человеческий словарь; язык ответа = язык запроса; раскрытие карточек, движение |
 | [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.4** | 500 LOC, SOLID, DRY, coverage; контур ruff + mypy на scripts/ |
 | [19-phase0-benchmark-results.md](19-phase0-benchmark-results.md) | ✅ **v1.0 DONE** | Все гейты ✅; qwen3 single-model рекомендация |
 | [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.4** | Token budget; non-Latin; compare N>3; вход синтеза ≠ латентность |
-| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.10** | + content_search, sitemap P2.5, RU keywords; **тема главнее формы**, отбор по счёту, а не по позиции в DOM; штрафы смотрят путь; тема ищется и в транслите, обучающий жанр против промо |
+| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.12** | + content_search, sitemap P2.5, RU keywords; **тема главнее формы**, отбор по счёту, а не по позиции в DOM; штрафы смотрят путь; тема в транслите, обучающий жанр против промо, выбор внутри раздела |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
-| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.14** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions; неполный обход виден в итоговом ответе; причина исключения называет виновника |
+| [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.15** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions; неполный обход виден в итоговом ответе; причина исключения называет виновника |
 | [25-action-framework.md](25-action-framework.md) | ✅ **v1.2** | Действия целиком: Tier 0 sinks (Google Docs + файл) · Tier 1 click · Tier 2 login/fill/submit · **Tier 3 handoff** (агент готовит, человек нажимает) — Phase 6–7 |
-| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.12** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3, T-2b, T-3d…T-3h: 15 дефектов) |
+| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.16** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3, T-2b, T-3d…T-3h: 15 дефектов) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -98,6 +98,10 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 | Дата | Изменение |
 |------|-----------|
+| 2026-08-06 | **v2.3:** doc 01 -> v0.7, doc 03 -> v0.11, doc 04 -> v0.8, doc 15 -> v0.10, doc 21 -> v0.12, doc 26 -> v0.16 (T-3i: агент ходит как человек — глубина 2 → 3, подразделы текущей страницы добавляются к top-K, 404-страница сайта не считается содержанием) |
+| 2026-08-06 | **v2.2:** doc 26 -> v0.15 (проверка эталона руками: у championat статьи нет и записанный URL — 404, значит ответ агента по этому сайту был верным; у sports.ru статья в трёх хопах, при глубине 2 недостижима; ошибка агента ровно одна — legalbet) |
+| 2026-08-05 | **v2.1:** doc 21 -> v0.11, doc 26 -> v0.14 (выбор внутри раздела: различает то слово задачи, которого нет в контексте страницы — эталонная статья на хабе #26 -> #1; три ограничения правила поставлены замером) |
+| 2026-08-05 | **v2.0:** doc 15 -> v0.9, doc 16 -> v0.11, doc 24 -> v0.15, doc 26 -> v0.13 (починка найденного в T-3h: бюджет синтеза 420 s по замеру 28 стадий, прочитанное не выбрасывается при падении синтеза, глубина обхода перестала быть тихой — флаг CLI + поле API + действующее число в ответе) |
 | 2026-08-04 | **v1.9:** doc 24 -> v0.14, doc 26 -> v0.12 (живой прогон T-3h: маршрут первого хопа подтверждён на legalbet, A/B сорван сетью; причина исключения теперь называет виновника — «прочитано 4 стр., ответ не собрался: модель не ответила» вместо «сайт не ответил») |
 | 2026-08-04 | **v1.8:** doc 21 -> v0.10, doc 26 -> v0.11 (T-3g: первый хоп починен по объявленному заранее критерию — хаб к статьям в top-10 на всех трёх корнях; тема ищется и в транслитерированном пути, обучающий жанр против промо, вес жанра двойной) |
 | 2026-08-04 | **v1.7:** doc 24 -> v0.13, doc 26 -> v0.10 (живой прогон T-3f: 0 статей из 3 как в базовой линии, маршрут сменился на записи; оговорка про неполный обход теперь доходит до итогового ответа; замер контаминирован глубиной — записано как моя ошибка) |

@@ -68,9 +68,15 @@ W_BLIND = -4  # ссылка без текста и без темы: модел�
 W_LEARN_ON_TOPIC = 10
 W_LEARN_PLAIN = 4
 W_PROMO = -10
+# Слово задачи, которого нет в контексте текущей страницы, — единственное, что различает
+# ссылки **внутри** тематического раздела. Замер на хабе «Школа беттинга»: эталонная статья
+# про футбол стояла #26 со счётом 38, а top-12 — «Как делать ставки в БК X» со счётом 44 при
+# полностью совпадающих признаках; слова «делать» и «ставки» там знают все ссылки, потому что
+# они уже в заголовке раздела. Вес выше разрыва в 6 очков (`headline`), но ниже темы.
+W_SUBJECT = 8
 
 
-def _looks_like_entry(path: str) -> bool:
+def looks_like_entry(path: str) -> bool:
     """Похож ли путь на отдельную запись (статью), а не на раздел."""
     if path.endswith((".html", ".htm")):
         return True
@@ -125,6 +131,36 @@ def _task_forms(task: str, stopwords: frozenset[str]) -> tuple[tuple[str, ...], 
     return words, tuple(transliterate(w) for w in words)
 
 
+@lru_cache(maxsize=256)
+def _subject_words(task: str, stopwords: frozenset[str], page_context: str) -> tuple[str, ...]:
+    """Слова задачи, которых **нет** в контексте текущей страницы (её URL + заголовок).
+
+    Правило без параметров и потому переносимое: стоя в разделе «Школа ставок: обучение как
+    делать ставки», слова «делать» и «ставки» знают все ссылки раздела — они уже в контексте,
+    и различить ими нечего. Различает то, чего в контексте нет («футбол»).
+
+    Пустой контекст (первый шаг, кэш homepage, пробы) → различающих слов нет вовсе: правило
+    работает только там, где известно, где стоит агент.
+
+    **Если контекст не знает ни одного слова задачи, правило тоже молчит** — и это не
+    осторожность, а замер: на корне `championat.com` заголовок «Чемпионат.com: новости
+    спорта» не содержит слов задачи, поэтому «различающими» становились все слова сразу,
+    бонус получали десять случайных ссылок и ссылка на статью раздела ставок **вылетала из
+    top-10**. Правило про сужение **внутри** раздела: нечего сужать — нечего и начислять.
+    """
+    if not page_context.strip():
+        return ()
+    words, translit = _task_forms(task, stopwords)
+    known = _path_words(page_context.casefold())
+    covered, rest = [], []
+    for word, lat in zip(words, translit, strict=True):
+        if _task_hit(known, (word,)) or _task_hit(known, (lat,)):
+            covered.append(word)
+        else:
+            rest.append(word)
+    return tuple(rest) if covered else ()
+
+
 def _content_signals(
     text: str,
     path: str,
@@ -133,6 +169,7 @@ def _content_signals(
     hunting_article: bool,
     stopwords: frozenset[str],
     genre: TaskGenre,
+    subject: tuple[str, ...],
 ) -> tuple[int, list[str]]:
     """Сигналы про СОДЕРЖАНИЕ: тема, форма записи, заголовок, нечитаемость.
 
@@ -148,7 +185,7 @@ def _content_signals(
     if on_topic:
         score += W_TASK
         tags.append("task-kw")
-    if _looks_like_entry(path):
+    if looks_like_entry(path):
         score += W_ENTRY_ON_TOPIC if (hunting_article and on_topic) else W_ENTRY_PLAIN
         tags.append("entry")
     if hunting_article and _looks_like_headline(text):
@@ -159,6 +196,11 @@ def _content_signals(
     if not text.strip() and not on_topic:
         score += W_BLIND
         tags.append("blind")
+    # Слово задачи, которого нет в контексте страницы, — то самое, что различает ссылки
+    # внутри раздела (замер на хабе «Школа беттинга», doc 21 § Выбор внутри раздела).
+    if subject and (_task_hit(text, subject) or _task_hit(path_words, subject)):
+        score += W_SUBJECT
+        tags.append("subject")
     if hunting_article:
         score, tags = _genre_signals(score, tags, text, path_words, genre=genre, on_topic=on_topic)
     return score, tags
@@ -235,8 +277,16 @@ def _penalties(path: str, *, intent: str) -> tuple[int, list[str]]:
 
 
 def score_link(
-    link: dict[str, Any], *, intent: str, task: str, hints: PathHints, on_homepage: bool
+    link: dict[str, Any],
+    *,
+    intent: str,
+    task: str,
+    hints: PathHints,
+    on_homepage: bool,
+    page_context: str = "",
 ) -> tuple[int, str]:
+    """`page_context` — URL и заголовок страницы, на которой агент стоит. Пусто = правило
+    «различает то, чего нет в контексте» не действует (doc 21 § Выбор внутри раздела)."""
     href = link["href"].casefold()
     text = (link.get("text") or "").casefold()
     path = urlparse(href).path or "/"
@@ -248,6 +298,10 @@ def score_link(
         hunting_article=intent == "content_search",
         stopwords=hints.task_stopwords,
         genre=_task_genre(task, hints.learn_markers, hints.promo_markers),
+        # На главной правило «различает то, чего нет в контексте» молчит: там агент выбирает
+        # РАЗДЕЛ, а не сужает внутри него. Замер: иначе бонус получают ссылки по всему сайту,
+        # и обучающий хаб на корне `legalbet.ru` съезжает с #1 на #7 (doc 21).
+        subject=() if on_homepage else _subject_words(task, hints.task_stopwords, page_context),
     )
     section = _section_signals(text, href, path, intent=intent, hints=hints, on_homepage=on_homepage)
     penalty = _penalties(path, intent=intent)
