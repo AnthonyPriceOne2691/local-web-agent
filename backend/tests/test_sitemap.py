@@ -86,6 +86,63 @@ async def test_sitemap_index_nested_and_robots_directive(hints):
     assert set(urls) == {f"{ORIGIN}/blog/betting-tips", f"{ORIGIN}/news/betting-market"}
 
 
+async def test_nested_sitemaps_are_chosen_by_name_not_by_order(hints):
+    """Замер на `legalbet.ru` (doc 26 § T-3j): в индексе **30** вложенных карт с говорящими
+    именами, и нужная — `sm_shkola_bettinga.xml` — стоит **22-й**. Брались первые три по
+    порядку (`sm_best_posts`, `sm_bonus`, `sm_bonus_compilation`), то есть бонусные промо, и
+    до школы обход не доходил никогда.
+
+    Это третий случай одной и той же ошибки: **отбор по позиции вместо смысла** (первые
+    два — лимит ссылок снапшота и позиция статей в DOM, T-3d).
+    """
+    junk = "".join(f"<sitemap><loc>{ORIGIN}/sm-bonus-{i}.xml</loc></sitemap>" for i in range(20))
+    index = (
+        f'<?xml version="1.0"?><sitemapindex>{junk}'
+        f"<sitemap><loc>{ORIGIN}/sm-shkola-bettinga.xml</loc></sitemap>"
+        f"</sitemapindex>"
+    )
+    routes = {f"{ORIGIN}/sitemap.xml": index}
+    routes.update({f"{ORIGIN}/sm-bonus-{i}.xml": _urlset(f"{ORIGIN}/bonus/promo-{i}") for i in range(20)})
+    routes[f"{ORIGIN}/sm-shkola-bettinga.xml"] = _urlset(f"{ORIGIN}/shkola-bettinga/stavki-na-futbol")
+
+    async with _client(routes) as client:
+        urls = await fetch_sitemap_candidates(
+            client,
+            origin=ORIGIN,
+            intent="content_search",
+            task="Найди статью о том, как делать ставки на футбол",
+            hints=hints,
+        )
+    assert f"{ORIGIN}/shkola-bettinga/stavki-na-futbol" in urls, urls
+
+
+async def test_sitemap_index_junk_maps_are_skipped(hints):
+    """У `championat.com` в индексе `stats.xml` ведёт к **5385** вложенным картам статистики:
+    обход по порядку тонет в них и до содержательных карт не доходит. Такие имена
+    (`stats`, `matches`, `teams`, `tags`, `video`) пропускаются."""
+    index = (
+        f'<?xml version="1.0"?><sitemapindex>'
+        f"<sitemap><loc>{ORIGIN}/sitemap/stats.xml</loc></sitemap>"
+        f"<sitemap><loc>{ORIGIN}/sitemap/articles.xml</loc></sitemap>"
+        f"</sitemapindex>"
+    )
+    routes = {
+        f"{ORIGIN}/sitemap.xml": index,
+        f"{ORIGIN}/sitemap/stats.xml": _urlset(*(f"{ORIGIN}/stat/betting-{i}" for i in range(50))),
+        f"{ORIGIN}/sitemap/articles.xml": _urlset(f"{ORIGIN}/articles/kak-delat-stavki-na-futbol"),
+    }
+    async with _client(routes) as client:
+        urls = await fetch_sitemap_candidates(
+            client,
+            origin=ORIGIN,
+            intent="content_search",
+            task="Найди статью о том, как делать ставки на футбол",
+            hints=hints,
+        )
+    assert f"{ORIGIN}/articles/kak-delat-stavki-na-futbol" in urls
+    assert not any("/stat/" in u for u in urls)
+
+
 async def test_site_map_intent_uses_path_hints(hints):
     sm = _urlset(f"{ORIGIN}/about", f"{ORIGIN}/contact", f"{ORIGIN}/x/random-page-1")
     async with _client({f"{ORIGIN}/sitemap.xml": sm}) as client:

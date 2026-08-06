@@ -1,47 +1,29 @@
 # Active delivery status
 
-- **slug:** sitemap-index
+- **slug:** found-fixes
 - **stack:** delivery@1.11, cqg@1.7, okf@1.5
 - **class:** S
 - **phase:** implement
 - **builder:** agent:claude-code
 - **verifier:** human:anthony
-- **human_ok_spec:** yes — human:anthony 2026-08-06 («поиска по сайту у агента нет — а нужно внедрять?»)
-- **human_ok_plan:** yes — тем же вопросом; ответ дал замер, план поменялся по данным
+- **human_ok_spec:** yes — human:anthony 2026-08-05 («давай мёрдж, а потом чини найденное»)
+- **human_ok_plan:** yes — тем же решением; порядок внутри поставки по цене находки
 - **shape-oracles:** cqg-deployed
-- **behavior-oracles:** tests-present + живые пробы robots/sitemap по трём сайтам
+- **behavior-oracles:** tests-present + замер по записям прогонов (БД) + офлайн-оракул очереди
 - **ci-oracles:** tooling
-- **worktree:** none
+- **worktree:** none — замеры читают `data/runs/app.db` и снятые страницы (gitignored)
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
-- **branch:** `trials/sitemap-index`
+- **branch:** `trials/found-fixes`
 - **blockers:** —
-- **waivers:** —
+- **waivers:** `max_files_touched=31 reason=docs-invariant by=human:anthony` (2026-08-06, §3.4).
+  31 файл против лимита 25; разбивка: код 17 · тесты 5 · доки 9. По строкам поставка в лимит
+  уложилась (785 из 800) — файлов много не из-за разрастания кода, а из-за инварианта доков:
+  правка дизайна требует док + индекс + changelog, и одних доков вышло девять. Деление на две
+  поставки не помогло бы (в первой половине 29 файлов) и разрезало бы одну тему пополам.
+  Предел поднят **ровно до текущего размера**, а не с запасом: подрастёт — гейт снова
+  остановит.
 - **circuit_breakers:** defaults from AGENT_DELIVERY_HARNESS.md §3.4
-
-## Зачем эта поставка
-
-Владелец спросил про поиск по сайту. Замер ответил иначе, чем ожидалось: поиск на этих
-порталах недоступен (robots / нет эндпоинта / параметр игнорируется), а **sitemap —
-доступен, и он у нас был сломан той же ошибкой «отбор по позиции вместо смысла», которую мы
-чинили уже дважды**.
-
-## Итог замера
-
-| Сайт | Поиск по сайту | Sitemap до правки | Sitemap после |
-|---|---|---|---|
-| `legalbet.ru` | параметр URL игнорируется, поле за кнопкой | 0 кандидатов (брались карты бонусов) | **20 кандидатов** из школы беттинга |
-| `www.sports.ru` | **запрещён robots** (`Disallow: /search/`) | 0 | 0 — сайт sitemap не объявляет вовсе |
-| `www.championat.com` | эндпоинта нет (8 шаблонов) | 0 (тонул в 5385 картах статистики) | 0 — обучающих статей там нет |
-
-Три причины поломки, каждая измерена: карты брались **по порядку** (нужная 22-я из 30);
-карты сущностей топили обход; ранжирование шло **русскими словами против латинских путей**.
-
-## Решение, которое я не принимал
-
-Работающий вариант поиска — **печатать в поле и жать «Найти»**, а submit по doc 25 — **Tier 2**
-(под подтверждением человека). Чтобы поиск стал автономным ходом, нужно решение владельца:
-«submit поисковой формы — read-only, Tier 1». Это канон безопасности, поэтому оставлено ему.
 
 ## Предыдущие поставки
 
@@ -50,9 +32,8 @@
 `ui-liquid-glass` (S) · `real-site-calibration` (S) · `protect-main-segments` (S) ·
 `lint-contour` (S) · `scripts-canon` (S) · `orchestrator-complexity` (M) ·
 `post-refactor-live` (S) · `docs-index-sync` (S) · `real-site-trials` транш 1 (M) ·
-`ui-and-answer-language` (M) · `trials-analysis` (M, `6a58c91`) · `nav-hop1` (S, `830b3f1`) ·
-**`found-fixes` (S, слита 06.08 — `ad1899a`, waiver владельца на размер)**. Артефакты в
-`delivery/archive/`.
+`ui-and-answer-language` (M) · `trials-analysis` (M, слита 04.08 — `6a58c91`) ·
+**`nav-hop1` (S, слита 04.08 — `830b3f1`)**. Артефакты в `delivery/archive/`.
 
 ## Зачем эта поставка
 
