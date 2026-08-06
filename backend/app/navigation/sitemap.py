@@ -23,9 +23,6 @@ MAX_QUEUE_URLS = 20
 MAX_NESTED_SITEMAPS = 3
 SITEMAP_TIMEOUT_S = 8.0
 CONTENT_PATH_MARKERS = ("/blog", "/article", "/news", "/guides", "/post")
-# Карты сущностей: они огромны и содержания не несут. У `championat.com` `stats.xml`
-# ведёт к 5385 вложенным картам статистики — обход по порядку тонет в них (doc 26 § T-3j).
-JUNK_MAP_MARKERS = ("stat", "match", "team", "tag", "video", "player", "person", "tournament", "amp")
 
 _LOC = re.compile(r"<loc>\s*([^<]+?)\s*</loc>", re.IGNORECASE)
 # Служебные слова задач («найди статью на сайте») — не сигнал в <loc>. Словарь переехал в
@@ -85,15 +82,13 @@ def _pick_nested(children: list[str], *, intent: str, task: str, hints: PathHint
 
     def score(url: str) -> int:
         name = url.rsplit("/", 1)[-1].removesuffix(".gz").removesuffix(".xml").casefold()
-        if any(j in name for j in JUNK_MAP_MARKERS):
-            return -1  # карты сущностей: матчи, команды, теги, статистика, видео
         s = sum(10 for w in forms if len(w) > 3 and w[:5] in name)
         s += sum(6 for g in genre if g in name)
         s += sum(4 for slug in slugs if slug and slug in name)
         return s
 
     ranked = sorted(((score(u), i, u) for i, u in enumerate(children)), key=lambda t: (-t[0], t[1]))
-    useful = [u for s, _, u in ranked if s >= 0]
+    useful = [u for s, _, u in ranked if s > 0]
     # Ни одного говорящего имени — берём начало индекса, как раньше: карта может быть одна
     # и называться `sitemap1.xml`.
     return useful[:MAX_NESTED_SITEMAPS] if useful else children[:MAX_NESTED_SITEMAPS]

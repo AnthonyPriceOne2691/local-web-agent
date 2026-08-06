@@ -39,11 +39,6 @@ class PathHints:
         return tuple(str(w).casefold() for w in self._data.get("learn_markers") or ())
 
     @property
-    def promo_markers(self) -> tuple[str, ...]:
-        """Бонусы, фрибеты, розыгрыши: тема совпадает, а ответа на «как делать» там нет."""
-        return tuple(str(w).casefold() for w in self._data.get("promo_markers") or ())
-
-    @property
     def task_stopwords(self) -> frozenset[str]:
         """Служебные слова задачи — не сигнал темы. Один словарь на sitemap-фильтр и
         оценку ссылок: раньше он жил в коде `sitemap.py`, и второй потребитель завёл бы

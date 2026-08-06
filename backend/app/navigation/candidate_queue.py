@@ -46,6 +46,18 @@ RELEVANT_TAGS = (*SIGNAL_TAGS, "probe", "sitemap", "legal-contact")
 # раздела два десятка детей.
 SUBSECTION_SLOTS = 4
 
+# Разделы, которых в окне нет вовсе, дописываются в хвост очереди. Модель должна видеть,
+# что вообще предлагает страница, а не десять образцов с одной полки: на корне
+# `legalbet.ru` девять из десяти мест занимали почти одинаковые рекламные страницы.
+#
+# Пробовался и **отклонён замером** более сильный вариант — обход по кругу разделам: ширина
+# получалась ценой тематичности (на `championat.com/bets/` доля тематических в top-10 падала
+# 10/10 → 4/10, нужная ссылка вылетала). Поэтому правило добавляющее, как и слоты
+# подразделов: окно по счёту не трогаем, дописываем максимум две ссылки.
+#
+# Знать слово «бонус» для этого не нужно — правило работает на магазине и новостях так же.
+BREADTH_SLOTS = 2
+
 
 def _fresh_links(links: list[dict[str, str]], origin: str, visited: set[str]) -> list[dict[str, str]]:
     """Свои и ещё не посещённые. visited отсекается у каждого источника."""
@@ -132,9 +144,46 @@ def _with_subsections(queue: list[Candidate], subsections: list[Candidate]) -> l
     return queue + [c for c in subsections if normalize_url(c.href) not in seen][:SUBSECTION_SLOTS]
 
 
+def _with_unseen_sections(queue: list[Candidate], page_scored: list[Candidate]) -> list[Candidate]:
+    """Дописать в хвост лучшие ссылки разделов, которых в окне нет вообще.
+
+    Именно дописать, а не потеснить: окно по счёту — это возможный ответ, а незнакомый
+    раздел — подсказка, что на странице есть ещё что-то. Замер отверг более сильный вариант
+    (обход по кругу): он давал ширину ценой тематичности.
+    """
+    if not queue:
+        return queue
+    known = {_section_key(c.href) for c in queue}
+    seen_urls = {normalize_url(c.href) for c in queue}
+    extra: list[Candidate] = []
+    for cand in sorted(page_scored, key=lambda c: -c.score):
+        key = _section_key(cand.href)
+        if key in known or normalize_url(cand.href) in seen_urls:
+            continue
+        known.add(key)
+        extra.append(cand)
+        if len(extra) >= BREADTH_SLOTS:
+            break
+    return queue + extra
+
+
+def _section_key(href: str) -> str:
+    """Раздел ссылки — первый сегмент пути: `/bonus/x` и `/bonus/y` — одна полка."""
+    parts = [p for p in urlparse(href).path.split("/") if p]
+    return parts[0] if parts else ""
+
+
 def _merge(buckets: list[list[Candidate]], top_k: int) -> list[Candidate]:
     """Вёдра по порядку, внутри ведра — по убыванию счёта; дубли между источниками
-    отбрасываются: побеждает более раннее ведро."""
+    отбрасываются: побеждает более раннее ведро.
+
+    Сверх этого — **разнообразие**: из одного раздела в очередь идёт не больше
+    `MAX_PER_SECTION` ссылок, остальные ждут в резерве и добираются в хвост, если мест не
+    хватило. Причина общая, а не про конкретный сайт: на корне букмекерского обзорника
+    девять из десяти мест занимали почти одинаковые бонусные промо и вытесняли обучающий
+    раздел; на магазине так же схлопнутся карточки одной категории, на новостях — заметки
+    одной рубрики. Правило не знает слова «бонус» и потому переносимо (doc 21 § Разнообразие).
+    """
     seen: set[str] = set()
     queue: list[Candidate] = []
     for bucket in buckets:
@@ -212,4 +261,5 @@ def build_candidates(
     subsections = _subsections(page_scored, urlparse(snapshot.url).path)
     for cand in subsections:
         cand.reason = f"{cand.reason}+subsection" if "subsection" not in cand.reason else cand.reason
-    return _with_subsections(_merge(buckets, top_k), subsections)
+    queue = _with_subsections(_merge(buckets, top_k), subsections)
+    return _with_unseen_sections(queue, page_scored)
