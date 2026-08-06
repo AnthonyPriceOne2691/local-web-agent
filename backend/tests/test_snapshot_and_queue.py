@@ -43,7 +43,10 @@ def test_queue_priorities_and_top_k(hints):
         legal_probes=[],
     )
     hrefs = [c.href for c in cands]
-    assert len(cands) <= 10
+    # Окно по счёту — 10, но сверх него очередь может получить до 4 ссылок на подразделы
+    # текущей страницы и до 2 на разделы, которых в окне нет вовсе (doc 21): оба правила
+    # **добавляющие**, потому что ход вглубь и «а что ещё есть» иначе не видны никогда.
+    assert len(cands) <= 16
     assert hrefs[0].endswith("/contact")  # P0 intent link первым
     assert any(h.endswith("/page/kontak") for h in hrefs)  # P2 alive probe
     assert all("9999" not in h for h in hrefs)  # чужой origin исключён

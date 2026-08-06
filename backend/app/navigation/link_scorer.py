@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
-from typing import Any, NamedTuple
+from typing import Any
 from urllib.parse import urlparse
 
 from app.navigation.matching import any_keyword, matches_keyword, task_words, transliterate
@@ -67,7 +67,6 @@ W_BLIND = -4  # ссылка без текста и без темы: модел�
 # та ошибка «форма выше темы», которая уже была сделана в T-3d.
 W_LEARN_ON_TOPIC = 10
 W_LEARN_PLAIN = 4
-W_PROMO = -10
 # Слово задачи, которого нет в контексте текущей страницы, — единственное, что различает
 # ссылки **внутри** тематического раздела. Замер на хабе «Школа беттинга»: эталонная статья
 # про футбол стояла #26 со счётом 38, а top-12 — «Как делать ставки в БК X» со счётом 44 при
@@ -105,22 +104,6 @@ def _task_hit(text: str, words: tuple[str, ...]) -> bool:
         if matches_keyword(text, word) or matches_keyword(text, word[:_MIN_TASK_PREFIX]):
             return True
     return False
-
-
-class TaskGenre(NamedTuple):
-    """Жанровые словари, уже разобранные под конкретную задачу."""
-
-    learn: tuple[str, ...]
-    promo: tuple[str, ...]  # пусто, когда промо и есть запрос пользователя
-
-
-@lru_cache(maxsize=256)
-def _task_genre(task: str, learn: tuple[str, ...], promo: tuple[str, ...]) -> TaskGenre:
-    """Штраф промо выключается, если о промо и спрашивают («найди бонусы букмекеров»).
-    Транслит проверяется тоже: запрос может прийти латиницей («najdi bonusy»)."""
-    low = task.casefold()
-    asks_promo = any_keyword(low, promo) or any_keyword(transliterate(low), promo)
-    return TaskGenre(learn=learn, promo=() if asks_promo else promo)
 
 
 @lru_cache(maxsize=256)
@@ -168,7 +151,7 @@ def _content_signals(
     *,
     hunting_article: bool,
     stopwords: frozenset[str],
-    genre: TaskGenre,
+    learn: tuple[str, ...],
     subject: tuple[str, ...],
 ) -> tuple[int, list[str]]:
     """Сигналы про СОДЕРЖАНИЕ: тема, форма записи, заголовок, нечитаемость.
@@ -202,30 +185,29 @@ def _content_signals(
         score += W_SUBJECT
         tags.append("subject")
     if hunting_article:
-        score, tags = _genre_signals(score, tags, text, path_words, genre=genre, on_topic=on_topic)
+        score, tags = _genre_signals(score, tags, text, path_words, learn=learn, on_topic=on_topic)
     return score, tags
 
 
 def _genre_signals(
-    score: int, tags: list[str], text: str, path_words: str, *, genre: TaskGenre, on_topic: bool
+    score: int, tags: list[str], text: str, path_words: str, *, learn: tuple[str, ...], on_topic: bool
 ) -> tuple[int, list[str]]:
-    """Обучающий жанр против промо — только при охоте за статьёй.
+    """Обучающий жанр — только при охоте за статьёй.
 
-    Задача «как делать ставки на футбол» просит **обучающий** материал, а формула не
-    отличала его ни от новости, ни от бонусной акции: у промо есть и тема («ставки»), и
-    форма записи, и длинный заголовок, поэтому на корне букмекерского обзорника промо
-    занимало девять мест из десяти (замер hop-1, doc 26 § T-3g).
+    Задача «как делать X» просит **обучающий** материал, а формула не отличала его ни от
+    новости, ни от рекламной акции. Жанр — признак общий: `wiki`, `school`, `guide`,
+    `academy`, `faq`, `tutorial` встречаются на сайтах любой темы.
 
-    Штраф промо снимается, если промо и есть запрос пользователя: «найди бонусы
-    букмекеров» — законный сценарий, и ломать его нельзя.
+    **Чего здесь сознательно нет — словаря «промо».** Он был (`bonus`, `фрибет`,
+    `розыгрыш`) и оказался словарём одной вертикали. Замер показал, что он не нужен:
+    без него обучающий хаб на корне остался #1, эталонная статья на хабе #1, а доля
+    тематических ссылок в top-10 даже подросла (doc 26 § T-3k). Общее правило —
+    «жанр усиливает тему» — делает ту же работу и переносится на любой сайт.
     """
     haystack = f"{text} {path_words}"
-    if any_keyword(haystack, genre.learn):
+    if any_keyword(haystack, learn):
         score += W_LEARN_ON_TOPIC if on_topic else W_LEARN_PLAIN
         tags.append("learn")
-    if genre.promo and any_keyword(haystack, genre.promo):
-        score += W_PROMO
-        tags.append("promo")
     return score, tags
 
 
@@ -297,7 +279,7 @@ def score_link(
         task,
         hunting_article=intent == "content_search",
         stopwords=hints.task_stopwords,
-        genre=_task_genre(task, hints.learn_markers, hints.promo_markers),
+        learn=hints.learn_markers,
         # На главной правило «различает то, чего нет в контексте» молчит: там агент выбирает
         # РАЗДЕЛ, а не сужает внутри него. Замер: иначе бонус получают ссылки по всему сайту,
         # и обучающий хаб на корне `legalbet.ru` съезжает с #1 на #7 (doc 21).

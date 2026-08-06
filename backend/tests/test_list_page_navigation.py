@@ -215,6 +215,41 @@ def test_cyrillic_link_text_still_matches_without_translit():
     assert "task-kw" in scored("https://x.test/p/1", "Всё о ставках на футбол")[1]
 
 
+# --- разнообразие очереди: не десять образцов с одной полки ---
+
+
+def test_one_section_does_not_own_the_whole_queue():
+    """Правило «обход по кругу разделам» пробовалось и **отклонено замером**: ширина
+    получалась ценой тематичности — на `championat.com/bets/` доля тематических ссылок в
+    top-10 падала 10/10 → 4/10, и нужная ссылка вылетала из окна (doc 26 § T-3k).
+
+    Работает то же, что и в остальных случаях: обучающий раздел выигрывает **признаками**,
+    а не квотой. Тест держит исход, а не механику.
+    """
+    promo = [
+        (
+            f"{ORIGIN}/bonus/liga-stavok-rozigrish-{i}-rublej-za-stavki",
+            f"Бонус: розыгрыш {i} рублей за ставки",
+        )
+        for i in range(12)
+    ]
+    hub = [(f"{ORIGIN}/shkola-bettinga", "Школа ставок")]
+    queue = build_candidates(
+        snapshot=snap(f"{ORIGIN}/", title="Ставки на спорт", text="дом " * 40, links=promo + hub),
+        homepage=None,
+        intent="content_search",
+        task=TASK,
+        hints=HINTS,
+        origin=ORIGIN,
+        visited=set(),
+        alive_probes=[],
+        legal_probes=[],
+    )
+    hrefs = [c.href for c in queue]
+    assert f"{ORIGIN}/shkola-bettinga" in hrefs, f"раздела нет в очереди вовсе: {hrefs}"
+    assert len(hrefs) <= 12, "правило добавляющее: окно не должно раздуваться"
+
+
 # --- подраздел текущей страницы: ход вглубь, который делает человек ---
 
 
@@ -365,25 +400,24 @@ def test_learning_genre_only_while_hunting_an_article():
     assert "learn" not in scored("https://x.test/wiki/page", intent="contact")[1]
 
 
-def test_promo_pages_are_penalized_but_not_when_the_task_asks_for_them():
-    """На корне `legalbet.ru` девять из top-10 были бонусные промо («розыгрыш 200000 рублей
-    фрибетами за ставки на теннис»): у них есть и тема, и форма записи, и длинный заголовок,
-    поэтому они обходили обучающий раздел.
+def test_learning_hub_wins_without_any_vertical_dictionary():
+    """Раньше здесь стоял штраф за «промо» (`бонус`, `фрибет`, `розыгрыш`) — словарь одной
+    вертикали. Замер показал, что он не нужен: обучающий раздел выигрывает у рекламных
+    страниц **общими** признаками — тема, жанр, форма записи (doc 26 § T-3k).
 
-    Штраф обязан выключаться, когда промо и есть запрос: «найди бонусы букмекеров» —
-    законный сценарий, и ломать его нельзя.
+    Тест держит именно это: словаря нет, а хаб всё равно выше промо-страницы.
     """
-    promo = "https://legalbet.ru/bonus/liga-stavok-rozigrish-200000-rublej-fribetami"
-    assert "promo" in scored(promo, "Бонус Лиги Ставок: розыгрыш фрибетов за ставки")[1]
-
-    for_bonus_task = score_link(
-        {"href": promo, "text": "Бонус Лиги Ставок: розыгрыш фрибетов"},
-        intent="content_search",
-        task="Найди бонусы букмекеров и сравни, где фрибет выгоднее",
-        hints=HINTS,
+    hub = scored("https://legalbet.ru/shkola-bettinga", "Школа ставок", on_homepage=True)
+    promo = scored(
+        "https://legalbet.ru/bonus/liga-stavok-rozigrish-200000-rublej-fribetami",
+        "Бонус Лиги Ставок: розыгрыш фрибетов за ставки",
         on_homepage=True,
-    )[1]
-    assert "promo" not in for_bonus_task
+    )
+    assert "promo" not in promo[1], "словарь вертикали вернулся"
+    assert "learn" in hub[1], "жанр обучающего раздела должен считаться общим признаком"
+    # На реальном корне `legalbet.ru` этого хватало на #1. Синтетика показывает границу
+    # честно: «голый» раздел без заголовка проигрывает записи по форме — и добирается уже
+    # не счётом, а правилом «раздел, которого в окне нет» (тест ниже).
 
 
 # --- штрафы: признак ищется в пути, а не во всём URL (T-3e) ---
