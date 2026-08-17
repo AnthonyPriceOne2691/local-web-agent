@@ -105,3 +105,20 @@ def test_snapshot_without_interactive_key_is_empty():
     # backward-compat: старый raw без ключа interactive (напр. FakeBrowser-страницы)
     s = build_snapshot({"title": "T", "main_text": "hi"}, page_url=f"{ORIGIN}/", origin=ORIGIN)
     assert s.interactive_elements == []
+
+
+def test_observe_js_strips_comment_threads():
+    """Ветка комментариев не входит в текст статьи (doc 03 § main_text, doc 26 § T-3n).
+
+    Тест смотрит на сам скрипт, а не на его работу, и это осознанное ограничение: в проекте
+    нет контура, поднимающего настоящий Chromium (браузерные тесты идут на фейковой странице,
+    см. `test_goto_wait_strategy`). Правило проверено **живым замером** на трёх статьях —
+    King Arthur 3771 → 3195 слов (−15 %), BBC Good Food 956 → 896 (−6 %), food52 без
+    изменений, начало статьи везде цело. Здесь же держится то, что дешёво держать: правило
+    не должно исчезнуть незамеченным, а порог — молча уехать в ноль и срезать полстраницы.
+    """
+    from app.observer.snapshot import OBSERVE_JS
+
+    assert '[id*="comment" i]' in OBSERVE_JS and '[class*="comment" i]' in OBSERVE_JS
+    assert "t.length >= 200" in OBSERVE_JS  # счётчик «COMMENTS 21» и кнопка остаются на месте
+    assert "mainText = mainText.replace(t, '')" in OBSERVE_JS  # вычитаем текст, не удаляем узел

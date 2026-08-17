@@ -60,9 +60,16 @@ def action_not_in(
 def url_not_visited(
     code: str, params: dict[str, Any], action: AgentAction, ctx: ActionContext
 ) -> Violation | None:
+    """G-H3: второй раз туда, где уже были, — включая URL, которые страницы не дали.
+
+    `attempted` отдельно от `visited` не по вкусу, а по замеру: при редиректе A → B в
+    `visited` попадает только B, и ссылка A проходила проверку бесконечно (doc 13 § G-H3).
+    """
     target = normalize_url(action.url or "")
     if target in ctx.visited:
         return Violation(constraint_id=code, message="already visited", proposed_url=target)
+    if target in ctx.attempted:
+        return Violation(constraint_id=code, message="already attempted", proposed_url=target)
     return None
 
 

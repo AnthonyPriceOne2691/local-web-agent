@@ -23,7 +23,8 @@ class ActionContext:
     current_url: str
     intent: str = "generic"
     candidates: set[str] = field(default_factory=set)  # normalized hrefs (queue ∪ probes ∪ sitemap)
-    visited: set[str] = field(default_factory=set)
+    visited: set[str] = field(default_factory=set)  # прочитанные страницы — на них бюджет G-H1
+    attempted: set[str] = field(default_factory=set)  # ходили, страницы не дало (редирект/ошибка)
     hops: dict[str, int] = field(default_factory=dict)
     max_pages: int = 10
     max_depth: int = 2
@@ -43,8 +44,13 @@ def build_action_context(
     hops: dict[str, int],
     origin: str,
     robots: RobotsLike,
+    attempted: set[str] | None = None,
 ) -> ActionContext:
-    """ActionContext из состояния оркестратора (вынесено из loop.py ради ≤500 LOC, doc 18)."""
+    """ActionContext из состояния оркестратора (вынесено из loop.py ради ≤500 LOC, doc 18).
+
+    `visited` и `attempted` приходят порознь: бюджет страниц (G-H1) считается только по
+    прочитанным, а «не ходи туда снова» (G-H3) — по обоим.
+    """
     from app.observer.links import normalize_url
 
     cfg = record.config
@@ -55,6 +61,7 @@ def build_action_context(
         intent=record.intent,
         candidates={normalize_url(c.href) for c in candidates},
         visited=visited,
+        attempted=attempted or set(),
         hops=hops,
         max_pages=cfg.max_pages,
         max_depth=cfg.max_depth,

@@ -84,6 +84,49 @@ docs:
   - /api
   - /help
 
+support:
+  # Слуги интента — это HTTP-ПРОБЫ (F1), каждая стоит запроса: замер на живых магазинах
+  # дал 80 s на 20 слугов при VPN. Поэтому здесь только самые частотные имена раздела, а
+  # полный список для БЕСПЛАТНОГО сопоставления ссылок лежит ниже в `help_desk`.
+  - /support
+  - /help
+  - /faq
+  - /shipping
+  - /delivery
+  - /returns
+  - /customer-service
+  - /warranty
+
+help_desk:
+  # Справка и обслуживание клиента — СТРУКТУРА сайта, а не предметная область: у магазина,
+  # у SaaS и у новостного сайта раздел устроен одинаково, и в нём лежат контакты, условия и
+  # ответы на вопросы. Замечание владельца 07.08: агент должен знать эти разделы и
+  # обращаться к ним, когда прямого ответа на странице нет.
+  #
+  # Список длиннее слугов и это не расточительство: сопоставление ссылки со строкой ничего
+  # не стоит, в отличие от пробы.
+  - /support
+  - /help
+  - /help-center
+  - /helpdesk
+  - /faq
+  - /faqs
+  - /customer-service
+  - /customer-care
+  - /knowledge-base
+  - /shipping
+  - /delivery
+  - /returns
+  - /refund
+  - /warranty
+  # RU
+  - /podderzhka
+  - /pomosch
+  - /vopros
+  - /dostavka
+  - /vozvrat
+  - /garantiya
+
 commercial:
   - /advertise
   - /advertising
@@ -129,8 +172,15 @@ intent_keywords:
                  дизайн, вёрстк, верстк, макет, цвет, шрифт, внешний вид, выгляд]
   site_map: [map site, page types, site structure, all pages, sections,
              структура сайта, карта сайта, раздел, типы страниц]
+  support: [shipping, delivery, return, refund, warranty, faq, help desk, customer service,
+            доставк, возврат, гарант, поддержк, помощ, часто задаваем,
+            lieferung, versand, rückgabe, garantie, hilfe, kundenservice]
   content_search: [article, blog, guide, post, betting,
-                   статья, статьи, блог, гайд, пост, найди текст, ставки, обзор]
+                   статья, статьи, блог, гайд, пост, найди текст, ставки, обзор,
+                   # DE — добавлено по живому прогону T-3p: без них «Finde eine Anleitung…»
+                   # уходило в generic, а с ним терялись блог-слуги, блок article и канонный
+                   # синтез. Словарь растёт по мере испытаний на новых языках, это его цена.
+                   anleitung, artikel, ratgeber, beitrag]
 
 # Служебные слова задач: сигналом темы НЕ считаются (RU+EN). Один словарь на двух
 # потребителей — sitemap-фильтр (<loc> не отличает «найди статью» от темы) и оценка
@@ -151,6 +201,35 @@ task_stopwords:
   - site
   - website
   - compare
+  # Английские служебные слова: без них «more» из «compare which store explains ... more
+  # clearly» становилось темой и давало «Learn More About Teensy» полный вес (T-3o).
+  - more
+  - which
+  - clearly
+  - please
+  - explain
+  - explains
+  # «at home» — уточнение места в задаче («how to bake bread at home»), а подпись «Home»
+  # стоит в меню почти каждого сайта: слово давало тему ГЛАВНОЙ странице и разделу /home
+  # (на food52 шесть ссылок «Дом и интерьер» обошли раздел выпечки). T-3q.
+  - home
+  # Немецкие служебные: та же история, что с `more` — «Seite» и «Thema» из формулировки
+  # задачи совпадали бы с пагинацией `/seite/2` и с рубриками (T-3p).
+  - eine
+  - einen
+  - welche
+  - welches
+  - seite
+  - seiten
+  - thema
+  - selbst
+  - finde
+  - finden
+  - vergleiche
+  - vergleich
+  - erklärt
+  - gründlicher
+  - besser
   # `guide` был служебным в sitemap-фильтре и остаётся им: жанр «руководство» ловится
   # словарём интента (`content_search`), а не словом задачи.
   - guide

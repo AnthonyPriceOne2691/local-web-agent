@@ -36,6 +36,20 @@ def action_signature(action: AgentAction) -> tuple[Any, ...]:
     return (action.action, action.element_index, action.value or "")
 
 
+def repeats_too_often(record: RunRecord, repeats: dict[tuple[Any, ...], int], action: AgentAction) -> bool:
+    """Повтор того же действия по тем же целям исчерпал лимит → ACT останавливается.
+
+    Живёт рядом с `REPEAT_LIMITS` и `action_signature`, а не в машине состояний: лимиты
+    и признак повтора — одна тема, и разнесёнными они уже расходились.
+    """
+    signature = action_signature(action)
+    repeats[signature] = repeats.get(signature, 0) + 1
+    if repeats[signature] <= REPEAT_LIMITS.get(action.action, 2):
+        return False
+    record.metadata["action_loop_guard"] = f"{action.action} повторён {repeats[signature]}× — остановка ACT"
+    return True
+
+
 async def _fill_form(
     browser: BrowserSession,
     record: RunRecord,

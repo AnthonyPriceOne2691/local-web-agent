@@ -1,6 +1,6 @@
 # Design Documents Index
 
-> Local Web Agent · Design doc · **v2.5** · 2026-08-06
+> Local Web Agent · Design doc · **v3.4** · 2026-08-07
 
 Планирование проекта ведётся через design docs в этой папке: любое изменение дизайна = правка дока + запись в changelog + bump версии в шапке, и версии в шапке, индексе и changelog обязаны совпадать (инвариант [CLAUDE.md](../CLAUDE.md)).
 
@@ -13,26 +13,26 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 | [00-project-overview.md](00-project-overview.md) | ✅ **v0.4** | Two-layer arch; Research Chat UX; action-capable (Phase 6) |
 | [01-requirements.md](01-requirements.md) | ✅ **v0.7** | FR/NFR incl. FR-6/FR-7 (actions, Tier 0–3); SSRF, cancel, D-12, hop depth |
 | [02-architecture.md](02-architecture.md) | ✅ **v0.2.1** | Layer 1 + Layer 2 |
-| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.11** | Playwright pipeline; robots своим UA; SPA fallback; ожидание `commit` + короткий бюджет DOMContentLoaded |
+| [03-browser-pipeline.md](03-browser-pipeline.md) | ✅ **v0.14** | Playwright pipeline; robots своим UA; SPA fallback; ожидание `commit`; **страница-отказ (403/anti-bot), пустая страница и ветка комментариев — не содержание** |
 | [04-crawl-orchestrator.md](04-crawl-orchestrator.md) | ✅ **v0.8** | Agent loop + VISION_BATCH; hop depth; landing domain |
-| [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.4** | ComparisonResult + excluded; article candidates |
+| [05-extraction-schema.md](05-extraction-schema.md) | ✅ **v0.5** | ComparisonResult + excluded; article candidates; **word_count — замер кода, не число модели**; отброс блока со следом |
 | [06-mvp-phases.md](06-mvp-phases.md) | ✅ **v0.12.1** | **Phases 0–7 DONE**; дальше — только backlog улучшений |
 | [07-tech-stack.md](07-tech-stack.md) | ✅ **v0.2.1** | Stack + LLM settings (async_api, deps) |
 | [12-session-storage.md](12-session-storage.md) | ✅ **v0.6** | SQLite + research sessions реализованы; legacy-импорт; sweep |
-| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.9** | ABC; I-H10 click / I-H11 fill safety; submit под attended-confirm; **I-H12** destructive → handoff |
+| [13-behavioral-contracts.md](13-behavioral-contracts.md) | ✅ **v0.10** | ABC; I-H10 click / I-H11 fill safety; submit под attended-confirm; **I-H12** destructive → handoff; **G-H3 = visited ∪ attempted** (редирект-алиасы) |
 | [14-llm-model-split.md](14-llm-model-split.md) | ✅ **v0.6** | qwen3 канон; лёгкая 8b на DOM-решения; VLM; fallback-пара |
 | [15-api-cli-spec.md](15-api-cli-spec.md) | ✅ **v0.10** | + SSE events, report, статика UI, attended resume/`challenge_wait` (kinds: challenge/login/confirm_submit/handoff) |
 | [16-prompts-library.md](16-prompts-library.md) | ✅ **v0.11** | Params: structured outputs, think; маршрутизация nav-моделей; быстрый синтез; **язык ответа = язык запроса** |
 | [17-ui-screens.md](17-ui-screens.md) | ✅ **v0.7** | CLI flows; Chat UI: liquid glass + человеческий словарь; язык ответа = язык запроса; раскрытие карточек, движение |
 | [18-engineering-standards.md](18-engineering-standards.md) | ✅ **v0.4** | 500 LOC, SOLID, DRY, coverage; контур ruff + mypy на scripts/ |
 | [19-phase0-benchmark-results.md](19-phase0-benchmark-results.md) | ✅ **v1.0 DONE** | Все гейты ✅; qwen3 single-model рекомендация |
-| [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.4** | Token budget; non-Latin; compare N>3; вход синтеза ≠ латентность |
-| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.14** | + content_search, sitemap P2.5, RU keywords; **тема главнее формы**, отбор по счёту, а не по позиции в DOM; штрафы смотрят путь; тема в транслите, обучающий жанр против промо, выбор внутри раздела |
+| [20-context-token-budget.md](20-context-token-budget.md) | ✅ **v0.5** | Token budget; non-Latin; compare N>3; вход синтеза ≠ латентность; **бюджет статьи = что хранит снапшот** |
+| [21-navigation-hints.md](21-navigation-hints.md) | ✅ **v0.18** | + content_search, sitemap P2.5, RU keywords; **тема главнее формы**, отбор по счёту, а не по позиции в DOM; штрафы смотрят путь; тема в транслите, обучающий жанр против промо, выбор внутри раздела; **тема по морфологии языка слова**; справочные разделы (support/faq) как ресурс |
 | [22-page-screenshots.md](22-page-screenshots.md) | ✅ **v0.4** | PNG multi-viewport; D-11 closed (detect→hide→click) |
 | [23-vision-analysis.md](23-vision-analysis.md) | ✅ **v0.3** | Key pages, failure modes; qwen2.5vl |
 | [24-research-chat-agent.md](24-research-chat-agent.md) | ✅ **v0.15** | Phase 4 DONE; attended + видимость окна по надобности; Phase 6 actions; неполный обход виден в итоговом ответе; причина исключения называет виновника |
 | [25-action-framework.md](25-action-framework.md) | ✅ **v1.2** | Действия целиком: Tier 0 sinks (Google Docs + файл) · Tier 1 click · Tier 2 login/fill/submit · **Tier 3 handoff** (агент готовит, человек нажимает) — Phase 6–7 |
-| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.18** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3, T-2b, T-3d…T-3h: 15 дефектов) |
+| [26-real-site-trials.md](26-real-site-trials.md) | 🛠 **v0.25** | Испытания на реальных сайтах: протокол по типам (магазин / SPA / новости), язык задачи RU+EN, отобранные сайты, журнал результатов (T-3, T-2b, T-3d…T-3q: журнал, EN, магазины, немецкая, разбор промахов) |
 
 > Номера 08–11 не используются (историческая нумерация, выровнена с voice-interview-coach).
 
@@ -98,6 +98,15 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 | Дата | Изменение |
 |------|-----------|
+| 2026-08-07 | **v3.4:** doc 21 -> v0.18, doc 26 -> v0.25 (закрыт пробел V23: промах на food52 объяснён замером — раздел выпечки получал ноль, потому что `bake` не связывалось с `baking`; формы слова через пересечение + `home` в стоп-листе) |
+| 2026-08-07 | **v3.3:** doc 03 -> v0.14, doc 20 -> v0.5 (закрыты названные пробелы: пустая страница без текста и ссылок больше не содержание — признак парный, чтобы не выбросить SPA; бюджет статьи привязан к тому, что снапшот реально хранит — подъём до 12000 отклонён числами, он переполняет ctx сравнения) |
+| 2026-08-07 | **v3.2:** doc 26 -> v0.24 (живой прогон немецких сайтов: ноль повторов, руководства найдены на всех трёх, ответ целиком по-немецки; косяк — интент `generic` вместо `content_search`, словарь знал только RU/EN, починено) |
+| 2026-08-07 | **v3.1:** doc 21 -> v0.17, doc 26 -> v0.23 (T-3p — немецкая вертикаль: значимое слово теперь четыре и более буквы **любого** алфавита; класс `[a-zа-яё]` рвал слова с диакритикой, ломая немецкий, французский, испанский, польский. Найдено офлайн-разбором задачи до прогона) |
+| 2026-08-07 | **v3.0:** doc 21 -> v0.16 (замечание владельца: агент должен знать разделы support/faq и обращаться к ним за контактами и ответами. Сигнал `help-desk` действует на любой странице и молчит при `content_search`; задачам про доставку/возврат дан свой интент `support`; списки разделены по цене — пробы 8, сопоставление 20) |
+| 2026-08-07 | **v2.9:** doc 21 -> v0.15, doc 26 -> v0.22 (T-3o — прогон магазинов на интенте `generic`: прочитанная страница попадала в «не удалось открыть»; префикс ≥4 символов врал на английском — `terms` → «Terminals», `store` → «Story» — и товарные ссылки получали счёт настоящей цели. Правило теперь по языку слова, на русских страницах дифф пустой) |
+| 2026-08-07 | **v2.8:** doc 03 -> v0.13, doc 26 -> v0.21 (T-3n — живой прогон на англоязычной кулинарной вертикали, глубина 4: критерий «ноль повторных заходов» выполнен во всех трёх прогонах; победитель King Arthur 3771 слово; промах на food52 назван; комментарии читателей больше не считаются объёмом статьи) |
+| 2026-08-07 | **v2.7:** doc 03 -> v0.12, doc 26 -> v0.20 (T-3m — отбор англоязычных сайтов живыми пробами: страница-отказ 403/«access issue» читалась как содержание, anti-bot «verify you are **a** human» не ловился из-за артикля; оба признака общие, не про сайт) |
+| 2026-08-06 | **v2.6:** doc 13 -> v0.10, doc 05 -> v0.5, doc 26 -> v0.19 (T-3l — замер журнала прогонов: одна дыра объяснила четыре «залипания» — при редиректе A → B запрошенная ссылка проходила G-H3 бесконечно; `attempted` рядом с `visited`, бюджет страниц по-прежнему только по прочитанным; `word_count` — замер кода по полному тексту, а не число модели; отброс блока статьи со следом) |
 | 2026-08-06 | **v2.5:** doc 21 -> v0.14, doc 26 -> v0.18 (T-3k: прогон при глубине 3 нашёл статью на legalbet; словари вертикали удалены по замеру, вместо них общее правило «раздел, которого в окне нет»; обход по кругу отклонён замером) |
 | 2026-08-06 | **v2.4:** doc 21 -> v0.13, doc 26 -> v0.17 (T-3j: поиск по сайту отклонён замером — robots/нет эндпоинта/параметр игнорируется; вместо него починен sitemap: карты по имени, пропуск карт сущностей, транслит в ранжировании — legalbet 0 → 20 кандидатов) |
 | 2026-08-06 | **v2.3:** doc 01 -> v0.7, doc 03 -> v0.11, doc 04 -> v0.8, doc 15 -> v0.10, doc 21 -> v0.12, doc 26 -> v0.16 (T-3i: агент ходит как человек — глубина 2 → 3, подразделы текущей страницы добавляются к top-K, 404-страница сайта не считается содержанием) |

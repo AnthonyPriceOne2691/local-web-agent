@@ -62,6 +62,89 @@ def test_article_about_404_errors_is_still_content():
     )
 
 
+def test_antibot_wording_with_an_article_is_still_a_challenge():
+    """Живая страница `thekitchn.com` (снята браузером 07.08): «Please verify you are **a**
+    human», 507 символов.
+
+    В словаре сигналов стояло «verify you are human» — без артикля, поэтому подстрока не
+    совпадала и заглушка уходила в синтез как содержание сайта. Формулировка не про
+    конкретный сайт: так пишут и Cloudflare, и HUMAN/PerimeterX.
+    """
+    assert (
+        detect_status(
+            url="https://www.thekitchn.com/",
+            main_text=(
+                "Please verify you are a human\n\nAccess to this page has been denied because "
+                "we believe you are using automation tools to browse the website."
+            ),
+            title="",
+            has_password_field=False,
+        )
+        == "captcha"
+    )
+
+
+def test_access_denied_page_is_not_content():
+    """Отказ в доступе — не содержание, ровно как 404.
+
+    Две живые страницы, снятые браузером 07.08: `seriouseats.com` отдал 316 символов
+    «If you are a reader experiencing an access issue…», `povarenok.ru` — заголовок
+    «403 Forbidden» и 19 символов текста. Обе шли в синтез со статусом `ok`, то есть
+    агент считал их содержанием сайта и тратил на них бюджет.
+    """
+    for url, text, title in (
+        (
+            "https://www.seriouseats.com/",
+            "If you are a reader experiencing an access issue, please contact support@people.inc.",
+            "",
+        ),
+        ("https://www.povarenok.ru/", "403 Forbidden nginx", "403 Forbidden"),
+    ):
+        assert detect_status(url=url, main_text=text, title=title, has_password_field=False) == ("error"), url
+
+
+def test_article_about_403_errors_is_still_content():
+    """Обратная сторона того же правила: разбор кодов ответа — это содержание."""
+    article = "Ошибка 403 Forbidden означает, что доступ запрещён сервером. Разбираем причины. " * 40
+    assert (
+        detect_status(
+            url="https://x.test/blog/403-forbidden",
+            main_text=article,
+            title="Что такое 403 Forbidden и как это чинить",
+            has_password_field=False,
+        )
+        == "ok"
+    )
+
+
+def test_page_without_text_and_links_is_not_content():
+    """Пустая страница — не содержание (doc 03 § Blockers, doc 26 § T-3p).
+
+    `chefkoch.de` отдаёт ноль текста и ноль ссылок даже после `networkidle`, а скриншот
+    **полностью белый** — значит и vision там смотреть нечего. При статусе `ok` такая
+    страница шла в синтез как содержание сайта и тратила бюджет.
+
+    Различающий признак дал замер, а не догадка: у живого SPA ссылки есть всегда, пустым
+    бывает только текст — `vercel.com` 111 слов при 164 ссылках, `heise.de` 12 слов при 392.
+    Поэтому режем по паре «нет текста И нет ссылок», а не по одному тексту: иначе выпал бы
+    весь SPA-сценарий, ради которого и делается скриншот под vision.
+    """
+    from app.observer.snapshot import build_snapshot
+    from tests.conftest import page_raw
+
+    dead = build_snapshot(
+        page_raw(title="", text="", links=[]), page_url="https://x.test/", origin="https://x.test"
+    )
+    assert dead.status == "error"
+
+    spa = build_snapshot(
+        page_raw(title="Vercel", text="", links=[(f"https://x.test/p{i}", "") for i in range(40)]),
+        page_url="https://x.test/spa",
+        origin="https://x.test",
+    )
+    assert spa.status == "ok", "у живого SPA пустой только текст — такую страницу не трогаем"
+
+
 def test_blockers_take_priority_over_not_found():
     """Порядок признаков: anti-bot заглушка тоже «тонкая», но её проходит человек —
     спутать их значило бы потерять attended-паузу."""

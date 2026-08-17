@@ -7,7 +7,17 @@ from typing import Any
 
 import yaml
 
-_INTENT_CATEGORIES = ("contact", "contact_legal", "about", "pricing", "careers", "docs", "commercial", "blog")
+_INTENT_CATEGORIES = (
+    "contact",
+    "contact_legal",
+    "about",
+    "pricing",
+    "careers",
+    "docs",
+    "commercial",
+    "blog",
+    "support",
+)
 
 
 class PathHints:
@@ -27,6 +37,18 @@ class PathHints:
     @property
     def legal_slugs(self) -> list[str]:
         return [str(s) for s in self._data.get("contact_legal", [])]
+
+    @property
+    def help_desk_slugs(self) -> tuple[str, ...]:
+        """Справка и обслуживание клиента (`/support`, `/faq`, `/returns`).
+
+        Отдельно от `slugs_for("support")` по двум причинам. По смыслу: слуги интента нужны,
+        чтобы **войти** в раздел с корня, а этот список действует на любой странице — раздел
+        помощи полезен отовсюду, в отличие от соседнего раздела темы. По цене: слуг — это
+        HTTP-проба (замер: 80 s на 20 слугов при VPN), а сопоставление ссылки со строкой
+        бесплатно, поэтому здесь список длиннее (doc 21 § Справочные разделы).
+        """
+        return tuple(str(s).casefold() for s in self._data.get("help_desk") or ())
 
     @property
     def intent_keywords(self) -> dict[str, list[str]]:

@@ -34,7 +34,14 @@ from functools import lru_cache
 from typing import Any
 from urllib.parse import urlparse
 
-from app.navigation.matching import any_keyword, matches_keyword, task_words, transliterate
+from app.navigation.matching import (
+    any_keyword,
+    en_forms,
+    has_cyrillic,
+    matches_keyword,
+    task_words,
+    transliterate,
+)
 from app.navigation.path_hints import PathHints
 
 FORBIDDEN_SUBSTR = ("/login", "/signin", "/signup", "/register", "/cart", "/checkout", "/wp-admin")
@@ -48,6 +55,7 @@ _LONG_SLUG = re.compile(r"/[a-z0-9]+(?:-[a-z0-9]+){2,}")
 _MIN_HEADLINE_WORDS = 4
 _MIN_HEADLINE_CHARS = 25
 _MIN_TASK_PREFIX = 4
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)  # буквы любого алфавита (см. matching._TASK_WORD)
 
 # Веса: тема (20) > форма записи при теме (+8) > форма записи без темы (4).
 # Порядок именно такой по замеру T-3d: при обратном соотношении агент уходил в
@@ -73,6 +81,11 @@ W_LEARN_PLAIN = 4
 # полностью совпадающих признаках; слова «делать» и «ставки» там знают все ссылки, потому что
 # они уже в заголовке раздела. Вес выше разрыва в 6 очков (`headline`), но ниже темы.
 W_SUBJECT = 8
+# Справочный раздел (`/support`, `/faq`, `/returns`) — **подсказка, где искать**, а не ответ.
+# Поэтому вес заметный, но ниже темы (20): по теме идём в первую очередь, а справка нужна,
+# когда прямой ссылки нет. Живой прогон магазинов: у SparkFun условия доставки лежат
+# именно на `/support`, а ссылка получала 3 балла и в очередь не попадала (doc 26 § T-3o).
+W_HELP_DESK = 6
 
 
 def looks_like_entry(path: str) -> bool:
@@ -98,20 +111,46 @@ def _path_words(path: str) -> str:
     return path.replace("-", " ").replace("_", " ").replace("/", " ")
 
 
-def _task_hit(text: str, words: tuple[str, ...]) -> bool:
-    """Слово задачи в тексте: с начала слова и по префиксу (стем-подобно)."""
+def _task_hit(text: str, words: tuple[str, ...], *, prefix: bool = False) -> bool:
+    """Слово задачи в тексте — по морфологии **своего языка**.
+
+    Кириллица: префикс ≥4 символов, потому что формы там образуются окончаниями
+    (`ставки`/`ставок`/`ставкам` — один корень). Латиница: лёгкий стем и сравнение
+    **целиком**, иначе префикс ловит чужие слова — живой прогон магазинов (doc 26 § T-3o)
+    дал `terms` → «Terminals» и `store` → «Story», и три товарные ссылки получили тот же
+    счёт, что настоящая цель.
+
+    `prefix=True` — для транслита русских слов: схемы транслитерации у сайтов разные
+    (`ц` → c/ts), совпадают как раз первые символы.
+    """
     for word in words:
-        if matches_keyword(text, word) or matches_keyword(text, word[:_MIN_TASK_PREFIX]):
+        if matches_keyword(text, word):
+            return True
+        if (prefix or has_cyrillic(word)) and matches_keyword(text, word[:_MIN_TASK_PREFIX]):
+            return True
+        if not has_cyrillic(word) and not prefix and en_forms(word) & _forms(text):
             return True
     return False
+
+
+@lru_cache(maxsize=1024)
+def _forms(text: str) -> frozenset[str]:
+    """Все формы слов текста. Кэш по тексту: одна и та же подпись ссылки проверяется против
+    каждого слова задачи."""
+    words = _WORD_RE.findall(text.casefold())
+    return frozenset().union(*(en_forms(w) for w in words)) if words else frozenset()
 
 
 @lru_cache(maxsize=256)
 def _task_forms(task: str, stopwords: frozenset[str]) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Значимые слова задачи и их транслитерация. Кэш по задаче: на портале сотни ссылок,
-    и разбирать одну и ту же задачу для каждой — впустую."""
+    и разбирать одну и ту же задачу для каждой — впустую.
+
+    Транслит отдаётся **только для кириллических** слов: у латинского слова он равен ему
+    самому, и сопоставление по нему включило бы префиксное правило там, где оно врёт.
+    """
     words = task_words(task, stopwords)
-    return words, tuple(transliterate(w) for w in words)
+    return words, tuple(transliterate(w) for w in words if has_cyrillic(w))
 
 
 @lru_cache(maxsize=256)
@@ -133,11 +172,14 @@ def _subject_words(task: str, stopwords: frozenset[str], page_context: str) -> t
     """
     if not page_context.strip():
         return ()
-    words, translit = _task_forms(task, stopwords)
+    words, _ = _task_forms(task, stopwords)
     known = _path_words(page_context.casefold())
     covered, rest = [], []
-    for word, lat in zip(words, translit, strict=True):
-        if _task_hit(known, (word,)) or _task_hit(known, (lat,)):
+    for word in words:
+        # Транслит спрашиваем только у кириллического слова: у латинского он равен ему же,
+        # а сопоставление по нему пошло бы префиксом — тем самым, который ловит чужие слова.
+        lat = (transliterate(word),) if has_cyrillic(word) else ()
+        if _task_hit(known, (word,)) or (lat and _task_hit(known, lat, prefix=True)):
             covered.append(word)
         else:
             rest.append(word)
@@ -164,7 +206,10 @@ def _content_signals(
     words, translit = _task_forms(task, stopwords)
     path_words = _path_words(path)
     # Транслит сопоставляется только с путём: текст ссылки на русском ловится словами как есть.
-    on_topic = _task_hit(text, words) or _task_hit(path_words, words) or _task_hit(path_words, translit)
+    # Транслит — только про русские слова, и сопоставляется префиксом: схемы у сайтов разные.
+    on_topic = (
+        _task_hit(text, words) or _task_hit(path_words, words) or _task_hit(path_words, translit, prefix=True)
+    )
     if on_topic:
         score += W_TASK
         tags.append("task-kw")
@@ -233,6 +278,12 @@ def _section_signals(
     if intent == "contact" and any(s.casefold() in href for s in hints.legal_slugs):
         score += 8
         tags.append("legal-contact")
+    # Справка действует НЕ ТОЛЬКО с главной, в отличие от слугов: соседний раздел темы с
+    # внутренней страницы уводит в сторону, а раздел помощи полезен отовсюду — там контакты,
+    # условия и ответы на вопросы (замечание владельца 07.08).
+    if not hunting_article and any(s in path for s in hints.help_desk_slugs):
+        score += W_HELP_DESK
+        tags.append("help-desk")
     if not hunting_article and path.rstrip("/").count("/") <= 1:
         score += 3
         tags.append("shallow")

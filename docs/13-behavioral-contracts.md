@@ -1,6 +1,6 @@
 # 13 — Behavioral Contracts (ABC-lite)
 
-> Local Web Agent · Design doc · **v0.9** · 2026-07-20  
+> Local Web Agent · Design doc · **v0.10** · 2026-08-06  
 > **Источник правды (контроль модели):** Bhardwaj, «Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents», arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) — локальная копия: `/Users/anthony/Documents/2602.22302v1.pdf`  
 > Контракт **C = (P, I, G, R)**, hard/soft split, bounded recovery, **runtime enforcement на уровне действий** (до Playwright)
 
@@ -101,11 +101,28 @@ LLM **не решает** budget страниц — только orchestrator (�
 |----|------|-------------|
 | G-H1 | **max_pages** | orchestrator counter — **not LLM** |
 | G-H2 | **max_depth** | orchestrator **hop depth** (навигационные переходы, не сегменты URL — doc 04 policy #2) |
-| G-H3 | **No revisit** | visited set |
+| G-H3 | **No revisit** | visited set **∪ attempted set** (см. ниже) |
 | G-H4 | **rate_limit_ms** | sleep in ACT |
 | G-H5 | **robots.txt** | robotparser before navigate |
 | G-H6 | **page_timeout_ms** | Playwright timeout |
 | G-H7 | **One action per PLAN step** | parser rejects batch actions |
+
+> **Замечание к G-H3 (v0.10):** множество «уже были» — это `visited ∪ attempted`, и разделение
+> не косметическое. `visited` хранит URL **прочитанных страниц** (`snapshot.url`, то есть адрес
+> ПОСЛЕ редиректа) — на нём же считается бюджет G-H1. `attempted` хранит то, **куда агент
+> ходил**: запрошенные URL, уведённые редиректом, и цели, до которых дойти не удалось (две
+> неудачных попытки `goto`, offsite-редирект, robots).
+>
+> Дыру нашёл замер журнала прогонов (doc 26 § T-3l): пока сайт редиректит A → B, ссылка A
+> остаётся «непосещённой» и проходит G-H3 **бесконечно** — на `sports.ru` три шага из восьми
+> ушли на одну и ту же страницу, `lenta.ru/archive` повторялся в трёх прогонах подряд.
+> `contract_violations` при этом были пустыми: правило честно не срабатывало.
+>
+> Почему не сложить всё в одно множество: алиас редиректа тогда съедал бы страницу из лимита
+> `max_pages`. Соответственно `ctx.pages_visited` считается **только** по `visited`.
+> Алиасы записываются в `metadata.redirect_aliases` и исключаются из «не удалось открыть»
+> (`unreached_urls`) — иначе агент сообщил бы человеку, что не дошёл до страницы, которую
+> прочитал.
 
 ### Soft invariants (I_soft)
 
@@ -608,3 +625,4 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 | 2026-07-20 | **v0.8.2 (Tier 2 fill):** I-H11 fill-safety — `fill` только в текстовые поля (`element_index` ∈ interactive_elements), никогда в password (креды — человек). `crawl.contract.yaml` +`fill_safety`; enforcer `validate_fill`; reqmap +FR-7.4 fill |
 | 2026-07-20 | **v0.8.3 (Tier 2 submit):** I-H10 уточнён — submit-элемент разрешён под attended-подтверждением (`ctx.attended`; `confirm_action` в ACT), без attended → reject. `ActionContext.attended` добавлен |
 | 2026-07-20 | **v0.9 (Tier 3 handoff, doc 25):** **I-H12** destructive click — словарь `destructive_signals` в `crawl.contract.yaml` (`click_not_destructive`, ДО `click_safety`): unattended → reject, attended → handoff (агент не жмёт — человек сам в видимом браузере). Recovery: unattended → replan, attended → пауза-handoff. Reqmap +FR-7.5. Закрывает дыру: destructive-submit больше не проходит Tier 2 confirm |
+| 2026-08-06 | **v0.10 (замер журнала, doc 26 § T-3l):** **G-H3 = `visited ∪ attempted`**. `visited` — прочитанные страницы (адрес ПОСЛЕ редиректа, на нём бюджет G-H1), `attempted` — куда ходили: запрошенные URL, уведённые редиректом, и недостижимые цели (две неудачных `goto`, offsite-редирект, robots). До правки при редиректе A → B ссылка A оставалась «непосещённой» и проходила проверку бесконечно: 4 прогона с повторами, на `sports.ru` три захода на одну страницу из восьми шагов, violations пустые. `ActionContext.attempted` добавлен; `pages_visited` по-прежнему только по `visited` (иначе алиас съедал бы страницу лимита); алиасы пишутся в `metadata.redirect_aliases` и исключаются из `unreached_urls` |

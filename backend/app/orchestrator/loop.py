@@ -27,7 +27,7 @@ from app.orchestrator.capture import dismiss_consent, step_capturer
 from app.orchestrator.decide import plan_validated
 from app.orchestrator.discovery import looks_like_article, probe_slugs, sitemap_urls
 from app.orchestrator.finalize import fail_run, finalize_run
-from app.orchestrator.interaction import REPEAT_LIMITS, act_on_element, action_signature
+from app.orchestrator.interaction import act_on_element, repeats_too_often
 from app.orchestrator.observe import drop_dead_page, navigate_and_observe
 from app.orchestrator.robots import RobotsPolicy
 from app.orchestrator.run_state import Prepared, RunState, StepOutcome
@@ -244,9 +244,10 @@ class CrawlOrchestrator:
         """NAVIGATE + OBSERVE. `next_url is None` = страница уже открыта, сразу PLAN."""
         if st.next_url is None:
             return StepOutcome.PROCEED
+        requested = st.next_url
         nav = await self._navigate_observe(
             record,
-            st.next_url,
+            requested,
             st.origin,
             prep.robots,
             first=not st.snapshots,
@@ -254,12 +255,18 @@ class CrawlOrchestrator:
         )
         st.next_url = None
         if nav is None:  # skipped/failed — PLAN с прежней страницы
+            # Цель, которая страницы не дала (robots, две неудачных попытки, offsite-редирект),
+            # больше не предлагается: иначе бюджет шагов сгорал на одной битой ссылке.
+            # Цена названа: временная сетевая ошибка закрывает URL до конца прогона.
+            st.attempted.add(requested)
             return StepOutcome.STOP if st.current is None else StepOutcome.CONTINUE
 
         snapshot, st.origin = nav
         if record.intent == "content_search" and looks_like_article(snapshot, record.config.task):
             snapshot.priority = True  # article candidate (doc 24) → 12K excerpt
-        st.remember(snapshot)
+        st.remember(snapshot, requested_url=requested)
+        if requested != snapshot.url:  # сайт увёл в другое место — видно человеку в записи
+            record.metadata.setdefault("redirect_aliases", {})[requested] = snapshot.url
         record.pages_visited = len(st.visited)
         record.current_url = snapshot.url
         if snapshot.status in ("captcha", "login_wall"):  # blocker (doc 04)
@@ -308,7 +315,7 @@ class CrawlOrchestrator:
             task=cfg.task,
             hints=self._hints,
             origin=st.origin,
-            visited=st.visited,
+            visited=st.seen,  # прочитанные + уведённые редиректом и недостижимые
             alive_probes=prep.alive_probes,
             legal_probes=prep.legal_probes,
             sitemap_urls=prep.sitemap_candidates,
@@ -330,6 +337,7 @@ class CrawlOrchestrator:
             navigator=self._navigator,
             enforcer=self._enforcer,
             routing=self._routing,
+            attempted=st.attempted,
         )
         st.violations_total += len(step_violations)
         record.steps.append(
@@ -388,26 +396,10 @@ class CrawlOrchestrator:
                 return StepOutcome.STOP
             return StepOutcome.CONTINUE
         if action.action in ("fill_form", "click", "fill"):
-            if self._repeats_too_often(record, st, action):
+            if repeats_too_often(record, st.repeats, action):
                 return StepOutcome.STOP
             return await self._interact_step(record, st, action, gate)
         return StepOutcome.STOP  # stop
-
-    @staticmethod
-    def _repeats_too_often(record: RunRecord, st: RunState, action: AgentAction) -> bool:
-        """Анти-залипание: повтор того же действия по тем же целям.
-
-        fill/fill_form тем же значением второй раз бессмыслен, click («показать
-        ещё», пагинация) законно повторяется — отсюда разные лимиты.
-        """
-        signature = action_signature(action)
-        st.repeats[signature] = st.repeats.get(signature, 0) + 1
-        if st.repeats[signature] <= REPEAT_LIMITS.get(action.action, 2):
-            return False
-        record.metadata["action_loop_guard"] = (
-            f"{action.action} повторён {st.repeats[signature]}× — остановка ACT"
-        )
-        return True
 
     async def _interact_step(
         self,

@@ -1,6 +1,6 @@
 # 05 — Extraction Schema
 
-> Local Web Agent · Design doc · **v0.4** · 2026-07-05
+> Local Web Agent · Design doc · **v0.5** · 2026-08-06
 
 ## Назначение
 
@@ -165,6 +165,23 @@ Optional block when crawl finds target article page:
 
 `article` — **лучшая** из ≤ `max_article_candidates: 3` найденных статей (R1 выбирает в synthesis; doc 21 § article candidates); отклонённые — в `article_candidates_considered[]` для прозрачности. Used as input to `compare_results` rubric `content_completeness`.
 
+**Что в этом блоке от кода, а не от модели (v0.5).** LLM возвращает только `url` и мету;
+`main_text_excerpt` и `word_count` подставляет код из снапшота:
+
+- **`word_count` — всегда замер.** Раньше числу модели верили, если оно больше 50 («мусор
+  вроде `14 min read` отсечём»), но модель ошибается **правдоподобно**: на живом прогоне
+  объявила 1380 слов там, где текст вдвое длиннее. Число уходит прямо в сравнение полноты
+  (`compare_synthesizer`: `words={a.word_count}`), то есть врало ровно там, где решается ответ.
+- **Считается по полному тексту страницы**, до обрезки снапшота (`PageSnapshot.text_words`,
+  doc 03 § caps). Счёт по обрезанному тексту упирался в `MAIN_TEXT_CAP` и делал все длинные
+  статьи одинаковыми — то есть неразличимыми для сравнения «где тема раскрыта полнее».
+- **Отброс блока оставляет след.** Если `article.url` не из прочитанных страниц, блок
+  снимается (он недостоверен) и в `not_found` появляется запись `key: article` с причиной.
+  Без неё «модель не нашла статью» и «код отбросил её URL» выглядели в ответе одинаково —
+  на 12 реальных прогонах из 13 `article` был пуст, и причина не записана ни в одном.
+  Второй канал того же — блок, не прошедший схему: он по-прежнему отбрасывается, чтобы
+  сохранить факты, но теперь помечается в телеметрии шага (`llm_stats.dropped_blocks`).
+
 ---
 
 ## ComparisonResult (Phase 3 — doc 24)
@@ -311,3 +328,4 @@ Backend validates R1 output against schema before saving. Malformed JSON:
 | 2026-07-05 | **v0.3:** article block; ComparisonResult; comparison report (doc 24) |
 | 2026-07-05 | **v0.3.1 (review):** status `canceled` (FR-3.8) |
 | 2026-07-05 | **v0.4 (review-2):** `schema_version` в ExtractionResult/ComparisonResult; `article_candidates_considered[]` (лучшая из ≤3, doc 21); `ComparisonResult.excluded[]` (partial failure, doc 24) |
+| 2026-08-06 | **v0.5 (замер журнала, doc 26 § T-3l):** `article.word_count` — всегда замер кода по ПОЛНОМУ тексту страницы (`PageSnapshot.text_words`), доверие числу модели убрано: она объявляла 1380 слов при вдвое большем тексте, а число идёт в сравнение полноты. Отброс блока перестал быть тихим: `article.url` не из прочитанных → запись `key: article` в `not_found` с причиной; блок, не прошедший схему, помечается в `llm_stats.dropped_blocks` |

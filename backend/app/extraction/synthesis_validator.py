@@ -15,6 +15,7 @@ from rapidfuzz import fuzz
 
 from app.contracts.loader import ContractSpec, load_contract
 from app.extraction.validator import validate_result
+from app.llm.synthesizer import ARTICLE_TEXT_CAP
 from app.schemas.extraction import Evidence, ExtractionResult, Fact, NotFound
 from app.schemas.snapshot import PageSnapshot
 
@@ -117,8 +118,9 @@ class SynthesisValidator:
 
     @staticmethod
     def _enrich_article(result: ExtractionResult, snapshots: list[PageSnapshot]) -> None:
-        """Article excerpt/word_count подставляет КОД из снапшота (verbatim, до 12K —
-        doc 20); LLM возвращает только url+мету и не перепечатывает статью в output."""
+        """Article excerpt/word_count подставляет КОД из снапшота (verbatim, до
+        `ARTICLE_TEXT_CAP` — ровно столько, сколько снапшот и хранит); LLM возвращает
+        только url+мету и не перепечатывает статью в output."""
         article = result.article
         if article is None:
             return
@@ -127,11 +129,19 @@ class SynthesisValidator:
         target = normalize_url(article.url)
         source = next((s for s in snapshots if normalize_url(s.url) == target), None)
         if source is None:  # URL статьи не из посещённых → блок недостоверен
+            # Молча выбрасывать нельзя: в ответе просто не будет статьи, и постфактум
+            # «модель не нашла» неотличимо от «код отбросил её URL» (замер журнала:
+            # article пуст на 12 реальных прогонах из 13, причина ни в одном не записана).
             result.article = None
+            result.not_found.append(
+                NotFound(key="article", reason=f"URL статьи не из прочитанных страниц: {article.url}")
+            )
             return
-        article.main_text_excerpt = source.main_text[:12000]
-        if article.word_count < 50:  # мусор LLM («14 min read» → 14) — считаем сами
-            article.word_count = len(source.main_text.split())
+        article.main_text_excerpt = source.main_text[:ARTICLE_TEXT_CAP]
+        # Число слов — замер, а не мнение модели: оно уходит в сравнение полноты, а модель
+        # ошибается правдоподобно (1380 слов там, где текст вдвое длиннее). `text_words`
+        # посчитан по ПОЛНОМУ тексту страницы, до обрезки снапшота.
+        article.word_count = source.text_words or len(source.main_text.split())
         if not article.title:
             article.title = source.title
 

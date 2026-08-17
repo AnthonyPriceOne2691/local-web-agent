@@ -11,12 +11,22 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.llm.json_chat import chat_json
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
+from app.observer.snapshot import MAIN_TEXT_CAP
 from app.schemas.extraction import ExtractionResult, SynthesisOutput
 from app.schemas.snapshot import PageSnapshot
 
 PAGE_TEXT_CAP = 1000  # doc 20 synthesis bundle
 PRIORITY_TEXT_CAP = 4000
-ARTICLE_TEXT_CAP = 12000  # content_search: полный excerpt для compare (doc 20)
+# Сколько текста статьи уходит в синтез и дальше в сравнение. Привязан к тому, что снапшот
+# РЕАЛЬНО хранит: раньше здесь стояло 12000 при `MAIN_TEXT_CAP` 8000, и верхняя треть бюджета
+# не использовалась никогда — замер записей прогонов показал excerpt ровно 8000 у двух живых
+# статей из трёх (King Arthur 3771 слово, legalbet 1380).
+#
+# Поднимать пару 8000/12000 вслепую нельзя, и это тоже замерено: блок сравнения трёх сайтов
+# вырос бы с 25 620 до ~33 620 символов, то есть до ~13 450 токенов на русском, а с ответом
+# (`synth_max_tokens` 4096) это 17 546 при `num_ctx` 16384 — переполнение. Подъём возможен
+# только вместе с `WIDE_NUM_CTX` для сравнения (doc 20 § Бюджет статьи).
+ARTICLE_TEXT_CAP = MAIN_TEXT_CAP  # content_search: excerpt для compare (doc 20)
 VISION_DESC_CAP = 400
 
 
@@ -123,10 +133,17 @@ class Synthesizer:
         except ValidationError:
             # чаще всего валидацию валят опциональные блоки (article/design) —
             # отбросить их и сохранить факты, а не ронять весь результат в пустой partial
-            for key in ("article", "article_candidates_considered", "design_tokens"):
+            dropped = [
+                k for k in ("article", "article_candidates_considered", "design_tokens") if k in payload
+            ]
+            for key in dropped:
                 payload.pop(key, None)
             try:
                 result = ExtractionResult.model_validate(payload)
+                # След обязателен: без него «статьи нет» и «блок статьи не прошёл схему»
+                # выглядят в ответе одинаково (doc 20 § Телеметрия синтеза).
+                stats["dropped_blocks"] = dropped
             except ValidationError:
                 result = ExtractionResult(status="partial", summary=str(raw.get("summary", ""))[:500])
+                stats["invalid_payload"] = True
         return result, stats

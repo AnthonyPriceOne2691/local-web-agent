@@ -61,6 +61,7 @@ async def plan_validated(
     navigator: Navigator,
     enforcer: ContractEnforcer,
     routing: NavRouting | None = None,
+    attempted: set[str] | None = None,
 ) -> tuple[AgentAction, list[Violation], dict[str, Any]]:
     violations: list[Violation] = []
     llm_stats: dict[str, Any] = {}
@@ -69,7 +70,7 @@ async def plan_validated(
         "drift", {"hard_total": 0, "ih6": 0, "replan_ok": 0, "replan_fail": 0, "fallbacks": 0}
     )
     cands = candidates[: 5 if drift["ih6"] >= DRIFT_IH6_FOR_TOP5 else None]
-    ctx = build_action_context(record, current, cands, visited, hops, origin, robots)
+    ctx = build_action_context(record, current, cands, visited, hops, origin, robots, attempted)
 
     replans_used = 0
     if not _fallback_only(drift):
@@ -80,7 +81,7 @@ async def plan_validated(
                 intent=record.intent,
                 snapshot=current,
                 candidates=cands,
-                visited=visited,
+                visited=visited | (attempted or set()),  # модель видит и уведённые редиректом
                 pages_left=pages_left,
                 retry_note=retry_note,
                 temperature=temperature,

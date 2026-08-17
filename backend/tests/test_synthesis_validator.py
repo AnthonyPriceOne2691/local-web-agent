@@ -158,10 +158,11 @@ def test_facts_truncated_to_contract_max(validator):
 
 def test_article_enriched_from_snapshot_code_side():
     """Excerpt/word_count статьи подставляет код из снапшота, не LLM-перепечатка."""
+    from app.llm.synthesizer import ARTICLE_TEXT_CAP
     from app.schemas.extraction import Article
 
     v = SynthesisValidator()
-    long_text = "Odds formats explained with worked examples. " * 400  # > 12K chars
+    long_text = "Odds formats explained with worked examples. " * 400  # длиннее любого cap
     snap = PageSnapshot(url="https://x.com/blog/guide", title="Guide", main_text=long_text)
     result = ExtractionResult(
         status="completed",
@@ -169,12 +170,71 @@ def test_article_enriched_from_snapshot_code_side():
         article=Article(url="https://x.com/blog/guide/", title="", main_text_excerpt="short quote"),
     )
     out = v.validate(result, [snap])  # трейлинг-слэш нормализуется
-    assert len(out.article.main_text_excerpt) == 12000
+    # Раньше здесь стояло 12000 — число, которого excerpt не достигал НИКОГДА: снапшот хранит
+    # `MAIN_TEXT_CAP` 8000, и замер записей прогонов показал ровно 8000 у двух живых статей.
+    # Теперь обе константы связаны, и тест держит эту связь (doc 20 § Бюджет статьи).
+    assert len(out.article.main_text_excerpt) == ARTICLE_TEXT_CAP
     assert out.article.word_count == len(long_text.split())
     assert out.article.title == "Guide"
     # url статьи не из посещённых → блок отбрасывается
     bad = ExtractionResult(status="completed", summary="s", article=Article(url="https://x.com/invented"))
     assert v.validate(bad, [snap]).article is None
+
+
+def test_word_count_is_counted_by_code_even_when_the_model_sounds_plausible():
+    """Число слов у статьи — замер, а не мнение модели.
+
+    Старое правило доверяло LLM всё, что больше 50 («мусор вроде „14 min read“ отсечём»).
+    Но модель ошибается правдоподобно: в живом прогоне на `legalbet.ru` она объявила
+    1380 слов там, где текст статьи вдвое длиннее. Число уходит прямо в сравнение полноты
+    (`compare_synthesizer`: `words={a.word_count}`), то есть врало там, где решается ответ.
+    """
+    from app.schemas.extraction import Article
+
+    v = SynthesisValidator()
+    text = "Ставки на футбол разбор рынков и коэффициентов. " * 200
+    snap = PageSnapshot(url="https://x.com/blog/guide", title="Guide", main_text=text)
+    result = ExtractionResult(
+        status="completed",
+        summary="found",
+        article=Article(url="https://x.com/blog/guide", word_count=1380),  # правдоподобно, но мимо
+    )
+    out = v.validate(result, [snap])
+    assert out.article.word_count == len(text.split()) != 1380
+
+
+def test_word_count_measures_the_whole_page_not_the_capped_text():
+    """Снапшот режет текст на `MAIN_TEXT_CAP`, и счёт по нему занижал длинные статьи.
+
+    Сравнение «где тема раскрыта полнее» тогда упиралось в потолок: у всех длинных статей
+    получалось одно и то же число. Считаем при снятии страницы, по полному тексту.
+    """
+    from app.schemas.extraction import Article
+
+    v = SynthesisValidator()
+    capped = "слово " * 1000  # то, что осталось после cap
+    snap = PageSnapshot(
+        url="https://x.com/long", title="Long", main_text=capped, truncated=True, text_words=4200
+    )
+    result = ExtractionResult(status="completed", summary="s", article=Article(url="https://x.com/long"))
+    assert v.validate(result, [snap]).article.word_count == 4200
+
+
+def test_dropped_article_leaves_a_trace():
+    """Блок статьи выбрасывался молча: в ответе просто нет статьи, и почему — неизвестно.
+
+    На реальных сайтах `article` пуст почти всегда (замер журнала: 12 прогонов из 13), и
+    без следа нельзя отличить «модель не нашла» от «код отбросил её URL».
+    """
+    from app.schemas.extraction import Article
+
+    v = SynthesisValidator()
+    snap = PageSnapshot(url="https://x.com/blog/guide", title="Guide", main_text="текст " * 100)
+    result = ExtractionResult(status="completed", summary="s", article=Article(url="https://x.com/invented"))
+    out = v.validate(result, [snap])
+    assert out.article is None
+    dropped = [nf for nf in out.not_found if nf.key == "article"]
+    assert dropped and "https://x.com/invented" in dropped[0].reason
 
 
 def test_article_word_count_coercion():

@@ -15,11 +15,12 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.llm.json_chat import chat_json
 from app.llm.ollama_client import OllamaClient, strip_thinking, supports_think
+from app.llm.synthesizer import ARTICLE_TEXT_CAP
 from app.schemas.extraction import ExtractionResult
 from app.schemas.research import ComparisonOutput, ComparisonResult
 
 SITE_SUMMARY_CAP = 1200
-ARTICLE_EXCERPT_CAP = 12000  # doc 20 § compare
+ARTICLE_EXCERPT_CAP = ARTICLE_TEXT_CAP  # ровно столько, сколько хранит снапшот (doc 20)
 FACTS_PER_SITE = 12
 WIDE_NUM_CTX = 24576  # N > 3 (doc 16)
 

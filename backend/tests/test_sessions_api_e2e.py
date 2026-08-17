@@ -222,7 +222,10 @@ async def test_uc2_e2e_article_compare_on_mocks(tmp_path):
     assert session.status == "completed"
     run_a = run_store.get(session.run_ids[0])
     assert run_a.intent == "content_search"
-    assert run_a.result.article and run_a.result.article.word_count == 2400
+    # Раньше здесь стояло 2400 — число из ответа модели. На странице фикстуры слов втрое
+    # меньше, и тест закреплял ровно ту выдумку, из-за которой сравнение полноты врало.
+    guide_words = len(browser_pages[f"{SITE_A}/blog/football-betting-guide"]["main_text"].split())
+    assert run_a.result.article and run_a.result.article.word_count == guide_words
     comparison = session.comparison_result
     assert comparison.winner and comparison.winner.start_url == SITE_A
     assert comparison.rankings[0].score == 92

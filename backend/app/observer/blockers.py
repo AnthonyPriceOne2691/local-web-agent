@@ -20,6 +20,8 @@ _CAPTCHA_SIGNALS = (
     "attention required",
     # прочие anti-bot / captcha
     "verify you are human",
+    "verify you are a human",  # HUMAN/PerimeterX пишет с артиклем — подстрока выше не ловила
+    "using automation tools to browse",
     "captcha",
     "are you a robot",
     "unusual traffic",
@@ -37,6 +39,15 @@ _NOT_FOUND_SIGNALS = (
     "not found",
     "page doesn't exist",
     "no longer available",
+    # Отказ в доступе — тот же класс, что 404: страница есть, содержания нет. Найдено
+    # живыми пробами 07.08 при отборе сайтов: `seriouseats.com` отдал 316 символов
+    # «access issue», `povarenok.ru` — «403 Forbidden» на 19 символах, и обе шли в синтез
+    # как содержание сайта. Тот же thin-guard: разбор кодов ответа остаётся статьёй.
+    "403",
+    "forbidden",
+    "access denied",
+    "access issue",
+    "access to this page has been denied",
 )
 
 

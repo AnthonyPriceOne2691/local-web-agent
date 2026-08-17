@@ -70,6 +70,7 @@ class PageSnapshot(BaseModel):
     screenshots: list[ScreenshotRef] = Field(default_factory=list)
     vision_insights: list[dict[str, Any]] = Field(default_factory=list)  # VisionInsight dumps (doc 23)
     truncated: bool = False
+    text_words: int = 0  # слов на всей странице, считая обрезанный хвост (doc 20 § caps)
     priority: bool = False
 
 
