@@ -10,7 +10,7 @@
 - **human_ok_plan:** yes — тем же вопросом; ответ дал замер, план поменялся по данным
 - **shape-oracles:** cqg-deployed
 - **behavior-oracles:** tests-present + живые пробы robots/sitemap по трём сайтам
-- **ci-oracles:** tooling
+- **ci-oracles:** weak — ни один прогон CI не наблюдался (`gh` локально не авторизован, api.github.com отвечает TLS timeout). Запись приведена к наблюдению, а не наоборот (§10.4)
 - **worktree:** none
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
