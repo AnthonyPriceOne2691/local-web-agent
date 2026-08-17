@@ -33,6 +33,22 @@ fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# Waiver из STATUS — основной механизм, env — аварийный. Причина: env-переменную
+# в CI иначе как правкой workflow не задать (то есть навсегда), а локально она не
+# оставляет следа в диффе, и ревьюер обхода не видит. Строка в STATUS попадает в
+# дифф, видна в PR и умирает вместе с поставкой (Delivery §4.3a).
+status_waiver() {
+  local f="delivery/active/STATUS.md" v
+  [[ -f "$f" ]] || return 1
+  v=$(sed -n 's/^[[:space:]]*[-*]\{0,1\}[[:space:]]*\**baseline_growth_waiver\**[[:space:]]*:\**[[:space:]]*\(.*\)$/\1/p' "$f" | head -1)
+  v=${v%%<!--*}
+  v=$(printf '%s' "$v" | sed 's/[[:space:]]*$//')
+  case "$v" in
+    ''|no|none|-|…|'<'*) return 1 ;;
+  esac
+  printf '%s' "$v"
+}
+
 # Снимок -> "path<TAB>count". Global-число получает ключ __global__.
 normalize() {
   awk '
@@ -63,8 +79,15 @@ for cur in "$LINT_DIR"/*_baseline.txt; do
   normalize "$tmp/old.raw" | sort >"$tmp/old.tsv"
   normalize "$cur" | sort >"$tmp/new.tsv"
 
-  if ! awk -F'\t' -v f="$name" '
-      NR == FNR { old[$1] = $2; next }
+  # `FILENAME == oldf`, а НЕ `NR == FNR`: если снимок в базе не содержит ни одной
+  # числовой записи (частый случай — проект стартовал чистым), old.tsv пуст, и
+  # тогда `NR == FNR` истинно для КАЖДОЙ строки new.tsv, потому что первый файл не
+  # добавил ничего в NR. Все новые записи уходили в массив `old[]` вместо сравнения,
+  # и мета-гейт превращался в полный no-op: любое число свежих нарушений
+  # легализовалось молча — ровно то, от чего он и поставлен. Найдено регрессионным
+  # сьютом (tests/) на первом же прогоне, полевые развёртывания это пропустили.
+  if ! awk -F'\t' -v f="$name" -v oldf="$tmp/old.tsv" '
+      FILENAME == oldf { old[$1] = $2; next }
       {
         if (!($1 in old)) {
           printf "  %s: НОВАЯ запись %s (count %s) — свежее нарушение легализовано\n", f, $1, $2
@@ -80,12 +103,33 @@ for cur in "$LINT_DIR"/*_baseline.txt; do
 done
 
 if [[ "$violations" -eq 0 ]]; then
+  # Сверено НОЛЬ — это не «проверено», а «сверять было нечего»: снимки в базе
+  # отсутствуют. Так выглядит первое развёртывание и первый прогон каждого нового
+  # гейта — то есть ровно те моменты, когда пересъём вверх наиболее вероятен.
+  # Статус WARNING, а не OK: зелёный мета-гейт, сверивший ноль, читается как
+  # «проверено» (Delivery §3.1a). Ошибкой делать нельзя — на bootstrap это штатно.
+  # Найдено полем (lab-2).
+  if [[ "$checked" -eq 0 ]]; then
+    # Без цветовых переменных: этот скрипт их не определяет, а под `set -u`
+    # ссылка на неопределённую переменную роняет гейт. Поймано обратным прогоном
+    # правки — четвёртый такой случай за сессию, и все четыре нашёл он же.
+    echo "baseline-ratchet: WARNING — сверено 0 снимков с $BASE: в базе их нет" \
+         "(bootstrap или новый гейт). Ратчет на снимки в этом прогоне НЕ работал."
+    exit 0
+  fi
   echo "baseline-ratchet: OK ($checked снимков сверено с $BASE)"
   exit 0
 fi
 
+if waiver=$(status_waiver); then
+  echo "baseline-ratchet: рост разрешён waiver'ом из delivery/active/STATUS.md: $waiver" >&2
+  echo "(виден в PR, умрёт вместе с поставкой)" >&2
+  exit 0
+fi
 if [[ "$ALLOW_BASELINE_GROWTH" == "1" ]]; then
-  echo "baseline-ratchet: рост разрешён ALLOW_BASELINE_GROWTH=1 — объясни в PR" >&2
+  echo "baseline-ratchet: рост разрешён ALLOW_BASELINE_GROWTH=1." >&2
+  echo "⚠ env-обход НЕ виден ревьюеру и в CI задаётся только правкой workflow." >&2
+  echo "Предпочитай строку 'baseline_growth_waiver: reason=… by=human:…' в STATUS." >&2
   exit 0
 fi
 if [[ "$STRICT" == "0" ]]; then
@@ -93,5 +137,7 @@ if [[ "$STRICT" == "0" ]]; then
   exit 0
 fi
 echo "baseline-ratchet: FAIL — снимок переснят ВВЕРХ в $violations файл(ах)." >&2
-echo "Починка: убрать нарушения в коде, затем --generate/--tighten; снимок только вниз (§7)." >&2
+echo "Варианты: (1) убрать нарушения в коде, затем --generate/--tighten — снимок" >&2
+echo "только вниз (§7); (2) если рост законен (массовое переименование) — строка" >&2
+echo "'baseline_growth_waiver: reason=… by=human:…' в delivery/active/STATUS.md." >&2
 exit 1

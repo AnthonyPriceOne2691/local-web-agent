@@ -102,7 +102,13 @@ max-statements = 50
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/main.py"]
+# `playwright_session.py` переехал сюда из COV_EXCLUDE_RE в check_diff_coverage.sh
+# (обновление контура 2026-08-17): канон впитал исключение и читает его ТЕПЕРЬ
+# отсюда, а не из тела гейта — «Читаем omit из pyproject, а не держим список в
+# скрипте». Причина прежняя: обёртка внешнего SDK, 28.9 % покрытия по природе.
+# ⚠ Цена перевода названа: `omit` — не приватное поле гейта, оно меняет и то, что
+# МЕРЯЕТ coverage, а не только область diff-coverage. Общий процент вырастет.
+omit = ["app/main.py", "app/browser/playwright_session.py"]
 
 [build-system]
 requires = ["hatchling"]

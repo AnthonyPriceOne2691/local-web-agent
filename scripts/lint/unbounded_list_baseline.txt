@@ -1,0 +1,4 @@
+# unbounded_list_baseline.txt — снимок AST-гейта. Генерируется --generate, НЕ руками.
+# Правило: unbounded-list: эндпоинт отдаёт список без границы
+# Формат: <count>:<path> (path от repo-root). Ратчет вниз: файл проходит при count <= снимок;
+# файл ВНЕ снимка (новый) — hard 0.

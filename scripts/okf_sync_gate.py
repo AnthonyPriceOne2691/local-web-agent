@@ -21,22 +21,14 @@ import os
 import re
 import subprocess
 import sys
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 
 BUNDLE = os.environ.get("OKF_BUNDLE", "knowledge")
 STRICT = os.environ.get("STRICT", "1") != "0"
 ALLOW_DRIFT = os.environ.get("ALLOW_CANON_DRIFT", "0") == "1"
-# Waiver, ВИДИМЫЙ в репозитории. env-переменной в CI не задать (а значит любая
-# правка кода без смены инварианта — форматирование, типизация, логирование —
-# роняла бы PR), поэтому осознанный дрейф объявляется строкой в STATUS:
-#   canon_drift_waiver: reason=… by=human:…
-# Она попадает в дифф, читается ревьюером и живёт ровно одну поставку.
-STATUS_WAIVER_RE = re.compile(r"(?im)^[ \t]*[-*]?[ \t]*\**canon_drift_waiver\**[ \t]*:[ \t]*(.+)$")
 RESERVED = {"index.md", "log.md"}
-
-# (ошибки, предупреждения) — общий тип проверок, чтобы их можно было складывать.
-Report = tuple[list[str], list[str]]
+DELIVERY_STATUS = "delivery/active/STATUS.md"
 
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
@@ -88,6 +80,34 @@ def scalar_field(fm: str, name: str) -> str:
     return m.group(1).strip().strip("\"'") if m else ""
 
 
+def status_waiver(root: Path) -> str:
+    """Строка `canon_drift_waiver:` из STATUS активной поставки ("" если нет).
+
+    Waiver обязан жить там, где идёт ревью. env-переменная для этого не годится:
+    в CI её иначе как правкой workflow не задать — то есть НАВСЕГДА, а локально
+    она не оставляет следа в диффе, и ревьюер обхода не видит. Строка в STATUS
+    попадает в дифф, видна в PR и умирает вместе с поставкой (уходит в archive).
+
+    Зачем waiver вообще нужен: гейт видит «файл тронут», а не «инвариант изменён».
+    Типизация, формат, логи, переименования трогают код под `implementation:`, не
+    меняя смысла. Правка concept'а в таком PR была бы ЛОЖНЫМ «обновлено»: свежий
+    `generated.at` создаёт вид пересмотра канона, которого не было.
+    """
+    p = root / DELIVERY_STATUS
+    if not p.is_file():
+        return ""
+    m = re.search(
+        r"(?im)^[ \t]*[-*]?[ \t]*\**canon_drift_waiver\**[ \t]*:\**[ \t]*(.*)$",
+        p.read_text(encoding="utf-8"),
+    )
+    if not m:
+        return ""
+    val = re.sub(r"<!--.*?-->", "", m.group(1)).strip()
+    if not val or val.lower() in {"no", "none", "-", "…"} or val.startswith("<"):
+        return ""
+    return val
+
+
 def covers(declared: str, changed: str) -> bool:
     """Совпадение пути: точное, префикс каталога или glob-хвост /**."""
     d = declared.strip().lstrip("./").rstrip()
@@ -117,26 +137,15 @@ def changed_files(base: str | None, staged: bool) -> tuple[list[str], list[str]]
     return [f for f in out.splitlines() if f], []
 
 
-def status_waiver() -> str:
-    """Строка `canon_drift_waiver:` из delivery/active/STATUS.md (пусто = нет)."""
-    status = repo_root() / "delivery" / "active" / "STATUS.md"
-    if not status.is_file():
-        return ""
-    m = STATUS_WAIVER_RE.search(status.read_text(encoding="utf-8"))
-    if not m:
-        return ""
-    return re.sub(r"<!--.*?-->", "", m.group(1)).strip().lstrip("*").strip()
+def collect_concepts(root, bundle) -> tuple[dict, list]:
+    """Карта `concept → объявленные пути` и список просроченных.
 
-
-def scan_bundle(root: Path, bundle: Path) -> tuple[dict[str, list[str]], list[tuple[str, str]]]:
-    """(concept -> объявленные пути, просроченные concept'ы).
-
-    Явный UTC, а не локальная дата: гейт гоняется и на машине автора, и в CI —
-    «просрочен ли stale_after» не должно зависеть от часового пояса раннера.
+    Шов `main` (`okf@1.13`): блок только СОБИРАЕТ данные и ничего не судит,
+    поэтому отделяется чисто и возвращает ровно две структуры.
     """
     concepts: dict[str, list[str]] = {}
     stale: list[tuple[str, str]] = []
-    today = datetime.now(UTC).date()
+    today = date.today()
     for path in sorted(bundle.rglob("*.md")):
         if path.name in RESERVED:
             continue
@@ -149,55 +158,80 @@ def scan_bundle(root: Path, bundle: Path) -> tuple[dict[str, list[str]], list[tu
             concepts[rel] = declared
         after = scalar_field(fm, "stale_after")
         m = DATE_RE.search(after) if after else None
-        if m and date(int(m.group(1)), int(m.group(2)), int(m.group(3))) < today:
-            stale.append((rel, after))
+        if m:
+            when = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            if when < today:
+                stale.append((rel, after))
     return concepts, stale
 
 
-def check_sync(concepts: dict[str, list[str]], base: str | None, staged: bool) -> Report:
-    """Дрейф кода относительно concept'ов на диффе."""
-    errors: list[str] = []
-    warnings: list[str] = []
-
-    files, issues = changed_files(base, staged)
-    warnings += [f"cannot compute diff: {i}" for i in issues]
-    if not files and not issues:
-        # Пустой дифф = гейт ничего не судит. Это законно (push в саму базу),
-        # но должно быть видно: молчаливый no-op читается как «проверено».
-        warnings.append(f"diff vs '{base or 'staged'}' is empty — gate inert this run")
-    if not files:
-        return errors, warnings
-
-    touched_bundle = {f for f in files if f.startswith(f"{BUNDLE}/")}
-    code = [f for f in files if f not in touched_bundle]
-    for rel, declared in sorted(concepts.items()):
-        if rel in touched_bundle:
-            continue  # concept обновлён — синхронизация заявлена
-        hits = sorted({c for c in code for d in declared if covers(d, c)})[:5]
-        if hits:
-            errors.append(f"{rel}: implementation changed but concept untouched -> {', '.join(hits)}")
-    if not concepts:
-        warnings.append(
-            "no concept declares implementation: — gate is inert; start filling the field (Приложение A.3)"
-        )
-    return errors, warnings
+def check_concept_sync(files, concepts: dict, errors: list[str], warnings: list[str]) -> None:
+    """Код тронут, а concept — нет: рассинхрон знания и реализации (§7.2)."""
+    if files:
+        touched_bundle = {f for f in files if f.startswith(f"{BUNDLE}/")}
+        code = [f for f in files if f not in touched_bundle]
+        for rel, declared in sorted(concepts.items()):
+            if rel in touched_bundle:
+                continue  # concept обновлён — синхронизация заявлена
+            hits = sorted({c for c in code for d in declared if covers(d, c)})[:5]
+            if hits:
+                errors.append(f"{rel}: implementation changed but concept untouched -> {', '.join(hits)}")
+        if not concepts:
+            warnings.append(
+                "no concept declares implementation: — gate is inert; "
+                "start filling the field (Приложение A.3)"
+            )
 
 
-def explain_failure(errors: list[str], check_stale: bool) -> int:
-    """Печать вердикта при находках: waiver / STRICT=0 / провал с подсказкой."""
-    waiver = status_waiver()
-    if ALLOW_DRIFT or waiver:
-        source = "ALLOW_CANON_DRIFT=1" if ALLOW_DRIFT else f"STATUS: {waiver}"
+def report(args, root, concepts: dict, errors: list[str], warnings: list[str]) -> int:
+    """Печать итога и код возврата.
+
+    Шов `main` (`okf@1.13`): вывод отделён от суждения — так `main` остаётся
+    диспетчером, а советы не мешают читать логику.
+    """
+    for w in warnings:
+        print(f"WARNING: {w}")
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+
+    if not errors:
+        # ⚠ Слово `OK` — это то, что уезжает в таблицу прогонов verify-report'а,
+        # и до `okf@1.16` оно было одинаковым у «проверил и сошлось» и у
+        # «проверять было нечем». Пустой дифф теперь ошибка (см. `judge_sync`),
+        # а вторая инертность — карта без единого `implementation:` — законна на
+        # развёртывании и остаётся warning'ом; но в СТРОКЕ ИТОГА она называется,
+        # иначе снова попадёт в отчёт неотличимой от проверки.
+        inert = "" if concepts else " — INERT: 0 concepts mapped, судить нечем"
+        print(f"okf_sync_gate: OK ({len(concepts)} mapped concepts, {len(warnings)} warning(s)){inert}")
+        return 0
+    # Waiver из STATUS — основной механизм: виден в диффе, живёт одну поставку.
+    # На --check-stale не действует: просроченный concept — это не «код тронут без
+    # смены смысла», а отдельная проблема (§7.2).
+    if not args.check_stale:
+        waiver = status_waiver(root)
+        if waiver:
+            print(
+                f"okf_sync_gate: drift разрешён waiver'ом из {DELIVERY_STATUS}: "
+                f"{waiver}\n"
+                f"({len(errors)} concept(s) не тронуты — waiver виден в PR и умрёт "
+                f"с поставкой)"
+            )
+            return 0
+
+    if ALLOW_DRIFT:
         print(
-            f"okf_sync_gate: drift allowed ({source}) — {len(errors)} finding(s); "
-            f"инварианты обязаны быть не тронуты, иначе это ложное «обновлено»",
+            f"okf_sync_gate: drift allowed by ALLOW_CANON_DRIFT=1 "
+            f"({len(errors)} finding(s)).\n"
+            f"⚠ env-обход НЕ виден ревьюеру и в CI задаётся только правкой workflow "
+            f"(то есть навсегда). Предпочитай строку `canon_drift_waiver:` в "
+            f"{DELIVERY_STATUS}.",
             file=sys.stderr,
         )
         return 0
     if not STRICT:
         print(f"okf_sync_gate: WARNING (STRICT=0) — {len(errors)} finding(s)", file=sys.stderr)
         return 0
-    if check_stale:
+    if args.check_stale:
         print(
             f"okf_sync_gate: FAIL — {len(errors)} concept(s) past stale_after.\n"
             "Fix: re-verify the canon and set `verified:` + a new `stale_after`, "
@@ -207,49 +241,132 @@ def explain_failure(errors: list[str], check_stale: bool) -> int:
     else:
         print(
             f"okf_sync_gate: FAIL — {len(errors)} concept(s) out of sync with code.\n"
-            "Fix: update the concept + scope log.md, or drop the path from "
-            "`implementation:` if it no longer applies (§4.1).",
+            "Варианты, в порядке предпочтения:\n"
+            "  1. Инвариант правда изменился → обнови concept + scope log.md (§4.1).\n"
+            "  2. Смысл не менялся (типы, формат, логи, переименование) → строка\n"
+            f"     `canon_drift_waiver: reason=… by=human:…` в {DELIVERY_STATUS}:\n"
+            "     она видна в PR и умрёт вместе с поставкой. Правка concept'а «чтобы\n"
+            "     позеленело» — ложное «обновлено», так делать нельзя.\n"
+            "  3. Путь больше не описывает этот concept → убери его из "
+            "`implementation:`\n"
+            "     (или сузь до конкретных файлов, если срабатывания повторяются).",
             file=sys.stderr,
         )
     return 1
 
 
-def main() -> int:
+def parse_cli() -> argparse.Namespace:
+    """Разбор аргументов вместе с фолбэком на `BASE` из окружения.
+
+    Шов по данным: блок отдаёт наружу ровно одно имя — `args`, свободных имён у
+    него нет вовсе (`ast`), поэтому граница проходит по нему без остатка. Держать
+    фолбэк здесь же обязательно: «чем судить» — часть разбора входа, а не
+    логики, и разъехавшись с ним, гейт снова запускался бы без базы.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", help="ref to diff against (e.g. origin/main)")
     ap.add_argument("--staged", action="store_true", help="use staged diff")
     ap.add_argument("--check-stale", action="store_true", help="stale_after check")
     args = ap.parse_args()
 
+    # Фолбэк на BASE из окружения: гейты CQG получают базу именно так, и
+    # расхождение конвенций (флаг здесь, переменная там) само приводило к
+    # запуску без базы — то есть к зелёному гейту, не проверившему ничего.
+    if not args.base and not args.staged:
+        args.base = os.environ.get("BASE") or None
+    return args
+
+
+def judge_freshness(concepts: dict, stale: list, errors: list[str]) -> None:
+    """`--check-stale`: просроченный `stale_after` — ошибка, а не предупреждение.
+
+    Половина развилки `main`, вырезанная целиком: `ast` называет свободными
+    ровно `concepts`, `stale`, `errors`, а решение о коде возврата остаётся у
+    `report` — через шов не проходит ни `return`, ни `break`.
+    """
+    for rel, when in stale:
+        errors.append(f"{rel}: stale_after {when} is in the past — re-verify or bump")
+    if not stale:
+        print(f"okf_sync_gate: freshness OK ({len(concepts)} mapped concepts)")
+
+
+def judge_sync(args, concepts: dict, stale: list, errors: list[str], warnings: list[str]) -> None:
+    """Sync-режим: дифф против базы против карты `implementation:` (§4.1).
+
+    Вторая половина той же развилки. Шов здесь потому, что режимы делят только
+    вход и печать: `stale` в этой ветке даёт warning, а в соседней — ошибку, и
+    держать оба смысла в одной функции значило хранить развилку дважды. Замер:
+    `main` 152/37 → 46/10 после `okf@1.13` и → 18/3 здесь.
+    """
+    for rel, when in stale:
+        warnings.append(f"{rel}: stale_after {when} is in the past (§7.2)")
+
+    files, issues = changed_files(args.base, args.staged)
+    for i in issues:
+        # ERROR, а не warning: невозможность вычислить дифф в sync-режиме — это
+        # неверная конфигурация обязательного входа, а не отсутствие внешнего
+        # инструмента. Гейт, вышедший 0 и не посмотревший ни одного файла,
+        # хуже отсутствующего (Delivery §3.1a). Найдено развёртыванием: вызов
+        # без --base давал WARNING и exit 0, то есть зелёный гейт, проверивший
+        # ноль. Отдельно от этого база теперь берётся и из окружения BASE —
+        # у гейтов CQG конвенция именно такая, и расхождение конвенций само
+        # приводило к «забыл флаг».
+        errors.append(
+            f"cannot compute diff: {i} — передай --base <ref> (или BASE=<ref>) "
+            "либо --staged; иначе гейт не проверяет ничего"
+        )
+    if not files and not issues:
+        # Пустой дифф = гейт не судил НИЧЕГО, и это ERROR, а не warning
+        # (`okf@1.16`, поле). Прежняя редакция честно печатала «inert this run»
+        # и выходила 0 — развёртывание прочло зелёное и записало в таблицу
+        # прогонов «okf_sync_gate — OK». Warning против этого не работает: в
+        # отчёте всё равно остаётся строка гейта, и inert от проверенного там
+        # неотличим. Класс здесь был НАЗВАН верно и раньше — прежний комментарий
+        # говорил «молчаливый no-op читается как «проверено»» — и лечился
+        # надписью о самом себе. Знание класса не заменяет вердикта.
+        #
+        # Довод написан ветвью ВЫШЕ и применяется дословно: «гейт, вышедший 0 и
+        # не посмотревший ни одного файла, хуже отсутствующего» (Delivery
+        # §3.1a). Невозможность вычислить дифф и пустой дифф — одна ситуация для
+        # читателя отчёта; вторая половина получила вердикт мягче первой только
+        # потому, что выглядит штатной.
+        #
+        # Законный повод (прогон до коммита, push в саму базу) от этого не
+        # исчезает — он теперь НАЗЫВАЕТСЯ вместо того, чтобы пройти молча.
+        # Ровно так поле и ошиблось: гейт прогнали ДО коммита, дифф против
+        # origin/main был пуст, гейт напечатал inert, и два расхождения нашёл
+        # потом CI. «Локально зелено» и «CI зелёный» разошлись не окружением, а
+        # МОМЕНТОМ прогона, и различить это может только сам гейт.
+        errors.append(
+            f"diff vs '{args.base or 'staged'}' is empty — gate judged NOTHING. "
+            "Прогон до коммита либо база, совпадающая с HEAD: возьми базу, "
+            "против которой поставка мержится (`--base origin/main`), и уже "
+            "ПОСЛЕ коммита. Зелёное здесь читалось бы как «проверено», а "
+            "проверено ноль файлов"
+        )
+    check_concept_sync(files, concepts, errors, warnings)
+
+
+def main() -> int:
+    args = parse_cli()
+
     root = repo_root()
     bundle = root / BUNDLE
+    errors: list[str] = []
+    warnings: list[str] = []
+
     if not bundle.is_dir():
         print(f"okf_sync_gate: no bundle at {BUNDLE}/ — skip (deploy OKF first)")
         return 0
 
-    concepts, stale = scan_bundle(root, bundle)
-    errors: list[str] = []
-    warnings: list[str] = []
+    concepts, stale = collect_concepts(root, bundle)
 
     if args.check_stale:
-        errors += [f"{rel}: stale_after {when} is in the past — re-verify or bump" for rel, when in stale]
-        if not stale:
-            print(f"okf_sync_gate: freshness OK ({len(concepts)} mapped concepts)")
+        judge_freshness(concepts, stale, errors)
     else:
-        warnings += [f"{rel}: stale_after {when} is in the past (§7.2)" for rel, when in stale]
-        sync_errors, sync_warnings = check_sync(concepts, args.base, args.staged)
-        errors += sync_errors
-        warnings += sync_warnings
+        judge_sync(args, concepts, stale, errors, warnings)
 
-    for w in warnings:
-        print(f"WARNING: {w}")
-    for e in errors:
-        print(f"ERROR: {e}", file=sys.stderr)
-
-    if not errors:
-        print(f"okf_sync_gate: OK ({len(concepts)} mapped concepts, {len(warnings)} warning(s))")
-        return 0
-    return explain_failure(errors, args.check_stale)
+    return report(args, root, concepts, errors, warnings)
 
 
 if __name__ == "__main__":

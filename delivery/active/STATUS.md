@@ -1,7 +1,7 @@
 # Active delivery status
 
 - **slug:** sitemap-index
-- **stack:** delivery@1.11, cqg@1.7, okf@1.5
+- **stack:** delivery@1.80, cqg@2.22, okf@1.17
 - **class:** S
 - **phase:** implement
 - **builder:** agent:claude-code
