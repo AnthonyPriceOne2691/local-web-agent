@@ -11,33 +11,33 @@ from __future__ import annotations
 
 import re
 
-from delivery_base import ACTIVE, ActiveCtx, field, is_placeholder, read
+from delivery_base import (ACTIVE, ActiveCtx, field,
+                           is_placeholder, read)
 from delivery_decisions import signature_verdict
 from delivery_diff import diff_identifiers, diff_stats
 from delivery_risk import risk_review_gaps, risky_classes
-from delivery_runtime import breaker_value, runtime_proof_gaps, runtime_surfaces, runtime_touched
+from delivery_runtime import (breaker_value, runtime_proof_gaps,
+                              runtime_surfaces, runtime_touched)
 
-
-def check_phase_and_class(
-    raw_phase: str,
-    raw_class: str,
-    phase: str,
-    klass: str,
-    allowed: set[str],
-    errors: list[str],
-    warnings: list[str],
-) -> None:
+def check_phase_and_class(raw_phase: str, raw_class: str, phase: str,
+                          klass: str, allowed: set[str], errors: list[str],
+                          warnings: list[str]) -> None:
     """Фаза и класс: значения из закрытого набора (§2.2).
 
     Шов `check_status_shape` (`delivery@1.60`).
     """
     if is_placeholder(raw_phase):
-        errors.append(f"STATUS.md: phase not filled in (template placeholder {raw_phase!r})")
+        errors.append(
+            f"STATUS.md: phase not filled in (template placeholder {raw_phase!r})"
+        )
     elif not phase:
         errors.append("STATUS.md: missing phase")
     elif phase not in allowed:
         # constitution is project-level file, not active phase
-        errors.append(f"STATUS.md: unknown phase '{phase}' (allowed: {', '.join(sorted(allowed))})")
+        errors.append(
+            f"STATUS.md: unknown phase '{phase}' "
+            f"(allowed: {', '.join(sorted(allowed))})"
+        )
 
     if not klass:
         msg = (
@@ -52,20 +52,11 @@ def check_phase_and_class(
             errors.append(msg)
 
 
-def check_required_artifacts(
-    status: str,
-    phase: str,
-    klass: str,
-    spec,
-    plan,
-    tasks,
-    verify,
-    eval_smoke,
-    implement_like: set[str],
-    errors: list[str],
-    warnings: list[str],
-) -> None:
-    """Артефакты, обязательные для этого класса и фазы (§2.2)."""
+def check_required_artifacts(status: str, phase: str, klass: str, spec, plan,
+                             tasks, verify, eval_smoke, implement_like: set[str],
+                             errors: list[str], warnings: list[str]) -> None:
+    """Артефакты, обязательные для этого класса и фазы (§2.2).
+    """
     if klass in {"M", "L"} and phase in {
         "plan",
         "tasks",
@@ -74,31 +65,42 @@ def check_required_artifacts(
         if not spec.is_file():
             errors.append(f"class {klass} at phase={phase}: missing active/spec.md")
 
-    check_spec_signature(status, klass, phase, spec, plan, tasks, implement_like, errors, warnings)
+    check_spec_signature(status, klass, phase, spec, plan, tasks,
+                         implement_like, errors, warnings)
 
-    check_plan_signature(status, klass, phase, tasks, implement_like, errors, warnings)
+    check_plan_signature(status, klass, phase, tasks, implement_like,
+                         errors, warnings)
 
     check_verify_report(status, phase, verify, errors, warnings)
 
     if klass in {"M", "L"} and phase in {"verify", "converge", "handoff"}:
         if not eval_smoke.is_file():
             errors.append(
-                "class M/L at verify+: missing active/eval-smoke.md (product oracles are mandatory, §6.2)"
+                "class M/L at verify+: missing active/eval-smoke.md "
+                "(product oracles are mandatory, §6.2)"
             )
 
 
-def check_verify_report(status: str, phase: str, verify, errors: list[str], warnings: list[str]) -> None:
-    """verify-report на месте и заполнен (§3.2)."""
+def check_verify_report(status: str, phase: str, verify,
+                        errors: list[str], warnings: list[str]) -> None:
+    """verify-report на месте и заполнен (§3.2).
+    """
     if not verify.is_file():
         if phase == "verify":
             # Фаза в процессе: отчёт ещё пишется — но выйти из неё без него нельзя.
-            warnings.append("phase=verify: active/verify-report.md not created yet")
+            warnings.append(
+                "phase=verify: active/verify-report.md not created yet"
+            )
         elif phase in {"converge", "handoff"}:
-            errors.append(f"phase={phase}: missing active/verify-report.md (DoD §3.2.2)")
+            errors.append(
+                f"phase={phase}: missing active/verify-report.md (DoD §3.2.2)"
+            )
 
 
-def check_risky_diff(status: str, args, phase: str, verify, errors: list[str], warnings: list[str]) -> None:
-    """Маячок на рисковый дифф (§12.5) и пути, проверяемые исполнением (§12.6)."""
+def check_risky_diff(status: str, args, phase: str, verify,
+                     errors: list[str], warnings: list[str]) -> None:
+    """Маячок на рисковый дифф (§12.5) и пути, проверяемые исполнением (§12.6).
+    """
     # --- §12.5: маячок на рисковый дифф. Предупреждение на verify, ОТКАЗ на
     # handoff — та же лестница, что у `deferred` (§2.2b): работать не мешаем,
     # объявить сделанным не даём. Блокировать на каждом коммите нельзя: правка
@@ -113,14 +115,15 @@ def check_risky_diff(status: str, args, phase: str, verify, errors: list[str], w
                 diff_identifiers(rstats[4], rbase),
             )
             for g in gaps:
-                (errors if phase == "handoff" else warnings).append(f"рисковый дифф: {g}")
+                (errors if phase == "handoff" else warnings).append(
+                    f"рисковый дифф: {g}"
+                )
 
     check_runtime_paths(status, args, phase, verify, errors, warnings)
 
 
-def check_runtime_paths(
-    status: str, args, phase: str, verify, errors: list[str], warnings: list[str]
-) -> None:
+def check_runtime_paths(status: str, args, phase: str, verify,
+                        errors: list[str], warnings: list[str]) -> None:
     """Путь, проверяемый только исполнением (§12.6).
 
     ⚠ Дифф считается ЗДЕСЬ, а не приходит параметром: у вызывающего он живёт
@@ -129,10 +132,10 @@ def check_runtime_paths(
     выносится — это тот же класс, что убегающий `return` (`delivery@1.59`).
     """
     if phase not in {"verify", "converge", "handoff"}:
-        return  # ⚠ ОХРАНА ФАЗЫ: блок жил под ней у вызывающего
+        return                    # ⚠ ОХРАНА ФАЗЫ: блок жил под ней у вызывающего
     rstats = diff_stats(args.diff_base or "HEAD~1")
     if not (rstats and rstats[4]):
-        return  # ⚠ ВТОРАЯ охрана: блок жил и под непустым диффом
+        return                    # ⚠ ВТОРАЯ охрана: блок жил и под непустым диффом
     # --- §12.6: путь, проверяемый только исполнением. Та же лестница
     # (предупреждение на verify, отказ на handoff) и по той же причине.
     surfaces, declared = runtime_surfaces(status)
@@ -147,22 +150,17 @@ def check_runtime_paths(
     else:
         touched = runtime_touched(rstats[4], surfaces)
         for g in runtime_proof_gaps(read(verify), touched):
-            (errors if phase == "handoff" else warnings).append(f"исполнение: {g}")
+            (errors if phase == "handoff" else warnings).append(
+                f"исполнение: {g}"
+            )
         check_surface_breaker(status, phase, touched, errors, warnings)
 
 
-def check_spec_signature(
-    status: str,
-    klass: str,
-    phase: str,
-    spec,
-    plan,
-    tasks,
-    implement_like: set[str],
-    errors: list[str],
-    warnings: list[str],
-) -> None:
-    """Спека подписана человеком там, где это требует класс (§3.1d)."""
+def check_spec_signature(status: str, klass: str, phase: str, spec, plan, tasks,
+                         implement_like: set[str], errors: list[str],
+                         warnings: list[str]) -> None:
+    """Спека подписана человеком там, где это требует класс (§3.1d).
+    """
     if klass in {"M", "L"} and phase in implement_like:
         if not plan.is_file():
             errors.append(f"class {klass} at phase={phase}: missing active/plan.md")
@@ -180,15 +178,9 @@ def check_spec_signature(
         warnings += w
 
 
-def check_plan_signature(
-    status: str,
-    klass: str,
-    phase: str,
-    tasks,
-    implement_like: set[str],
-    errors: list[str],
-    warnings: list[str],
-) -> None:
+def check_plan_signature(status: str, klass: str, phase: str, tasks,
+                         implement_like: set[str], errors: list[str],
+                         warnings: list[str]) -> None:
     """Подпись плана для класса L и задачи для S (§2.2, §3.3)."""
     if klass == "L" and phase in implement_like:
         # §2.2b распространяется на ВСЕ поля-подписи, а не только на спеку:
@@ -203,7 +195,8 @@ def check_plan_signature(
         errors.append("class S at implement+: missing active/tasks.md (mini-spec)")
 
 
-def check_surface_breaker(status: str, phase: str, touched, errors: list[str], warnings: list[str]) -> None:
+def check_surface_breaker(status: str, phase: str, touched,
+                          errors: list[str], warnings: list[str]) -> None:
     """Breaker по ПОВЕРХНОСТЯМ, а не по объёму (§12.6).
 
     §3.4 считает файлы и строки, и три правки в три подсистемы на десяток
@@ -242,12 +235,21 @@ def check_status_shape(status: str, args, errors: list[str], warnings: list[str]
     raw_phase = field(status, "phase")
     raw_class = field(status, "class")
 
-    phase_m = re.match(r"(?i)^([a-z_]+)", raw_phase) if not is_placeholder(raw_phase) else None
-    class_m = re.match(r"(?i)^([SML])\b", raw_class) if not is_placeholder(raw_class) else None
+    phase_m = (
+        re.match(r"(?i)^([a-z_]+)", raw_phase)
+        if not is_placeholder(raw_phase)
+        else None
+    )
+    class_m = (
+        re.match(r"(?i)^([SML])\b", raw_class)
+        if not is_placeholder(raw_class)
+        else None
+    )
     phase = phase_m.group(1).lower() if phase_m else ""
     klass = class_m.group(1).upper() if class_m else ""
 
-    check_phase_and_class(raw_phase, raw_class, phase, klass, allowed, errors, warnings)
+    check_phase_and_class(raw_phase, raw_class, phase, klass, allowed,
+                          errors, warnings)
 
     spec = ACTIVE / "spec.md"
     plan = ACTIVE / "plan.md"
@@ -255,19 +257,10 @@ def check_status_shape(status: str, args, errors: list[str], warnings: list[str]
     verify = ACTIVE / "verify-report.md"
     eval_smoke = ACTIVE / "eval-smoke.md"
 
-    check_required_artifacts(
-        status, phase, klass, spec, plan, tasks, verify, eval_smoke, implement_like, errors, warnings
-    )
+    check_required_artifacts(status, phase, klass, spec, plan, tasks, verify,
+                             eval_smoke, implement_like, errors, warnings)
 
     check_risky_diff(status, args, phase, verify, errors, warnings)
 
-    return ActiveCtx(
-        phase=phase,
-        klass=klass,
-        spec=spec,
-        plan=plan,
-        tasks=tasks,
-        verify=verify,
-        eval_smoke=eval_smoke,
-        implement_like=implement_like,
-    )
+
+    return ActiveCtx(phase=phase, klass=klass, spec=spec, plan=plan, tasks=tasks, verify=verify, eval_smoke=eval_smoke, implement_like=implement_like)

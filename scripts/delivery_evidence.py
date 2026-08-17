@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import re
 
-from delivery_base import ACTIVE, SKIP_DIR_PARTS, TEST_TEXT_SUFFIXES, ActiveCtx, field, is_placeholder, read
+from delivery_base import (ACTIVE, ActiveCtx, field, is_placeholder,
+                           read)
+from delivery_base import SKIP_DIR_PARTS, TEST_TEXT_SUFFIXES
 from delivery_decisions import signature_verdict
 from delivery_history import debt_is_not_frozen, expectation_predates_tests
 
-
-def check_archive_obligation(status: str, ctx: ActiveCtx, phase: str, errors: list[str]) -> None:
+def check_archive_obligation(status: str, ctx: ActiveCtx, phase: str,
+                             errors: list[str]) -> None:
     """Поставка уходит в archive с обязательством проверить (§13.1).
 
     Шов `check_evidence` (`delivery@1.57`). Отдаёт дальше только `vr` — текст
@@ -46,7 +48,9 @@ def check_archive_obligation(status: str, ctx: ActiveCtx, phase: str, errors: li
     if phase == "handoff" and verify.is_file():
         vr = read(verify)
         if not re.search(r"READY FOR HANDOFF", vr, re.I):
-            errors.append("phase=handoff: verify-report.md lacks 'READY FOR HANDOFF' verdict")
+            errors.append(
+                "phase=handoff: verify-report.md lacks 'READY FOR HANDOFF' verdict"
+            )
         # §9.2: метрики снимаются на handoff. Без гейта ритуал не выполняется.
         if "Harness metrics" not in vr:
             errors.append(
@@ -56,7 +60,8 @@ def check_archive_obligation(status: str, ctx: ActiveCtx, phase: str, errors: li
             )
 
 
-def check_builder_verifier(status: str, ctx: ActiveCtx, klass: str, phase: str, errors: list[str]) -> None:
+def check_builder_verifier(status: str, ctx: ActiveCtx, klass: str, phase: str,
+                           errors: list[str]) -> None:
     """Builder ≠ Verifier (§5.2) — заявление о независимости.
 
     Единственный из шести блоков, который НИЧЕГО не отдаёт дальше.
@@ -84,10 +89,10 @@ def check_builder_verifier(status: str, ctx: ActiveCtx, klass: str, phase: str, 
             )
 
 
-def check_assert_review(
-    status: str, ctx: ActiveCtx, klass: str, phase: str, errors: list[str], warnings: list[str]
-) -> None:
-    """Ревью утверждений пропорционально (§3.1d ур. 3, DoD §3.2.7)."""
+def check_assert_review(status: str, ctx: ActiveCtx, klass: str, phase: str,
+                        errors: list[str], warnings: list[str]) -> None:
+    """Ревью утверждений пропорционально (§3.1d ур. 3, DoD §3.2.7).
+    """
     verify = ctx.verify
     # --- §3.1d уровень 3 / DoD §3.2.7: ревью утверждений пропорционально
     # непроверяемой части. `n/a` законен, только если КАЖДОЕ утверждение
@@ -131,9 +136,9 @@ def check_assert_review(
             warnings += w
 
 
-def check_expectation_and_oracle(
-    status: str, ctx: ActiveCtx, klass: str, phase: str, errors: list[str], warnings: list[str]
-) -> None:
+def check_expectation_and_oracle(status: str, ctx: ActiveCtx, klass: str,
+                                 phase: str, errors: list[str],
+                                 warnings: list[str]) -> None:
     """Ожидание раньше кода (§3.1d ур. 1) и реляционный оракул (§6.5 ур. 2).
 
     Два раздела в одной функции, хотя комментарии обещают два шва: последний
@@ -201,14 +206,15 @@ def check_expectation_and_oracle(
                 ):
                     tests_text += read(f)
 
-        check_examples_and_ids(
-            spec_text, ex_ids, tests_text + read(eval_smoke), klass, phase, errors, warnings
-        )
+        check_examples_and_ids(spec_text, ex_ids,
+                               tests_text + read(eval_smoke), klass, phase,
+                               errors, warnings)
 
         check_relational_oracle(tests_text, klass, warnings)
 
 
-def check_relational_oracle(tests_text: str, klass: str, warnings: list[str]) -> None:
+def check_relational_oracle(tests_text: str, klass: str,
+                            warnings: list[str]) -> None:
     """Хотя бы один реляционный оракул на M/L (§6.5 уровень 2).
 
     Пятый шов (`delivery@1.57`) — ВНУТРИ функции, а не по её шву: блок вложен
@@ -232,7 +238,8 @@ def check_relational_oracle(tests_text: str, klass: str, warnings: list[str]) ->
     # осмысленно ТОЛЬКО при работающем mutation (на macOS —
     # `brew install coreutils`, CQG §5 шаг 3), и об этом сказано в тексте
     # ошибки: иначе получим ритуал вместо оракула.
-    if not re.search(r"@given|@hypothesis\.given|fc\.assert|fc\.property", tests_text):
+    if not re.search(r"@given|@hypothesis\.given|fc\.assert|fc\.property",
+                     tests_text):
         warnings.append(
             f"class {klass}: ни одного реляционного оракула (§6.5) — "
             "не найдено ни `@given` (hypothesis), ни `fc.property` "
@@ -246,15 +253,9 @@ def check_relational_oracle(tests_text: str, klass: str, warnings: list[str]) ->
         )
 
 
-def check_examples_and_ids(
-    spec_text: str,
-    ex_ids: list[str],
-    refs_text: str,
-    klass: str,
-    phase: str,
-    errors: list[str],
-    warnings: list[str],
-) -> None:
+def check_examples_and_ids(spec_text: str, ex_ids: list[str], refs_text: str,
+                           klass: str, phase: str, errors: list[str],
+                           warnings: list[str]) -> None:
     """Блок примеров есть, id проставлены, id встречаются в тестах.
 
     Шестой шов (`delivery@1.57`): цепочка `if/elif/else` — это три ответа на
@@ -292,9 +293,8 @@ def check_examples_and_ids(
         # тестов может просто не быть, и проверка ругалась бы на штатное
         # состояние фазы implement.
         if phase in {"verify", "converge", "handoff"}:
-            test_dirs = [
-                d for d in ("tests", "backend/tests", "src/tests") if (ACTIVE.parent.parent / d).is_dir()
-            ]
+            test_dirs = [d for d in ("tests", "backend/tests", "src/tests")
+                         if (ACTIVE.parent.parent / d).is_dir()]
             warnings += expectation_predates_tests(ex_ids, test_dirs)
 
 
@@ -328,8 +328,7 @@ def check_evidence(status: str, args, errors: list[str], warnings: list[str], ct
         ctx.tasks,
         ctx.verify,
         ctx.eval_smoke,
-        ctx.implement_like,
-    )
+        ctx.implement_like)
     # --- Долг не должен болтаться вечно (§3.5). Проверяется ТОЛЬКО на handoff:
     # на каждом коммите это блокировало бы работу, не связанную со старым
     # долгом, и такой гейт отключают через неделю. Работать не мешаем —
@@ -344,3 +343,4 @@ def check_evidence(status: str, args, errors: list[str], warnings: list[str], ct
     check_assert_review(status, ctx, klass, phase, errors, warnings)
 
     check_expectation_and_oracle(status, ctx, klass, phase, errors, warnings)
+

@@ -40,7 +40,8 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str] | None, str]:
     return meta, text[m.end() :]
 
 
-def check_body_smells(rel: str, path: Path, body: str, warnings: list[str]) -> None:
+def check_body_smells(rel: str, path: Path, body: str,
+                      warnings: list[str]) -> None:
     """Мягкие пределы concept'а: строк в теле и байт в файле (§3.3, атомарность).
 
     Отдельный шов, потому что это единственный читатель порогов из окружения:
@@ -69,7 +70,8 @@ def check_links(rel: str, root: Path, body: str, warnings: list[str]) -> None:
             warnings.append(f"{rel}: broken bundle link {link}")
 
 
-def check_file(path: Path, root: Path, errors: list[str], warnings: list[str]) -> None:
+def check_file(path: Path, root: Path, errors: list[str],
+               warnings: list[str]) -> None:
     """Один markdown bundle'а: кодировка, зарезервированное имя, frontmatter, type.
 
     Шов по потоку управления: каждый `continue` тела цикла означал «по этому
@@ -86,7 +88,8 @@ def check_file(path: Path, root: Path, errors: list[str], warnings: list[str]) -
         return
 
     if path.name in RESERVED:
-        if path.name == "log.md" and not re.search(r"(?m)^## \d{4}-\d{2}-\d{2}\s*$", text):
+        if path.name == "log.md" and not re.search(
+                r"(?m)^## \d{4}-\d{2}-\d{2}\s*$", text):
             warnings.append(f"{rel}: no ## YYYY-MM-DD headings (SPEC §9 shape)")
         return
 
@@ -112,7 +115,8 @@ def check_root_index(root: Path, warnings: list[str]) -> None:
     """
     root_index = root / "index.md"
     if not root_index.is_file():
-        warnings.append("missing root index.md (optional in SPEC, required by project profile)")
+        warnings.append(
+            "missing root index.md (optional in SPEC, required by project profile)")
         return
     if "okf_version" not in root_index.read_text(encoding="utf-8"):
         warnings.append("root index.md has no okf_version (SPEC §12 recommended)")

@@ -58,8 +58,7 @@ HARDENING_PATHS = (
 # Согласие с четырьмя реализациями CQG держит `tests/test_what_is_a_test_file.py`.
 TEST_PATH_RE = re.compile(
     r"(^|/)(test|tests|__tests__|spec|specs)/|(^|/)conftest\.py$|(^|/)test[_-]"
-    r"|[_-](test|spec)\.|(Test|Tests|Spec|Specs)\.|\.(test|spec)\."
-)
+    r"|[_-](test|spec)\.|(Test|Tests|Spec|Specs)\.|\.(test|spec)\.")
 DOC_PREFIXES = ("delivery/", "knowledge/")
 
 
@@ -141,7 +140,8 @@ def _diff_stats(span: str) -> tuple[str, list[str]]:
         added += int(a) if a.isdigit() else 0
         deleted += int(d) if d.isdigit() else 0
     return (
-        f"{code_files} code (+{doc_files} process docs) / +{added}/-{deleted} (net {added - deleted:+d})",
+        f"{code_files} code (+{doc_files} process docs) / "
+        f"+{added}/-{deleted} (net {added - deleted:+d})",
         hardened,
     )
 
@@ -154,7 +154,9 @@ def _spec_timings(span: str) -> dict[str, str]:
     величины меряют одно и то же событие, поэтому и режутся вместе.
     """
     spec_created = first_commit("delivery/active/spec.md", rev_range=span)
-    spec_ok = first_commit("delivery/active/STATUS.md", r"human_ok_spec:\**[ \t]*yes", rev_range=span)
+    spec_ok = first_commit(
+        "delivery/active/STATUS.md", r"human_ok_spec:\**[ \t]*yes", rev_range=span
+    )
     if spec_created and spec_ok:
         accepted = hours_between(spec_created[1], spec_ok[1])
     elif spec_created:
@@ -162,7 +164,9 @@ def _spec_timings(span: str) -> dict[str, str]:
     else:
         accepted = "n/a (no spec.md in history — class S?)"
 
-    handoff = first_commit("delivery/active/STATUS.md", r"phase:\**[ \t]*handoff", rev_range=span)
+    handoff = first_commit(
+        "delivery/active/STATUS.md", r"phase:\**[ \t]*handoff", rev_range=span
+    )
     if handoff:
         after = git("rev-list", "--count", f"{handoff[0]}..HEAD").strip() or "0"
         rework = f"{after} commit(s) after first phase: handoff"

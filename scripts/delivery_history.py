@@ -13,7 +13,6 @@ import re
 
 from delivery_base import ARCHIVE, ROOT, git
 
-
 # --- Происхождение ожидания (§3.1d) -----------------------------------------
 # §3.1d говорит: «примеры пишутся на фазе specify, ДО plan и до кода. Порядок
 # принципиален: ожидание, придуманное после реализации, — это описание реализации».
@@ -49,12 +48,14 @@ def _first_commit_with(text: str, *paths: str) -> str:
     if not paths:
         return ""
     token = rf"(^|[^A-Za-z0-9_]){re.escape(text)}([^A-Za-z0-9_]|$)"
-    out = git("-C", str(ROOT), "log", "--format=%H", f"-S{token}", "--pickaxe-regex", "--", *paths)
+    out = git("-C", str(ROOT), "log", "--format=%H", f"-S{token}",
+              "--pickaxe-regex", "--", *paths)
     revs = [l.strip() for l in out.split("\n") if l.strip()]
     return revs[-1] if revs else ""
 
 
-def _expectation_verdict(ex: str, test_paths: list[str], order: dict[str, int]) -> str:
+def _expectation_verdict(ex: str, test_paths: list[str],
+                         order: dict[str, int]) -> str:
     """`after` | `unknown` | `""` — что история говорит про ОДИН id.
 
     Шов по данным: наружу блок отдавал только корзину, в которую лёг id, —
@@ -71,7 +72,8 @@ def _expectation_verdict(ex: str, test_paths: list[str], order: dict[str, int]) 
     return "after" if order.get(s_rev, 0) < order.get(t_rev, 0) else ""
 
 
-def _expectation_warnings(after: list[str], unknown: list[str], total: int) -> list[str]:
+def _expectation_warnings(after: list[str], unknown: list[str],
+                          total: int) -> list[str]:
     """Формулировки §3.1d по двум корзинам вердиктов.
 
     Шов по данным: сверху блок читает ровно три имени, вниз отдаёт готовые
@@ -104,7 +106,8 @@ def expectation_predates_tests(ex_ids: list[str], test_paths: list[str]) -> list
     """
     if not ex_ids or not test_paths:
         return []
-    order = {rev: i for i, rev in enumerate(git("-C", str(ROOT), "rev-list", "--topo-order", "HEAD").split())}
+    order = {rev: i for i, rev in enumerate(
+        git("-C", str(ROOT), "rev-list", "--topo-order", "HEAD").split())}
     if not order:
         return []
     ids = list(dict.fromkeys(ex_ids))
@@ -147,7 +150,7 @@ def debt_entries(blob: str) -> dict[str, int]:
     return out
 
 
-@functools.cache
+@functools.lru_cache(maxsize=None)
 def _debt_at_cached(rev: str) -> tuple[tuple[str, int], ...]:
     """Кэш на ревизию: одна и та же точка окна читается дважды (сумма и возраст),
     а каждое чтение — это `git ls-tree` плюс `git show` на снимок."""
@@ -155,11 +158,13 @@ def _debt_at_cached(rev: str) -> tuple[tuple[str, int], ...]:
     # `-C ROOT` обязателен: `ROOT` берётся от пути скрипта, а `git` без него
     # работал бы в ТЕКУЩЕМ каталоге. В продакшене они совпадают, но проверка,
     # правильность которой зависит от того, откуда её позвали, — не проверка.
-    names = git("-C", str(ROOT), "ls-tree", "--name-only", "-r", rev, "scripts/lint/").split()
+    names = git("-C", str(ROOT), "ls-tree", "--name-only", "-r", rev,
+                "scripts/lint/").split()
     for name in names:
         if not name.endswith("_baseline.txt"):
             continue
-        for path, weight in debt_entries(git("-C", str(ROOT), "show", f"{rev}:{name}")).items():
+        for path, weight in debt_entries(
+                git("-C", str(ROOT), "show", f"{rev}:{name}")).items():
             total[path] = total.get(path, 0) + weight
     return tuple(sorted(total.items()))
 
@@ -183,17 +188,14 @@ def archive_samples() -> list[str]:
     # и началом окна оказалась САМАЯ НОВАЯ — проверка сравнивала «сейчас» с
     # «сейчас» и молчала. В настоящем репозитории это редкость, но оракул, чья
     # правильность зависит от скорости коммитов, оракулом не является.
-    order = {
-        rev: i for i, rev in enumerate(git("-C", str(ROOT), "rev-list", "--topo-order", "HEAD").split())
-    }  # 0 = самый новый
+    order = {rev: i for i, rev in enumerate(
+        git("-C", str(ROOT), "rev-list", "--topo-order", "HEAD").split())}  # 0 = самый новый
     revs: list[str] = []
     for d in sorted(p for p in ARCHIVE.iterdir() if p.is_dir()):
         rel = f"delivery/archive/{d.name}"
-        log = [
-            l
-            for l in git("-C", str(ROOT), "log", "--diff-filter=A", "--format=%H", "--", rel).split("\n")
-            if l.strip()
-        ]
+        log = [l for l in git("-C", str(ROOT), "log", "--diff-filter=A",
+                              "--format=%H", "--", rel)
+               .split("\n") if l.strip()]
         if log:
             revs.append(log[-1].strip())
     # order даёт «насколько давно»: больший индекс = старше. Нужен возрастающий
@@ -215,7 +217,10 @@ def _debt_stuck(now: dict[str, int], window: list[str]) -> list[str]:
     Признак гниения — вес не уменьшился ни разу.
     """
     samples_debt = [debt_at(r) for r in window]
-    stuck = sorted(p for p in now if all(p in s for s in samples_debt) and now[p] >= samples_debt[0][p])
+    stuck = sorted(
+        p for p in now
+        if all(p in s for s in samples_debt) and now[p] >= samples_debt[0][p]
+    )
     if not stuck:
         return []
     return [
@@ -292,3 +297,5 @@ def debt_is_not_frozen() -> list[str]:
 
     errors.extend(_debt_stuck(now, window))
     return errors
+
+

@@ -21,15 +21,12 @@ ACTIVE = DELIVERY / "active"
 ARCHIVE = DELIVERY / "archive"
 
 # §3.4; переопределяются строкой в STATUS: "max_files_touched=40 reason=… by=human:…"
-DEFAULT_BREAKERS = {
-    "max_files_touched": 25,
-    "max_loc_diff": 800,
-    # §12.6: breaker по ПОВЕРХНОСТЯМ, а не по объёму. Три
-    # правки в три подсистемы на десяток строк проходят два
-    # порога выше не заметив — и именно так выглядел
-    # составной отказ, который потом разбирали перебором.
-    "max_runtime_paths": 1,
-}
+DEFAULT_BREAKERS = {"max_files_touched": 25, "max_loc_diff": 800,
+                    # §12.6: breaker по ПОВЕРХНОСТЯМ, а не по объёму. Три
+                    # правки в три подсистемы на десяток строк проходят два
+                    # порога выше не заметив — и именно так выглядел
+                    # составной отказ, который потом разбирали перебором.
+                    "max_runtime_paths": 1}
 
 # Процессные артефакты не считаются в breaker'ах: spec/plan/tasks и concept'ы —
 # это не blast radius кода, а его описание. Механика самого контура — тоже:
@@ -49,10 +46,17 @@ BREAKER_EXCLUDE = (
     "knowledge/",
     "scripts/lint/",
     "scripts/merge_guard.sh",
-    "scripts/delivery_check.py",
-    "scripts/delivery_metrics.py",
-    "scripts/okf_validate.py",
-    "scripts/okf_sync_gate.py",
+    # ⚠ ПРЕФИКСЫ, а не четыре точных пути, и это РЕЦИДИВ, закрытый заново.
+    # `delivery@1.29` внесла сюда `delivery_check.py`, `delivery_metrics.py`,
+    # `okf_validate.py`, `okf_sync_gate.py` — тогда их было ровно четыре.
+    # `delivery@1.53` разрезала `delivery_check.py` на тринадцать модулей по
+    # планке §2.1, и одиннадцать новых в список НЕ попали: список перечислял
+    # случаи, а не называл принцип. Замер третьего развёртывания: breaker
+    # намерил net 2595 при лимите 800 на 14 файлах, и все четырнадцать —
+    # механика контура. То есть класс «развёртывание контура пробивает
+    # собственный breaker» вернулся туда, где был закрыт.
+    "scripts/delivery_",
+    "scripts/okf_",
     # `.claude/` — механика контура (права агента §4.5), а не продуктовый код.
     # Без исключения маячок §12.5 срабатывал на классе «безопасность» из-за
     # слова `permission` в собственном файле настроек прав: контур ругался на
@@ -93,19 +97,9 @@ BREAKER_EXCLUDE = (
 # `backend/uv.lock`, где префикс молча не совпадёт. Принять правку проекта
 # дословно значило бы увезти наверх дефект, которого на его раскладке не видно.
 GENERATED_FILENAMES = (
-    "package-lock.json",
-    "npm-shrinkwrap.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-    "bun.lockb",
-    "poetry.lock",
-    "uv.lock",
-    "Pipfile.lock",
-    "Cargo.lock",
-    "go.sum",
-    "Gemfile.lock",
-    "composer.lock",
-    "Podfile.lock",
+    "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml",
+    "bun.lockb", "poetry.lock", "uv.lock", "Pipfile.lock", "Cargo.lock",
+    "go.sum", "Gemfile.lock", "composer.lock", "Podfile.lock",
 )
 
 
@@ -117,7 +111,8 @@ def out_of_blast_radius(path: str) -> bool:
     исключение, которого нет в печати, это ровно «исключение растворено», против
     чего §3.4 и требует печатать число.
     """
-    return path.startswith(BREAKER_EXCLUDE) or path.rsplit("/", 1)[-1] in GENERATED_FILENAMES
+    return (path.startswith(BREAKER_EXCLUDE)
+            or path.rsplit("/", 1)[-1] in GENERATED_FILENAMES)
 
 
 # Текстовые расширения для поиска id примеров в тестах. Маска `*test*` ловит и
@@ -125,20 +120,8 @@ def out_of_blast_radius(path: str) -> bool:
 # и роняло весь гейт (полевая находка F9: воспроизводится в любом проекте, где
 # хоть раз запускали pytest).
 TEST_TEXT_SUFFIXES = (
-    ".py",
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".go",
-    ".rs",
-    ".swift",
-    ".kt",
-    ".java",
-    ".rb",
-    ".php",
-    ".cs",
-    ".md",
+    ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".swift", ".kt", ".java",
+    ".rb", ".php", ".cs", ".md",
 )
 # «Не наш код» — принцип §3.1f CQG, а не список каталогов: установленное,
 # вендоренное и кэши инструментов не писал никто из проекта. Список ОБЩИЙ для
@@ -146,21 +129,9 @@ TEST_TEXT_SUFFIXES = (
 # владельцев держит `tests/test_what_is_not_our_code.py`. Прежняя пятёрка не
 # знала `vendor`, `.tox`, `build`, `dist`, `site-packages` — 9 расхождений из 15.
 SKIP_DIR_PARTS = (
-    ".venv",
-    "venv",
-    "site-packages",
-    "node_modules",
-    "vendor",
-    ".tox",
-    ".nox",
-    ".eggs",
-    "__pycache__",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "build",
-    "dist",
-    ".git",
+    ".venv", "venv", "site-packages", "node_modules", "vendor", ".tox", ".nox",
+    ".eggs", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "build", "dist", ".git",
 )
 
 
@@ -183,6 +154,7 @@ def git(*args: str) -> str:
     except FileNotFoundError:
         return ""
     return out.stdout if out.returncode == 0 else ""
+
 
 
 # Незаполненный шаблон не должен проходить проверку — тот же урок, что с STATUS
@@ -218,6 +190,7 @@ def list_entries(text: str) -> list[str]:
         elif line and entries and not line.startswith("#") and not line.startswith("```"):
             entries[-1] += " " + line
     return entries
+
 
 
 def read_json(path: Path) -> tuple[dict, str]:
@@ -260,7 +233,17 @@ def is_placeholder(value: str) -> bool:
     стороны закреплены тестами (тот же класс, что фильтр блочных скаляров
     в check_gate_coverage.sh, cqg@1.40).
     """
-    if not value or value in {"…", "...", "-", "TBD", "tbd"}:
+    # Типографские тире и `n/a` — по ЗАМЕРУ, а не для полноты. Третье
+    # развёртывание написало `blockers:` со знаком U+2014 — естественный
+    # способ сказать «нет» по-русски. Гейт потребовал escalation.md за
+    # блокер, которого нет: ложное КРАСНОЕ, остановившее развёртывание.
+    if not value or value.strip().lower() in {
+            "", "-", "\u2013", "\u2014", "\u2212", "\u2026", "...",
+            "tbd"}:
+        # ⚠ `n/a` сюда НЕ входит, и это решение с причиной: канон
+        # различает «не делали» и «нечем», требуя `reason=` (прогон
+        # `test_na_needs_a_reason`). Первая редакция этой правки внесла
+        # его заодно с тире и выключила правило — сьют поймал.
         return True
     return value.startswith("<") or bool(BARE_CHOICES_RE.match(value))
 
@@ -304,6 +287,8 @@ def verdict_blocks(text: str) -> list[str]:
     if cur:
         blocks.append("\n".join(cur))
     return [b for b in blocks if VERDICT_RE.search(b) and not unfilled(b)]
+
+
 
 
 @dataclass(frozen=True)

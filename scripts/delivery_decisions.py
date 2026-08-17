@@ -13,7 +13,6 @@ import re
 
 from delivery_base import list_entries, unfilled
 
-
 def signature_verdict(name: str, raw: str, klass: str, phase: str) -> tuple[list[str], list[str]]:
     """§2.2b для ЛЮБОГО поля-подписи: `yes` / `deferred (reason=…)` / нет.
 
@@ -55,6 +54,7 @@ def signature_verdict(name: str, raw: str, klass: str, phase: str) -> tuple[list
             "человека нет — deferred (reason=…), §2.2b)"
         )
     return errs, warns
+
 
 
 def permission_block(constitution: str) -> dict[str, list[str]] | None:
@@ -125,53 +125,16 @@ def decision_lines(text: str) -> tuple[list[str], list[str]]:
 # не принуждать, а придать записи форму, в которой ложь видна. Отсюда предупреждение,
 # не ошибка, и широкий признак вместо узкого.
 COST_MARKERS = (
-    "требует",
-    "требовал",
-    "ломает",
-    "сломал",
-    "съедал",
-    "съест",
-    "зависит",
-    "недоступ",
-    "не поддерж",
-    "переписать",
-    "миграц",
-    "потерял",
-    "нет доступа",
-    "запрещ",
-    "нет в",
-    "пришлось бы",
-    "потребовал",
+    "требует", "требовал", "ломает", "сломал", "съедал", "съест", "зависит",
+    "недоступ", "не поддерж", "переписать", "миграц", "потерял", "нет доступа",
+    "запрещ", "нет в", "пришлось бы", "потребовал",
 )
 
 DECISION_STOPWORDS = frozenset(
-    [
-        "test",
-        "tests",
-        "main",
-        "init",
-        "app",
-        "src",
-        "lib",
-        "code",
-        "file",
-        "data",
-        "self",
-        "none",
-        "true",
-        "false",
-        "type",
-        "name",
-        "path",
-        "text",
-        "line",
-        "list",
-        "dict",
-        "json",
-        "yaml",
-        "toml",
-    ]
+    "test tests main init app src lib code file data self none true false "
+    "type name path text line list dict json yaml toml".split()
 )
+
 
 
 def decisions_without_cost(text: str, diff_ids: set[str] | None = None) -> list[str]:
@@ -202,3 +165,5 @@ def decisions_without_cost(text: str, diff_ids: set[str] | None = None) -> list[
             continue  # цитирует код — такое не напишешь, не открыв дифф
         out.append(line)
     return out
+
+

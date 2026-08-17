@@ -10,24 +10,17 @@ from __future__ import annotations
 
 import re
 
-from delivery_artifact import check_artifact_oracle, check_weak_names_the_cheap_gap
-from delivery_base import (
-    ACTIVE,
-    ActiveCtx,
-    field,
-    is_placeholder,
-    list_entries,
-    read,
-    unfilled,
-    verdict_blocks,
-)
+from delivery_base import (ACTIVE, ActiveCtx, field, is_placeholder,
+                           list_entries, read, unfilled, verdict_blocks)
+from delivery_artifact import (check_artifact_oracle,
+                               check_weak_names_the_cheap_gap)
 from delivery_decisions import decision_lines, decisions_without_cost
 from delivery_diff import diff_identifiers, diff_stats
 
 
-def check_diagnosis(
-    status: str, ctx: ActiveCtx, kind: str, phase: str, errors: list[str], warnings: list[str]
-) -> None:
+
+def check_diagnosis(status: str, ctx: ActiveCtx, kind: str, phase: str,
+                    errors: list[str], warnings: list[str]) -> None:
     """Багфикс обязан показать, КАК искали (§12.1).
 
     Шов `check_journals` (`delivery@1.58`), выбран по данным: ничего не отдаёт
@@ -45,7 +38,7 @@ def check_diagnosis(
         diag_file = ACTIVE / "diagnosis.md"
         if is_placeholder(diag):
             errors.append(
-                f"kind={kind.split(maxsplit=1)[0]} at verify+: missing diagnosis (§12.1) "
+                f"kind={kind.split()[0]} at verify+: missing diagnosis (§12.1) "
                 "— журнал гипотез с вердиктами; n/a только с reason="
             )
         elif diag.lower().startswith("n/a"):
@@ -56,7 +49,8 @@ def check_diagnosis(
                 )
         elif not diag_file.is_file():
             errors.append(
-                "diagnosis указывает на файл, которого нет (§12.1) — ожидается delivery/active/diagnosis.md"
+                "diagnosis указывает на файл, которого нет (§12.1) — "
+                "ожидается delivery/active/diagnosis.md"
             )
         elif not verdict_blocks(read(diag_file)):
             errors.append(
@@ -69,7 +63,8 @@ def check_diagnosis(
             )
 
 
-def check_escalation(status: str, ctx: ActiveCtx, phase: str, errors: list[str], warnings: list[str]) -> None:
+def check_escalation(status: str, ctx: ActiveCtx, phase: str,
+                     errors: list[str], warnings: list[str]) -> None:
     """Остановка обязана быть оформлена (§12.3).
 
     Самый крупный блок (59 строк) и единственный, отдающий дальше имя (`ln` —
@@ -79,16 +74,11 @@ def check_escalation(status: str, ctx: ActiveCtx, phase: str, errors: list[str],
     # контекста перекладывается на человека — то самое время, которое контур
     # экономит.
     blockers = field(status, "blockers")
-    if (
-        blockers
-        and not is_placeholder(blockers)
-        and blockers.lower()
-        not in {
-            "none",
-            "нет",
-            "n/a",
-        }
-    ):
+    if blockers and not is_placeholder(blockers) and blockers.lower() not in {
+        "none",
+        "нет",
+        "n/a",
+    }:
         esc = ACTIVE / "escalation.md"
         if not esc.is_file():
             errors.append(
@@ -121,7 +111,9 @@ def check_escalation(status: str, ctx: ActiveCtx, phase: str, errors: list[str],
                     )
                 ]
             )
-            costs = len([ln for ln in lines_e if re.search(r"(?i)\bцена\b|\bcost\b", ln)])
+            costs = len(
+                [ln for ln in lines_e if re.search(r"(?i)\bцена\b|\bcost\b", ln)]
+            )
             if opts < 2:
                 errors.append(
                     f"escalation.md: заполненных вариантов {opts}, нужно ≥2 "
@@ -138,10 +130,10 @@ def check_escalation(status: str, ctx: ActiveCtx, phase: str, errors: list[str],
                 )
 
 
-def check_rejected_options(
-    ctx: ActiveCtx, klass: str, phase: str, errors: list[str], warnings: list[str]
-) -> None:
-    """Отклонённые варианты оставляют след (§12.2a)."""
+def check_rejected_options(ctx: ActiveCtx, klass: str, phase: str,
+                           errors: list[str], warnings: list[str]) -> None:
+    """Отклонённые варианты оставляют след (§12.2a).
+    """
     plan, implement_like = ctx.plan, ctx.implement_like
     # --- §12.2a: отклонённые варианты. Без следа тот же тупик предлагают
     # снова — и он снова выглядит разумным, потому что причина отказа нигде
@@ -164,7 +156,8 @@ def check_rejected_options(
             entries = [
                 ln
                 for ln in list_entries(sec.group(1))
-                if not unfilled(ln) and re.search(r"(?i)потому что|because|reason=", ln)
+                if not unfilled(ln)
+                and re.search(r"(?i)потому что|because|reason=", ln)
             ]
             if not entries:
                 msg_alt = (
@@ -176,10 +169,10 @@ def check_rejected_options(
             (errors if klass == "L" else warnings).append(msg_alt)
 
 
-def check_decisions_format(
-    status: str, args, ctx: ActiveCtx, klass: str, phase: str, errors: list[str], warnings: list[str]
-) -> None:
-    """Журнал решений: проверяется ФОРМАТ ленты (§12.2)."""
+def check_decisions_format(status: str, args, ctx: ActiveCtx, klass: str, phase: str,
+                           errors: list[str], warnings: list[str]) -> None:
+    """Журнал решений: проверяется ФОРМАТ ленты (§12.2).
+    """
     implement_like = ctx.implement_like
     # --- §12.2: журнал решений. Проверяется ФОРМАТ: лента без альтернатив
     # неаудируема, а именно аудируемость — весь смысл файла.
@@ -190,7 +183,8 @@ def check_decisions_format(
         if bad:
             errors.append(
                 f"decisions.md: {len(bad)} строк(а) не в формате §12.2 "
-                "«выбрал X вместо Y — потому что Z»: " + "; ".join(b[:55] for b in bad[:3])
+                "«выбрал X вместо Y — потому что Z»: "
+                + "; ".join(b[:55] for b in bad[:3])
             )
         if klass == "L" and late and not good:
             errors.append(
@@ -207,7 +201,9 @@ def check_decisions_format(
         # по-разному там, где решение и принимается.
         check_decision_cost(args, dec_file, late, errors, warnings)
     elif klass == "L" and late:
-        errors.append("class L at verify+: missing active/decisions.md (§12.2)")
+        errors.append(
+            "class L at verify+: missing active/decisions.md (§12.2)"
+        )
     elif klass == "M" and late:
         warnings.append(
             "class M at verify+: нет active/decisions.md (§12.2) — поведение "
@@ -218,7 +214,8 @@ def check_decisions_format(
     check_weak_names_the_cheap_gap(status, errors, warnings)
 
 
-def check_decision_cost(args, dec_file, late: bool, errors: list[str], warnings: list[str]) -> None:
+def check_decision_cost(args, dec_file, late: bool, errors: list[str],
+                        warnings: list[str]) -> None:
     """Решение без названной цены — отчёт о сделанном, а не выбор (§12.2).
 
     Девятый шов (`delivery@1.58`) и снова по СЛОЖНОСТИ: `check_decisions_format`
@@ -243,7 +240,11 @@ def check_decision_cost(args, dec_file, late: bool, errors: list[str], warnings:
 
 def check_journals(status: str, args, errors: list[str], warnings: list[str], ctx: ActiveCtx) -> None:
     """Диагноз, эскалация, отклонённые варианты и лента решений."""
-    phase, klass, plan, implement_like = (ctx.phase, ctx.klass, ctx.plan, ctx.implement_like)
+    phase, klass, plan, implement_like = (
+        ctx.phase,
+        ctx.klass,
+        ctx.plan,
+        ctx.implement_like)
     # kind/behavior читаем один раз — их используют обе проверки ниже.
     kind = field(status, "kind").lower()
     behavior = field(status, "behavior-oracles").lower()
@@ -258,7 +259,8 @@ def check_journals(status: str, args, errors: list[str], warnings: list[str], ct
             )
         elif repro.lower().startswith("n/a") and "reason=" not in repro.lower():
             errors.append(
-                "repro_test: n/a без reason= (§3.1c) — «не воспроизводится» обычно значит «не пробовал»"
+                "repro_test: n/a без reason= (§3.1c) — «не воспроизводится» "
+                "обычно значит «не пробовал»"
             )
 
     check_diagnosis(status, ctx, kind, phase, errors, warnings)

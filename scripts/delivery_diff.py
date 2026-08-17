@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import re
 
-from delivery_base import git, out_of_blast_radius
+from delivery_base import out_of_blast_radius, git
 from delivery_decisions import DECISION_STOPWORDS
-
 
 def diff_stats(base: str) -> tuple[int, int, int, int, list[str]] | None:
     """(files, added, deleted, excluded, paths) для base..HEAD; None если ref недоступен.
@@ -38,7 +37,7 @@ def diff_stats(base: str) -> tuple[int, int, int, int, list[str]] | None:
             continue
         files += 1
         paths.append(path)
-        added += int(a) if a.isdigit() else 0  # "-" у бинарников
+        added += int(a) if a.isdigit() else 0      # "-" у бинарников
         deleted += int(d) if d.isdigit() else 0
     return files, added, deleted, excluded, paths
 
@@ -73,6 +72,7 @@ def applicable_lessons(index_text: str, changed: list[str]) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+
 def diff_identifiers(paths: list[str], base: str) -> set[str]:
     """Токены, которые есть в диффе: базовые имена файлов + идентификаторы кода.
 
@@ -100,3 +100,5 @@ def diff_identifiers(paths: list[str], base: str) -> set[str]:
         if low not in DECISION_STOPWORDS:
             ids.add(low)
     return ids
+
+

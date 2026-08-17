@@ -37,7 +37,9 @@ DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 def git(*args: str) -> str:
     """git с подавлением ошибок: пустая строка = git не смог (не блокер сам по себе)."""
     try:
-        out = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+        out = subprocess.run(
+            ["git", *args], capture_output=True, text=True, check=False
+        )
     except FileNotFoundError:
         return ""
     return out.stdout if out.returncode == 0 else ""
@@ -165,17 +167,24 @@ def collect_concepts(root, bundle) -> tuple[dict, list]:
     return concepts, stale
 
 
-def check_concept_sync(files, concepts: dict, errors: list[str], warnings: list[str]) -> None:
-    """Код тронут, а concept — нет: рассинхрон знания и реализации (§7.2)."""
+def check_concept_sync(files, concepts: dict, errors: list[str],
+                       warnings: list[str]) -> None:
+    """Код тронут, а concept — нет: рассинхрон знания и реализации (§7.2).
+    """
     if files:
         touched_bundle = {f for f in files if f.startswith(f"{BUNDLE}/")}
         code = [f for f in files if f not in touched_bundle]
         for rel, declared in sorted(concepts.items()):
             if rel in touched_bundle:
                 continue  # concept обновлён — синхронизация заявлена
-            hits = sorted({c for c in code for d in declared if covers(d, c)})[:5]
+            hits = sorted(
+                {c for c in code for d in declared if covers(d, c)}
+            )[:5]
             if hits:
-                errors.append(f"{rel}: implementation changed but concept untouched -> {', '.join(hits)}")
+                errors.append(
+                    f"{rel}: implementation changed but concept untouched -> "
+                    f"{', '.join(hits)}"
+                )
         if not concepts:
             warnings.append(
                 "no concept declares implementation: — gate is inert; "
@@ -183,7 +192,8 @@ def check_concept_sync(files, concepts: dict, errors: list[str], warnings: list[
             )
 
 
-def report(args, root, concepts: dict, errors: list[str], warnings: list[str]) -> int:
+def report(args, root, concepts: dict, errors: list[str],
+           warnings: list[str]) -> int:
     """Печать итога и код возврата.
 
     Шов `main` (`okf@1.13`): вывод отделён от суждения — так `main` остаётся
@@ -202,7 +212,10 @@ def report(args, root, concepts: dict, errors: list[str], warnings: list[str]) -
         # развёртывании и остаётся warning'ом; но в СТРОКЕ ИТОГА она называется,
         # иначе снова попадёт в отчёт неотличимой от проверки.
         inert = "" if concepts else " — INERT: 0 concepts mapped, судить нечем"
-        print(f"okf_sync_gate: OK ({len(concepts)} mapped concepts, {len(warnings)} warning(s)){inert}")
+        print(
+            f"okf_sync_gate: OK ({len(concepts)} mapped concepts, "
+            f"{len(warnings)} warning(s)){inert}"
+        )
         return 0
     # Waiver из STATUS — основной механизм: виден в диффе, живёт одну поставку.
     # На --check-stale не действует: просроченный concept — это не «код тронут без
@@ -290,7 +303,8 @@ def judge_freshness(concepts: dict, stale: list, errors: list[str]) -> None:
         print(f"okf_sync_gate: freshness OK ({len(concepts)} mapped concepts)")
 
 
-def judge_sync(args, concepts: dict, stale: list, errors: list[str], warnings: list[str]) -> None:
+def judge_sync(args, concepts: dict, stale: list, errors: list[str],
+               warnings: list[str]) -> None:
     """Sync-режим: дифф против базы против карты `implementation:` (§4.1).
 
     Вторая половина той же развилки. Шов здесь потому, что режимы делят только

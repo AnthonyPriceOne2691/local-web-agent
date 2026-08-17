@@ -12,7 +12,6 @@ import re
 
 from delivery_base import DEFAULT_BREAKERS, field, is_placeholder
 
-
 # --- §12.6: путь, который проверяется только исполнением ---------------------
 # Есть класс отказов, невидимый ВСЕМ статическим оракулам и необрабатываемый в
 # рантайме: платформа отвечает на нарушение политики смертью процесса, а не кодом
@@ -60,7 +59,7 @@ def breaker_value(status: str, name: str) -> int:
     for m in re.finditer(rf"({re.escape(name)})[ \t]*=[ \t]*(\d+)", status):
         bol = status.rfind("\n", 0, m.start()) + 1
         eol = status.find("\n", m.end())
-        line = status[bol : eol if eol != -1 else len(status)]
+        line = status[bol: eol if eol != -1 else len(status)]
         low = line.lower()
         if "circuit_breakers" in low or ("reason=" in low and "by=human:" in low):
             val = int(m.group(2))
@@ -104,9 +103,9 @@ def runtime_proof_gaps(report: str, touched: set[str]) -> list[str]:
             "нет блока «## Исполнение рисковых путей» (§12.6) — дифф задел: "
             + ", ".join(sorted(touched))
             + ". Это пути, чей отказ не виден ни сборке, ни тестам — падением "
-            "процесса (права, платформа) или молча (раскладка экрана). Нужен "
-            "не вывод, что всё должно работать, а строка «прогнал <что>, "
-            "увидел <что> at=<дата>»"
+              "процесса (права, платформа) или молча (раскладка экрана). Нужен "
+              "не вывод, что всё должно работать, а строка «прогнал <что>, "
+              "увидел <что> at=<дата>»"
         ]
     body = block.group(0)
     low = body.lower()
@@ -127,15 +126,15 @@ def runtime_proof_gaps(report: str, touched: set[str]) -> list[str]:
     def named(s: str) -> bool:
         if s.strip().rstrip("/").lower() in low:
             return True
-        return any(tok and tok.lower() in low for tok in re.split(r"[/*]", s) if len(tok) > 3)
+        return any(tok and tok.lower() in low
+                   for tok in re.split(r"[/*]", s) if len(tok) > 3)
 
     silent = [s for s in sorted(touched) if not named(s)]
     if silent:
         gaps.append(
-            "в блоке исполнения не названы задетые пути: "
-            + ", ".join(silent)
+            "в блоке исполнения не названы задетые пути: " + ", ".join(silent)
             + " (§12.6) — на каждый нужна своя строка: исполнять их надо по "
-            "одному, иначе отказ приходит составным и разбирается перебором"
+              "одному, иначе отказ приходит составным и разбирается перебором"
         )
     if not re.search(r"(?i)\bat\s*=\s*\d", body):
         gaps.append(
@@ -150,3 +149,5 @@ def runtime_proof_gaps(report: str, touched: set[str]) -> list[str]:
             "которого нельзя повторить, следующий раз будет выброшен, а не починен"
         )
     return gaps
+
+

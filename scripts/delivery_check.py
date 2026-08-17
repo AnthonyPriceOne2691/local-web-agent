@@ -8,6 +8,7 @@ Usage:
 Exit 0 = OK (warnings allowed). Exit 1 = errors.
 """
 
+
 from __future__ import annotations
 
 import argparse
@@ -15,13 +16,14 @@ import re
 import sys
 from datetime import date
 
-from delivery_base import ACTIVE, ARCHIVE, DELIVERY, ROOT, field, is_placeholder, read, read_json
-from delivery_decisions import permission_block
+from delivery_base import (ACTIVE, ARCHIVE, DELIVERY, ROOT,
+                           field,
+                           is_placeholder, read, read_json)
+from delivery_decisions import (permission_block)
 from delivery_evidence import check_evidence
 from delivery_journals import check_journals
 from delivery_limits import check_limits
 from delivery_status import check_status_shape
-
 
 def check_archive_index(args, errors: list[str], warnings: list[str]) -> None:
     """Индекс архива: полнота и просроченное наблюдение (§2.2a, §13.1).
@@ -54,13 +56,17 @@ def check_archive_index(args, errors: list[str], warnings: list[str]) -> None:
 
 
 def check_permissions(errors: list[str], warnings: list[str]) -> None:
-    """Права на действия: объявлено ↔ подключено (§4.5) и песочницы (§4.6)."""
+    """Права на действия: объявлено ↔ подключено (§4.5) и песочницы (§4.6).
+    """
     # --- §4.5: права на действия. Объявлено (CONSTITUTION) ↔ подключено (настройки).
     settings_path = ROOT / ".claude" / "settings.json"
     declared = permission_block(read(DELIVERY / "CONSTITUTION.md"))
     settings, s_err = read_json(settings_path)
     if s_err:
-        errors.append(f".claude/settings.json: не парсится ({s_err}) — права агента не проверяемы (§4.5)")
+        errors.append(
+            f".claude/settings.json: не парсится ({s_err}) — права агента "
+            "не проверяемы (§4.5)"
+        )
     perms = settings.get("permissions") or {}
     wired = {k: list(perms.get(k) or []) for k in ("deny", "ask")}
 
@@ -68,7 +74,9 @@ def check_permissions(errors: list[str], warnings: list[str]) -> None:
 
     check_sandbox_oracles(declared, errors)
     local, _ = read_json(ROOT / ".claude" / "settings.local.json")
-    n_allow = len(perms.get("allow") or []) + len((local.get("permissions") or {}).get("allow") or [])
+    n_allow = len(perms.get("allow") or []) + len(
+        (local.get("permissions") or {}).get("allow") or []
+    )
     if n_allow >= 50 and not wired["deny"]:
         warnings.append(
             f"permissions: {n_allow} правил в allow и ни одного в deny (§4.5) — "
@@ -103,10 +111,10 @@ def check_sandbox_oracles(declared, errors: list[str]) -> None:
     # Считаем и локальные настройки — именно там оседают клики «yes».
 
 
-def check_declared_vs_wired(
-    declared, settings_path, s_err, wired, errors: list[str], warnings: list[str]
-) -> None:
-    """Объявленные права ↔ подключённые в настройках (§4.5)."""
+def check_declared_vs_wired(declared, settings_path, s_err, wired,
+                            errors: list[str], warnings: list[str]) -> None:
+    """Объявленные права ↔ подключённые в настройках (§4.5).
+    """
     if declared is None:
         msg = (
             "CONSTITUTION.md: нет блока `agent-permissions` (§4.5 / A.1) — контур "
@@ -114,7 +122,8 @@ def check_declared_vs_wired(
         )
         if any(wired.values()):
             errors.append(
-                msg + "; при этом deny/ask в настройках заданы, то есть границы действий живут без ревью"
+                msg + "; при этом deny/ask в настройках заданы, то есть границы "
+                "действий живут без ревью"
             )
         else:
             warnings.append(msg)

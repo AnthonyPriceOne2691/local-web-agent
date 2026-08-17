@@ -90,7 +90,7 @@ def check_weak_names_the_cheap_gap(status, errors, warnings) -> None:
     raw = field(status, "behavior-oracles")
     if not raw.lower().startswith("weak"):
         return
-    tail = raw[len("weak") :].strip(" —-:;()")
+    tail = raw[len("weak"):].strip(" —-:;()")
     if tail and not is_placeholder(tail):
         return
     warnings.append(

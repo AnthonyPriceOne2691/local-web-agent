@@ -44,8 +44,8 @@ RISK_CLASSES = {
     # `test_green_without_the_thing.py` отрицательным корпусом: список слов, на
     # которых ни один класс не смеет сработать.
     "деньги": r"(?i)(\b(price|pricing|payment|invoice|refund|billing|amount|"
-    r"цена|платеж|платёж)\w*"
-    r"|\b(balance|баланс|счёт|счет)(s|а|е|у|ы|ов)?\b)",
+              r"цена|платеж|платёж)\w*"
+              r"|\b(balance|баланс|счёт|счет)(s|а|е|у|ы|ов)?\b)",
     # ⚠ Русские корни — только однозначные. `доступ` пришлось убрать: он совпадал
     # внутри слова `недоступен` в обычном комментарии, и маячок требовал ревью
     # безопасности от правки текстового чанкера. Ложное срабатывание от ФРАГМЕНТА,
@@ -55,10 +55,10 @@ RISK_CLASSES = {
     # ревью безопасности от правки текстового чанкера. На проекте, чей домен —
     # токены, такой маячок сработал бы на каждом диффе и был бы снят через неделю.
     "безопасность": r"(?i)(\bauth|access_token|auth_token|api_token|refresh_token|"
-    r"\bbearer|\bsecret|\bpassword|\bcredential|\bpermission|"
-    r"\bjwt\b|session_key|парол|авториз)",
+                    r"\bbearer|\bsecret|\bpassword|\bcredential|\bpermission|"
+                    r"\bjwt\b|session_key|парол|авториз)",
     "транзакция БД": r"(?i)\b(commit|rollback|transaction|begin\(\)|savepoint|"
-    r"session\.begin|atomic)\w*",
+                     r"session\.begin|atomic)\w*",
     # lab-12: единственный класс, подтверждённый как slipped ОБЕИМИ арками, —
     # CPU-bound работа по всей выборке в async-хендлере. Маячок его тогда поднял,
     # но ПО ЧУЖОМУ ПОВОДУ («новый модуль» + `commit` у соседа в репозитории):
@@ -70,11 +70,11 @@ RISK_CLASSES = {
     # Слова однозначные и составные, по правилу выше: голый `all` или `loop`
     # совпадал бы всюду и снял бы маячок за неделю.
     "производительность": r"(?i)(\blist_all\b|\bfetchall\b|\.all\(\)|"
-    r"scan_all|full_scan|\bselectinload\b|"
-    r"json\.loads|json\.dumps|\bre\.(search|compile|finditer)\b)",
+                          r"scan_all|full_scan|\bselectinload\b|"
+                          r"json\.loads|json\.dumps|\bre\.(search|compile|finditer)\b)",
     "цепочка гейтов": r"scripts/lint/|merge_guard|pre-commit-config",
     "интеграция": r"(?i)\b(httpx|requests\.|aiohttp|urllib|webhook|grpc|boto3|"
-    r"openai|anthropic)\w*",
+                  r"openai|anthropic)\w*",
 }
 
 
@@ -109,7 +109,9 @@ def risky_classes(paths: list[str], base: str) -> dict[str, set[str]]:
     return hits
 
 
-def risk_review_gaps(report: str, classes: dict[str, set[str]], diff_ids: set[str]) -> list[str]:
+def risk_review_gaps(
+    report: str, classes: dict[str, set[str]], diff_ids: set[str]
+) -> list[str]:
     """Чего не хватает в записи ревью рисковых мест.
 
     Требуется НЕ подтверждение, а содержание: назван класс и процитировано то, что
@@ -127,9 +129,9 @@ def risk_review_gaps(report: str, classes: dict[str, set[str]], diff_ids: set[st
             "нет блока «## Ревью рисковых мест» (§12.5) — дифф задел: "
             + ", ".join(classes)
             + ". Гейта на это нет и быть не может: у «архитектура неудачна» нет "
-            "оракула. Нужно НЕ подтверждение, что смотрел, а содержание: что "
-            "именно может сломаться, с именами из диффа. Риска нет — так и "
-            "напиши «риска нет, потому что …», тоже с именами"
+              "оракула. Нужно НЕ подтверждение, что смотрел, а содержание: что "
+              "именно может сломаться, с именами из диффа. Риска нет — так и "
+              "напиши «риска нет, потому что …», тоже с именами"
         ]
     body = block.group(0)
     low = body.lower()
@@ -158,9 +160,10 @@ def risk_review_gaps(report: str, classes: dict[str, set[str]], diff_ids: set[st
     # «законный выход» на первой версии правки.
     STRUCTURAL = {"новый модуль"}
     undiscussed = [
-        c
-        for c, tokens in (classes or {}).items()
-        if c not in STRUCTURAL and c.lower() not in low and not any(t in low for t in tokens)
+        c for c, tokens in (classes or {}).items()
+        if c not in STRUCTURAL
+        and c.lower() not in low
+        and not any(t in low for t in tokens)
     ]
     if undiscussed:
         gaps.append(
@@ -179,3 +182,5 @@ def risk_review_gaps(report: str, classes: dict[str, set[str]], diff_ids: set[st
             "файлы, которые смотрел: этого не написать, не открыв дифф"
         )
     return gaps
+
+

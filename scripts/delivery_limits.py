@@ -10,23 +10,13 @@ from __future__ import annotations
 
 import re
 
-from delivery_base import (
-    ACTIVE,
-    ARCHIVE,
-    BREAKER_EXCLUDE,
-    DEFAULT_BREAKERS,
-    GENERATED_FILENAMES,
-    ActiveCtx,
-    field,
-    is_placeholder,
-    read,
-)
+from delivery_base import (ACTIVE, ARCHIVE, BREAKER_EXCLUDE, ActiveCtx,
+                           DEFAULT_BREAKERS, GENERATED_FILENAMES, field,
+                           is_placeholder, read)
 from delivery_diff import applicable_lessons, diff_stats
 
-
-def weak_ci_consequences(
-    status: str, waivers: str, ctx: ActiveCtx, errors: list[str], warnings: list[str]
-) -> None:
+def weak_ci_consequences(status: str, waivers: str, ctx: ActiveCtx,
+                         errors: list[str], warnings: list[str]) -> None:
     """Что тянет за собой честное `ci-oracles: weak` (§10.4).
 
     Четвёртый шов (`delivery@1.56`): ветка `weak` — самая длинная в проверке
@@ -95,7 +85,8 @@ def weak_ci_consequences(
     # и спорить с ней значит требовать вранья в одну или другую сторону.
 
 
-def check_ci_layer(status: str, args, ctx: ActiveCtx, errors: list[str], warnings: list[str]) -> None:
+def check_ci_layer(status: str, args, ctx: ActiveCtx, errors: list[str],
+                   warnings: list[str]) -> None:
     """Слой CI (§10.4), waiver'ы и строка стека.
 
     Третий шов `check_limits` (`delivery@1.56`).
@@ -111,7 +102,9 @@ def check_ci_layer(status: str, args, ctx: ActiveCtx, errors: list[str], warning
     ci = field(status, "ci-oracles").lower()
     waivers = field(status, "waivers").lower()
     if is_placeholder(ci):
-        warnings.append("STATUS.md: missing ci-oracles (weak|tooling|deployed) — §10.4")
+        warnings.append(
+            "STATUS.md: missing ci-oracles (weak|tooling|deployed) — §10.4"
+        )
     elif ci.startswith("weak"):
         weak_ci_consequences(status, waivers, ctx, errors, warnings)
     if args.require_ci and not ci.startswith(("deployed", "tooling")):
@@ -130,11 +123,13 @@ def check_ci_layer(status: str, args, ctx: ActiveCtx, errors: list[str], warning
     stack = field(status, "stack")
     if is_placeholder(stack) or "delivery@" not in stack:
         warnings.append(
-            "STATUS.md: missing stack version (e.g. 'delivery@<version>, cqg@<version>, okf@absent')"
+            "STATUS.md: missing stack version "
+            "(e.g. 'delivery@<version>, cqg@<version>, okf@absent')"
         )
 
 
-def check_starting_diff(args, phase: str, n_files: int, warnings: list[str], errors: list[str]) -> None:
+def check_starting_diff(args, phase: str, n_files: int, warnings: list[str],
+                        errors: list[str]) -> None:
     """Стартовый дифф на ранних фазах — чужие изменения (lab-11 F12/F13/F8).
 
     Пятый шов (`delivery@1.56`), и последний, который уводит `check_limits`
@@ -199,7 +194,7 @@ def breaker_limits(status: str, errors: list[str]) -> dict[str, int]:
             continue
         bol = status.rfind("\n", 0, m.start()) + 1
         eol = status.find("\n", m.end())
-        line = status[bol : eol if eol != -1 else len(status)]
+        line = status[bol: eol if eol != -1 else len(status)]
         if "circuit_breakers" in line.lower():
             limits[m.group(1)] = int(m.group(2))
             continue
@@ -216,9 +211,8 @@ def breaker_limits(status: str, errors: list[str]) -> dict[str, int]:
     return limits
 
 
-def breaker_verdicts(
-    n_files: int, net: int, klass: str, limits: dict[str, int], errors: list[str], warnings: list[str]
-) -> None:
+def breaker_verdicts(n_files: int, net: int, klass: str, limits: dict[str, int],
+                     errors: list[str], warnings: list[str]) -> None:
     """Пороги объёма: класс S, файлы, строки (§2.2b, §3.4).
 
     Второй шов `check_limits` (`delivery@1.56`). Берёт уже посчитанные числа —
@@ -251,7 +245,12 @@ def breaker_verdicts(
 
 def check_limits(status: str, args, errors: list[str], warnings: list[str], ctx: ActiveCtx) -> None:
     """CI-слой, объёмные breaker'ы и рисковый дифф."""
-    phase, klass, plan, tasks, verify = (ctx.phase, ctx.klass, ctx.plan, ctx.tasks, ctx.verify)
+    phase, klass, plan, tasks, verify = (
+        ctx.phase,
+        ctx.klass,
+        ctx.plan,
+        ctx.tasks,
+        ctx.verify)
     check_ci_layer(status, args, ctx, errors, warnings)
 
     # --- Circuit breakers (§3.4): анти-oneshot по объёму поставки.
@@ -277,7 +276,8 @@ def check_limits(status: str, args, errors: list[str], warnings: list[str], ctx:
         stats = diff_stats(args.diff_base)
         if stats is None:
             warnings.append(
-                f"circuit breakers: ref '{args.diff_base}' unavailable (shallow clone? need full history)"
+                f"circuit breakers: ref '{args.diff_base}' unavailable "
+                "(shallow clone? need full history)"
             )
         else:
             n_files, added, deleted, excluded, changed = stats
@@ -287,7 +287,9 @@ def check_limits(status: str, args, errors: list[str], warnings: list[str], ctx:
             lessons = applicable_lessons(read(ARCHIVE / "INDEX.md"), changed)
             if lessons:
                 cited = read(plan) + read(tasks) + status
-                unread = [i for i in lessons if not re.search(rf"\b{i}\b", cited)]
+                unread = [
+                    i for i in lessons if not re.search(rf"\b{i}\b", cited)
+                ]
                 if unread:
                     warnings.append(
                         "archive/INDEX.md: уроки по затронутым путям не "
