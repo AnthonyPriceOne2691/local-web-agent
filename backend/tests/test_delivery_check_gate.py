@@ -4,12 +4,19 @@
 поведение: exit code и текст сообщений. Рефакторинг обязан оставить их зелёными —
 иначе он поменял гейт, а не форму кода.
 
-Гейт запускается процессом с `--root` на фикстуру: так проверяется настоящая
-граница (аргументы + вывод + код возврата), а не внутренние функции.
+Гейт запускается **процессом** на фикстуре: так проверяется настоящая граница
+(вывод + код возврата), а не внутренние функции.
+
+Канон delivery@1.80 убрал у гейта флаг `--root`: корень репозитория он определяет по
+месту самого скрипта (`Path(__file__).parents[1]`). Поэтому фикстура теперь получает
+**свою копию** `scripts/` — иначе гейт смотрел бы на настоящий репозиторий, а старый
+вызов с `--root` падал с кодом 2 (`unrecognized arguments`), что тесты принимали за
+«гейт отклонил поставку».
 """
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -33,8 +40,12 @@ STATUS_OK_S = """# Active delivery status
 
 
 def run_gate(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Гейт исполняется из КОПИИ в фикстуре: его корень — это `scripts/../`."""
+    scripts = root / "scripts"
+    if not scripts.exists():
+        shutil.copytree(REPO / "scripts", scripts)
     return subprocess.run(
-        [sys.executable, str(GATE), "--root", str(root), *args],
+        [sys.executable, str(scripts / "delivery_check.py"), *args],
         capture_output=True,
         text=True,
         check=False,
@@ -93,7 +104,7 @@ def test_class_m_requires_spec_plan_and_human_ok(tmp_path: Path) -> None:
     assert done.returncode == 1
     assert "missing active/spec.md" in done.stderr
     assert "missing active/plan.md" in done.stderr
-    assert "human_ok_spec is not yes (stop-gate §3.3)" in done.stderr
+    assert "human_ok_spec без подписи человека (stop-gate §3.3" in done.stderr
 
 
 def test_class_l_requires_human_ok_plan(tmp_path: Path) -> None:
@@ -101,7 +112,7 @@ def test_class_l_requires_human_ok_plan(tmp_path: Path) -> None:
     root = make_repo(tmp_path, status, tasks="t", spec="s", plan="p")
     done = run_gate(root)
     assert done.returncode == 1
-    assert "human_ok_plan is not yes (stop-gate §3.3)" in done.stderr
+    assert "human_ok_plan без подписи человека (stop-gate §3.3" in done.stderr
 
 
 def test_handoff_requires_verdict_and_metrics(tmp_path: Path) -> None:
@@ -142,12 +153,17 @@ def test_ci_oracles_weak_warns_but_passes_class_s(tmp_path: Path) -> None:
     assert "ci-oracles: weak" in done.stdout
 
 
-def test_require_ci_rejects_weak(tmp_path: Path) -> None:
+def test_require_ci_warns_on_weak(tmp_path: Path) -> None:
+    """Канон delivery@1.80 понизил `ci-oracles: weak` с ошибки до предупреждения.
+
+    Тест пиннил прежнее поведение (код 1). Менять пришлось ожидание, а не канон: слабые
+    ci-оракулы теперь named-риск, а не стоп.
+    """
     status = STATUS_OK_S.replace("- **ci-oracles:** tooling", "- **ci-oracles:** weak")
     root = make_repo(tmp_path, status, tasks="t")
     done = run_gate(root, "--require-ci")
-    assert done.returncode == 1
-    assert "--require-ci" in done.stderr
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "warning" in done.stdout.lower()
 
 
 @pytest.mark.parametrize(

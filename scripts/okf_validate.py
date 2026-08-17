@@ -17,11 +17,13 @@ import sys
 from pathlib import Path
 
 RESERVED = {"index.md", "log.md"}
-
-# (ошибки, предупреждения) — общий тип всех проверок, поэтому их можно складывать.
-Report = tuple[list[str], list[str]]
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
-TYPE_RE = re.compile(r"(?m)^type:\s*(.+?)\s*$")
+# `[ \t]`, а НЕ `\s`: `\s` включает перевод строки, и на пустом `type:` регулярка
+# уходила на следующую строку — `type:` + `title: t` давало type == "title: t".
+# Валидатор печатал `0 error(s)` там, где SPEC §11 требует непустой type: ложное
+# зелёное. Найдено дописыванием регрессии, а не прогоном (тест на пустой тип был
+# первым, который вообще это спросил).
+TYPE_RE = re.compile(r"(?m)^type:[ \t]*(.+?)[ \t]*$")
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str] | None, str]:
@@ -38,37 +40,16 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str] | None, str]:
     return meta, text[m.end() :]
 
 
-def check_root_index(root: Path) -> Report:
-    """index.md — мягкое правило SPEC, но обязательное по профилю проекта."""
-    root_index = root / "index.md"
-    if not root_index.is_file():
-        return [], ["missing root index.md (optional in SPEC, required by project profile)"]
-    if "okf_version" not in root_index.read_text(encoding="utf-8"):
-        return [], ["root index.md has no okf_version (SPEC §12 recommended)"]
-    return [], []
+def check_body_smells(rel: str, path: Path, body: str,
+                      warnings: list[str]) -> None:
+    """Мягкие пределы concept'а: строк в теле и байт в файле (§3.3, атомарность).
 
-
-def check_reserved(rel: str, name: str, text: str) -> Report:
-    """index.md / log.md проверяются по форме, а не как concept'ы."""
-    if name == "log.md" and not re.search(r"(?m)^## \d{4}-\d{2}-\d{2}\s*$", text):
-        return [], [f"{rel}: no ## YYYY-MM-DD headings (SPEC §9 shape)"]
-    return [], []
-
-
-def check_concept(root: Path, path: Path, rel: str, text: str) -> Report:
-    """Один concept: frontmatter (жёстко) + объём и ссылки (мягко)."""
+    Отдельный шов, потому что это единственный читатель порогов из окружения:
+    пока они жили в `validate_bundle`, каждый следующий разрез тащил бы их
+    через ещё одну сигнатуру. Замер: −4 к цикломатике `check_file`.
+    """
     max_lines = int(os.environ.get("OKF_MAX_LINES", "600"))
     max_bytes = int(os.environ.get("OKF_MAX_BYTES", str(80 * 1024)))
-
-    meta, body = parse_frontmatter(text)
-    if meta is None:
-        return [f"{rel}: missing YAML frontmatter (SPEC §11)"], []
-
-    errors: list[str] = []
-    warnings: list[str] = []
-    if not meta.get("type"):
-        errors.append(f"{rel}: frontmatter missing non-empty type (SPEC §11)")
-
     lines = body.count("\n") + (1 if body and not body.endswith("\n") else 0)
     size = path.stat().st_size
     if lines > max_lines:
@@ -76,23 +57,69 @@ def check_concept(root: Path, path: Path, rel: str, text: str) -> Report:
     if size > max_bytes:
         warnings.append(f"{rel}: {size} bytes > soft max {max_bytes} (split?)")
 
-    # bundle-absolute links existence (soft)
+
+def check_links(rel: str, root: Path, body: str, warnings: list[str]) -> None:
+    """Bundle-абсолютные ссылки ведут в существующий файл (SPEC §6, soft).
+
+    Шов здесь потому, что это единственная проверка, которой нужен КОРЕНЬ
+    bundle'а рядом с телом файла, и единственная, что кладёт цикл внутрь цикла:
+    вынос забирает у `check_file` сразу два ветвления.
+    """
     for link in re.findall(r"\[[^\]]*\]\((/[^)]+?\.md)\)", body):
         if not (root / link.lstrip("/")).is_file():
             warnings.append(f"{rel}: broken bundle link {link}")
 
-    return errors, warnings
 
+def check_file(path: Path, root: Path, errors: list[str],
+               warnings: list[str]) -> None:
+    """Один markdown bundle'а: кодировка, зарезервированное имя, frontmatter, type.
 
-def check_file(root: Path, path: Path) -> Report:
+    Шов по потоку управления: каждый `continue` тела цикла означал «по этому
+    файлу всё» — и стал ранним `return` помощника, поэтому смысл через границу
+    не изменился, а решение «идти ли дальше» осталось внутри одного файла.
+    Свободными в блоке `ast` называл ровно `path`, `root`, `errors`, `warnings`
+    (пороги ушли в `check_body_smells` — там их единственный читатель).
+    """
     rel = path.relative_to(root).as_posix()
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
-        return [f"{rel}: not UTF-8"], []
+        errors.append(f"{rel}: not UTF-8")
+        return
+
     if path.name in RESERVED:
-        return check_reserved(rel, path.name, text)
-    return check_concept(root, path, rel, text)
+        if path.name == "log.md" and not re.search(
+                r"(?m)^## \d{4}-\d{2}-\d{2}\s*$", text):
+            warnings.append(f"{rel}: no ## YYYY-MM-DD headings (SPEC §9 shape)")
+        return
+
+    meta, body = parse_frontmatter(text)
+    if meta is None:
+        errors.append(f"{rel}: missing YAML frontmatter (SPEC §11)")
+        return
+    if not meta.get("type"):
+        errors.append(f"{rel}: frontmatter missing non-empty type (SPEC §11)")
+
+    check_body_smells(rel, path, body, warnings)
+    check_links(rel, root, body, warnings)
+
+
+def check_root_index(root: Path, warnings: list[str]) -> None:
+    """Корень bundle'а: `index.md` существует и называет `okf_version` (SPEC §12).
+
+    Шов проведён по данным: блок судил ОДИН файл и отдавал наружу только строки
+    `warnings` — `ast` показывает свободными ровно `root` и `warnings`, а имя
+    `text` из него ниже никто не читал (в цикле оно связывалось заново). Ветка
+    «файла нет» восстановлена ранним `return`, чтобы охрана условия осталась
+    частью блока, а не превратилась во вложенность.
+    """
+    root_index = root / "index.md"
+    if not root_index.is_file():
+        warnings.append(
+            "missing root index.md (optional in SPEC, required by project profile)")
+        return
+    if "okf_version" not in root_index.read_text(encoding="utf-8"):
+        warnings.append("root index.md has no okf_version (SPEC §12 recommended)")
 
 
 def validate_bundle(root: Path) -> int:
@@ -107,9 +134,10 @@ def validate_bundle(root: Path) -> int:
     if not md_files:
         errors.append(f"no markdown files under {root}")
 
-    for errs, warns in [check_root_index(root), *(check_file(root, p) for p in md_files)]:
-        errors += errs
-        warnings += warns
+    check_root_index(root, warnings)
+
+    for path in md_files:
+        check_file(path, root, errors, warnings)
 
     for w in warnings:
         print(f"WARNING: {w}")

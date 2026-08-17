@@ -50,13 +50,19 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        files: ^(backend|cli|scripts)/
+        # Механика контура — не продуктовый код проекта (см. ruff.toml).
+        # Через `files` (а не `extend-exclude`): pre-commit передаёт пути
+        # ЯВНО, и ruff применяет исключения к таким только с --force-exclude.
+        files: ^(backend|cli)/|^scripts/(?!lint/|delivery_|okf_|merge_guard)
         exclude: ^scripts/spike/   # Phase 0 артефакт — вне стандартов (CLAUDE.md)
       # Подключён после того, как база отформатирована целиком (поставка
       # legacy-debt): до этого он переформатировал бы 71 файл на первом коммите.
       # Стилевой коммит — в .git-blame-ignore-revs.
       - id: ruff-format
-        files: ^(backend|cli|scripts)/
+        # Механика контура — не продуктовый код проекта (см. ruff.toml).
+        # Через `files` (а не `extend-exclude`): pre-commit передаёт пути
+        # ЯВНО, и ruff применяет исключения к таким только с --force-exclude.
+        files: ^(backend|cli)/|^scripts/(?!lint/|delivery_|okf_|merge_guard)
         exclude: ^scripts/spike/
 
   # -------------------------------------------------------------------------
@@ -85,9 +91,10 @@ repos:
       - id: mypy-scripts
         name: mypy --strict (гейт-скрипты)
         language: system
-        files: ^scripts/.*\.py$
+        # Механика контура — не продуктовый код проекта (см. ruff.toml).
+        files: ^scripts/(?!lint/|delivery_|okf_|merge_guard)[^/]*\.py$
         exclude: ^scripts/spike/
-        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && backend/.venv/bin/mypy --strict --exclude "scripts/spike" scripts'
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && backend/.venv/bin/mypy --strict --exclude "scripts/(spike|lint/|delivery_|okf_|merge_guard)" scripts'
         pass_filenames: false
 
   # -------------------------------------------------------------------------
@@ -141,6 +148,30 @@ repos:
         name: config-access — типизированный config.X, не getattr/os.getenv
         language: system
         entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule config-access'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: blind-error-gate
+        name: blind-error — тип и текст ошибки несут контекст
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule blind-error'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: unstructured-log-gate
+        name: unstructured-log — контекст через extra=, не в тексте
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_grep_gate.sh --rule unstructured-log'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: cpu-in-async-gate
+        name: cpu-in-async — разбор/хеш не в цикле события
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. python3 scripts/lint/check_ast_gate.py --rule cpu-in-async'
+        files: ^(backend|cli|scripts)/.*\.py$
+        pass_filenames: false
+      - id: unbounded-list-gate
+        name: unbounded-list — у списочного ответа есть граница
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. python3 scripts/lint/check_ast_gate.py --rule unbounded-list'
         files: ^(backend|cli|scripts)/.*\.py$
         pass_filenames: false
       - id: di-indirection-gate
@@ -240,3 +271,31 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+  # -------------------------------------------------------------------------
+  # Приехали с обновлением до cqg@2.22. Стадия pre-push: §8.6 держит бюджет
+  # pre-commit, а эти три требуют внешних инструментов и минут.
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: complexity-gate
+        name: complexity — сложность и вложенность под порогом
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_complexity_gate.sh'
+        files: ^(backend|cli)/.*\.py$
+        pass_filenames: false
+        stages: [pre-push]
+      - id: deps-audit-gate
+        name: deps-audit — уязвимости в зависимостях не растут
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && bash scripts/lint/check_deps_audit.sh'
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: layers-gate
+        name: layers — направление зависимостей между слоями
+        language: system
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && bash scripts/lint/check_layers_gate.sh'
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

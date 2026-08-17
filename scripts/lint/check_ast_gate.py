@@ -25,140 +25,101 @@ repo-root); файл проходит при count <= снимок; файл в�
 
 from __future__ import annotations
 
+
+from __future__ import annotations
+
 import argparse
 import ast
 import os
+import re
 import sys
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
 from pathlib import Path
 
+from ast_rules import find_inline_prompt, find_silent_except
+from ast_web_rules import find_cpu_in_async, find_unbounded_list
+
 FEATURES = Path(os.environ.get("LINT_PY_SRC", "backend/features"))
-# Адаптация под этот проект (CQG «Применимость»): LINT_PY_SRC=. покрывает весь репо
-# (прод-код лежит в backend/app И cli/), а venv/node_modules лежат ВНУТРИ дерева —
-# rglob затянул бы site-packages в baseline (168 чужих записей на первом прогоне).
-SKIP_PARTS = ("/tests/", "/migrations/", "/.venv/", "/site-packages/", "/node_modules/")
-SILENT_OK_MARKER = "# silent-ok:"
 
-_LOG_BASES = {"logger", "logging", "log", "warnings"}
-_LOG_ATTR_PREFIXES = ("log", "warn", "exception", "error", "record", "capture", "notify")
-_PROMPT_MARKERS = ("ты —", "ты -", "you are", "you classify", "act as", "роль:", "system:")
-_PROMPT_MIN_LINES = 8
+# Население гейта отбирают ДВА принципа, и они разной природы. Держать их одним
+# кортежем и было дефектом: почему в списке лежат `/tests/` и `/migrations/`, не
+# сказано нигде, поэтому про `.venv` не с чем было спорить — он просто не похож
+# на прежние записи и проваливался молча.
+#
+# ① «НЕ НАШ КОД» — установленное, вендоренное, кэши инструментов. Новый случай
+# судить так: этот файл писал кто-то из проекта? Нет — сюда. Это НЕ настройка
+# развёртывания: чужой код не наш ни при какой маске, поэтому список правит канон.
+# Замер `local-web-agent`: прод-код лежит в двух корнях (`backend/app` И `cli/`),
+# поэтому `LINT_PY_SRC=.` — законная настройка, а `.venv`/`node_modules` лежат
+# ВНУТРИ дерева, и rglob затянул site-packages в снимок — 168 чужих записей на
+# первом прогоне. Остальные три проекта флота везли ту же пару без изменений и
+# уцелели лишь тем, что их маска смотрит в подкаталог: везение раскладки, не защита.
+NOT_OUR_CODE = frozenset((
+    ".venv", "venv", "site-packages", "node_modules", "vendor", ".tox", ".nox",
+    ".eggs", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "build", "dist", ".git",
+))
+# ② «НАШ КОД, НО НЕ СУДИМ ЭТИМ ПРАВИЛОМ» — написано в проекте, правило не
+# применяем сознательно. Новый случай судить так: файл наш и останется нашим?
+# Тогда сюда — и вот это как раз НАСТРОЙКА развёртывания, законно разная у разных
+# проектов, в отличие от ①.
+NOT_JUDGED_HERE = frozenset(("tests", "migrations"))
 
-
-def _is_broad(handler: ast.ExceptHandler) -> bool:
-    t = handler.type
-    if t is None:
-        return True
-    if isinstance(t, ast.Name) and t.id in ("Exception", "BaseException"):
-        return True
-    if isinstance(t, ast.Tuple):
-        return any(isinstance(e, ast.Name) and e.id in ("Exception", "BaseException") for e in t.elts)
-    return False
-
-
-def _handler_leaves_trace(handler: ast.ExceptHandler) -> bool:
-    for node in ast.walk(handler):
-        if isinstance(node, ast.Raise):
-            return True
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Attribute):
-                base = func.value
-                if isinstance(base, ast.Name) and base.id in _LOG_BASES:
-                    return True
-                if func.attr.startswith(_LOG_ATTR_PREFIXES):
-                    return True
-            if isinstance(func, ast.Name) and func.id.startswith(("log", "record", "capture", "notify")):
-                return True
-    return False
+# «Тестовый файл» — понятие §3.1e, и это ЕДИНОЕ выражение: тот же ERE стоит в
+# `check_grep_gate.sh`, `check_file_length.sh`, `mutation_ts.sh` и
+# `check_diff_coverage.sh`, а согласие всех пяти держит прогон
+# `tests/test_what_is_a_test_file.py`. Прежняя форма (`test_` в начале имени плюс
+# `conftest.py`) знала три случая из одиннадцати: `util_test.py`, `__tests__/`,
+# `api.spec.ts`, `FooTest.java`, `FooTests.cs` в неё не попадали.
+IS_TEST = re.compile(
+    r"(^|/)(test|tests|__tests__|spec|specs)/|(^|/)conftest\.py$|(^|/)test[_-]"
+    r"|[_-](test|spec)\.|(Test|Tests|Spec|Specs)\.|\.(test|spec)\.")
 
 
-def _handler_has_silent_ok(handler: ast.ExceptHandler, src_lines: list[str]) -> bool:
-    end = (handler.body[-1].end_lineno if handler.body else None) or handler.lineno
-    span = range(handler.lineno - 1, min(end, len(src_lines)))
-    return any(SILENT_OK_MARKER in src_lines[i] for i in span)
+def in_population(rel_posix: str) -> bool:
+    """Судит ли гейт этот файл. Один вход на оба принципа отбора.
 
-
-def _docstring_ids(tree: ast.AST) -> set[int]:
-    ids: set[int] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            body = node.body
-            if (
-                body
-                and isinstance(body[0], ast.Expr)
-                and isinstance(body[0].value, ast.Constant)
-                and isinstance(body[0].value.value, str)
-            ):
-                ids.add(id(body[0].value))
-    return ids
-
-
-def find_silent_except(tree: ast.AST, src_lines: list[str]) -> list[int]:
-    out = []
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.ExceptHandler)
-            and _is_broad(node)
-            and not _handler_leaves_trace(node)
-            and not _handler_has_silent_ok(node, src_lines)
-        ):
-            out.append(node.lineno)
-    return out
-
-
-# src_lines не используется — сигнатура общая с find_silent_except, обе функции
-# вызываются одинаково из таблицы проверок.
-def find_inline_prompt(tree: ast.AST, src_lines: list[str]) -> list[int]:
-    doc_ids = _docstring_ids(tree)
-    out = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in doc_ids:
-            if node.value.count("\n") + 1 < _PROMPT_MIN_LINES:
-                continue
-            head = node.value.strip().lower()
-            if head.startswith(_PROMPT_MARKERS):
-                out.append(node.lineno)
-    return out
-
-
-@dataclass(frozen=True)
-class Rule:
-    """Правило гейта. Датакласс, а не dict: у dict с разнородными значениями тип
-    полей схлопывается в `object`, и `rule["find"](…)` уже не проверяется."""
-
-    find: Callable[[ast.AST, list[str]], list[int]]
-    baseline: str
-    label: str
-    hint: str
+    Сверяется ЭЛЕМЕНТ пути, а не подстрока: `my_node_modules_util/` и
+    `venv_helper.py` — продуктовый код, и слабая форма (`"venv" in path`)
+    объявила бы их чужими. Путь берётся ОТНОСИТЕЛЬНЫМ repo-root — на абсолютном
+    совпал бы ещё и каталог НАД репозиторием (`/home/u/build/proj/...`).
+    """
+    parts = set(rel_posix.split("/"))
+    return not (parts & NOT_OUR_CODE) and not (parts & NOT_JUDGED_HERE)
 
 
 RULES = {
-    "silent-except": Rule(
-        find=find_silent_except,
-        baseline="silent_except_baseline.txt",
-        label="silent-except: broad-except без raise/лога",
-        hint=(
-            "Оставь след: logger.warning/exception с контекстом, либо пробрось. "
-            "Осознанный fail-soft — пометь `# silent-ok: <причина>` в хендлере."
-        ),
-    ),
-    "inline-prompt": Rule(
-        find=find_inline_prompt,
-        baseline="inline_prompt_baseline.txt",
-        label="inline-prompt: LLM-промпт инлайном в .py",
-        hint="Промпт — в отдельный <name>.md + lazy-load, не строкой в коде.",
-    ),
+    "silent-except": {
+        "find": find_silent_except,
+        "baseline": "silent_except_baseline.txt",
+        "label": "silent-except: broad-except без raise/лога",
+        "hint": "Оставь след: logger.warning/exception с контекстом, либо пробрось. Осознанный fail-soft — пометь `# silent-ok: <причина>` в хендлере.",
+    },
+    "unbounded-list": {
+        "find": find_unbounded_list,
+        "baseline": "unbounded_list_baseline.txt",
+        "label": "unbounded-list: эндпоинт отдаёт список без границы",
+        "hint": "Добавь `limit` (и `offset`/курсор) с потолком по умолчанию — иначе объём ответа растёт вместе с корпусом, и это вектор отказа, а не медленный ответ. Набор, который по устройству не растёт, помечай `# unbounded-ok: <причина>`.",
+    },
+    "cpu-in-async": {
+        "find": find_cpu_in_async,
+        "baseline": "cpu_in_async_baseline.txt",
+        "label": "cpu-in-async: разбор/регулярка в цикле внутри async def",
+        "hint": "Стоимость растёт с размером выборки, а event loop встаёт на всё это время. Ограничь выборку (limit), перенеси разбор в БД/индекс, либо унеси в пул: `await asyncio.to_thread(...)`. Осознанно оставить — `# cpu-ok: <причина>` на строке вызова.",
+    },
+    "inline-prompt": {
+        "find": find_inline_prompt,
+        "baseline": "inline_prompt_baseline.txt",
+        "label": "inline-prompt: LLM-промпт инлайном в .py",
+        "hint": "Промпт — в отдельный <name>.md + lazy-load, не строкой в коде.",
+    },
 }
 
 
-def iter_target_files(repo_root: Path) -> Iterator[Path]:
+def iter_target_files(repo_root: Path):
     for path in sorted((repo_root / FEATURES).rglob("*.py")):
-        rel = path.as_posix()
-        if any(part in rel for part in SKIP_PARTS):
+        if not in_population(repo_rel(path, repo_root)):
             continue
-        if path.name.startswith("test_") or path.name == "conftest.py":
+        if IS_TEST.search(repo_rel(path, repo_root)):
             continue
         yield path
 
@@ -180,62 +141,102 @@ def load_baseline(baseline_path: Path) -> dict[str, int]:
     return snap
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--rule", required=True, choices=sorted(RULES))
-    parser.add_argument("--generate", action="store_true")
-    args = parser.parse_args()
 
-    strict = os.environ.get("STRICT", "1") == "1"
-    rule = RULES[args.rule]
 
-    script_dir = Path(__file__).resolve().parent
-    repo_root = script_dir.parent.parent  # <repo-root>/scripts/lint/ -> repo-root
-    baseline_path = script_dir / rule.baseline
+def scan(repo_root: Path, rule: dict) -> tuple[dict[str, int], int]:
+    """→ ({путь: сколько находок}, сколько файлов ПРОСМОТРЕНО).
 
+    `scanned` считается после успешного разбора: файл, который не прочитался или
+    не распарсился, гейт не смотрел, и записывать его в доказательство нельзя.
+    """
     counts: dict[str, int] = {}
+    scanned = 0
     for path in iter_target_files(repo_root):
         try:
             src = path.read_text(encoding="utf-8")
             tree = ast.parse(src)
         except (OSError, SyntaxError):
             continue
-        hits = rule.find(tree, src.splitlines())
+        scanned += 1
+        hits = rule["find"](tree, src.splitlines())
         if hits:
             counts[repo_rel(path, repo_root)] = len(hits)
+    return counts, scanned
 
-    if args.generate:
-        lines = [
-            f"# {rule.baseline} — снимок AST-гейта. Генерируется --generate, НЕ руками.",
-            f"# Правило: {rule.label}",
-            "# Формат: <count>:<path> (path от repo-root). Ратчет вниз: файл проходит при count <= снимок;",
-            "# файл ВНЕ снимка (новый) — hard 0.",
-        ]
-        lines += [f"{c}:{p}" for p, c in sorted(counts.items())]
-        baseline_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(
-            f"baseline пересобран: {baseline_path.name} ({len(counts)} файлов, {sum(counts.values())} сайтов)"
-        )
-        return 0
 
-    snap = load_baseline(baseline_path)
-    violations = []
-    for p, c in sorted(counts.items()):
-        allowed = snap.get(p, 0)
-        if c > allowed:
-            violations.append((p, c, allowed))
+def write_baseline(baseline_path: Path, rule: dict, counts: dict[str, int],
+                   scanned: int) -> int:
+    lines = [
+        f"# {rule['baseline']} — снимок AST-гейта. Генерируется --generate, НЕ руками.",
+        f"# Правило: {rule['label']}",
+        "# Формат: <count>:<path> (path от repo-root). Ратчет вниз: файл проходит при count <= снимок;",
+        "# файл ВНЕ снимка (новый) — hard 0.",
+    ]
+    lines += [f"{c}:{p}" for p, c in sorted(counts.items())]
+    baseline_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(
+        f"baseline пересобран: {baseline_path.name} — просмотрено {scanned} файл(ов), "
+        f"с находками {len(counts)}, сайтов {sum(counts.values())}"
+    )
+    return 0
 
+
+def judge(rule_name: str, rule: dict, counts: dict[str, int], snap: dict[str, int],
+          scanned: int, strict: bool) -> int:
+    """Сверка со снимком и печать. Успех обязан назвать число просмотренного.
+
+    Иначе «код чист» и «просканировано ноль» неотличимы, а приёмка §6 требует
+    именно этого числа. Класс закрывался трижды (grep-гейт 1.19, complexity
+    1.20/1.22) и трижды не переносился сюда: пятое развёртывание нашло его тремя
+    арками сразу — этот скрипт единственный не печатал НИЧЕГО ни на одном пути.
+    """
+    violations = [(p, c, snap.get(p, 0)) for p, c in sorted(counts.items())
+                  if c > snap.get(p, 0)]
     if violations:
         mark = "✗" if strict else "⚠"
         for p, c, allowed in violations:
             print(f"  {mark}  {p}: {c} нарушений (разрешено {allowed})")
-        print(
-            f"\n{'ERROR' if strict else 'WARNING'}: {len(violations)} файл(ов) нарушают правило {args.rule}."
-        )
-        print(rule.hint)
+        print(f"\n{'ERROR' if strict else 'WARNING'}: {len(violations)} файл(ов) нарушают правило {rule_name}.")
+        print(rule["hint"])
         print("Легаси из baseline — ок до чистки; новый код держим на нуле. Пересъём вниз: --generate.")
         return 1 if strict else 0
+    if scanned == 0:
+        print(f"{rule_name}: 0 файлов просмотрено — проверь LINT_PY_SRC (§6): "
+              "гейт, который ничего не видит, хуже красного")
+        return 0
+    # Маска печатается вместе с числом (`cqg@1.88`): без неё доктор мог только
+    # подозревать частичную слепоту, а с ней — считает расхождение.
+    print(f"{rule_name}: OK — просмотрено {scanned} файл(ов), в снимке {len(snap)}, "
+          f"по маске: {FEATURES}/**/*.py")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    # --list-rules печатает правила этого скрипта: мета-гейт сверяет подключение
+    # ПРАВИЛ, а не только файлов (F7). Поэтому --rule не required: список должен
+    # быть доступен без выбора правила.
+    parser.add_argument("--rule", choices=sorted(RULES))
+    parser.add_argument("--generate", action="store_true")
+    parser.add_argument("--list-rules", action="store_true")
+    args = parser.parse_args()
+    if args.list_rules:
+        for name in sorted(RULES):
+            print(name)
+        return 0
+    if not args.rule:
+        parser.error("--rule обязателен (или --list-rules)")
+
+    rule = RULES[args.rule]
+    script_dir = Path(__file__).resolve().parent
+    repo_root = script_dir.parent.parent  # <repo-root>/scripts/lint/ -> repo-root
+    baseline_path = script_dir / rule["baseline"]
+
+    counts, scanned = scan(repo_root, rule)
+    if args.generate:
+        return write_baseline(baseline_path, rule, counts, scanned)
+    return judge(args.rule, rule, counts, load_baseline(baseline_path), scanned,
+                 os.environ.get("STRICT", "1") == "1")
 
 
 if __name__ == "__main__":

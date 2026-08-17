@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Ratified:** 2026-07-27
-**Canon stack:** delivery@1.11 · cqg@1.7 · okf@1.5
+**Canon stack:** delivery@1.80 · cqg@2.22 · okf@1.17
 <!-- версии из шапок канонов; каноны лежат ВНЕ репо (Prepare/, gitignored) —
      AGENT_STACK §7.1 вариант B, см. delivery/STACK-ACCEPTANCE.md -->
 **CI:** deployed (github-actions) merge-gate: tooling   <!-- §10.4; серверная защита ветки — по тарифу -->
