@@ -1,0 +1,17 @@
+# complexity_baseline.txt — снимок нарушений сложности ФУНКЦИЙ по файлам.
+# Формат: <число нарушений>:<путь>. Половины, снявшие снимок: python + ts
+# python: ruff C901,PLR0911,PLR0912,PLR0913,PLR0915; пороги — в pyproject ([tool.ruff.lint.mccabe] / [.pylint]).
+# ts: eslint {"complexity":["error",10],"max-depth":["error",4],"max-params":["error",8],"max-statements":["error",50]} (порог у гейта, env LINT_TS_COMPLEXITY_RULES).
+# Снимок только ТАЕТ: тронул файл — раздели функцию и пере-сними вниз.
+1:backend/app/llm/json_chat.py
+1:backend/app/llm/navigator.py
+1:backend/app/llm/ollama_client.py
+1:backend/app/navigation/candidate_queue.py
+1:backend/app/orchestrator/decide.py
+3:backend/app/orchestrator/interaction.py
+1:backend/app/orchestrator/observe.py
+1:cli/main.py
+1:frontend/src/components/Chat.tsx
+1:frontend/src/components/Inspector.tsx
+1:frontend/src/components/RunCard.tsx
+2:scripts/delivery_status.py
