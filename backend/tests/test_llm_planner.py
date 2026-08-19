@@ -12,6 +12,7 @@ from app.schemas.research import ComparisonResult, Ranking, SessionRecord
 from app.schemas.run import RunConfig, RunRecord
 from app.storage.session_store import SqliteSessionStore
 from app.storage.sqlite_store import SqliteRunStore
+from tests.cassettes import CassetteOllama
 from tests.conftest import REPO_ROOT, FakeOllama
 
 
@@ -66,7 +67,12 @@ async def test_planner_enforces_m_contracts(tmp_path):
     settings = _settings(tmp_path)
     run_store, session_store = _stores(settings)
     session = _session_with_runs(run_store, session_store)
-    llm = FakeOllama(
+    # ⚠ Кассета, а не очередь: ответ ищется по ключу, в который входит sha256
+    # системного промпта. Прежний двойник отдавал скриптованный ответ независимо
+    # от промпта, поэтому порча промпта не могла уронить ЭТОТ тест по построению
+    # — он проверяет контракты M-H1/M-H3, которые живут в самом промпте.
+    llm = CassetteOllama(
+        "planner_m_contracts",
         [
             {
                 "plan": [
@@ -78,7 +84,7 @@ async def test_planner_enforces_m_contracts(tmp_path):
                 ],
                 "reply": "",
             }
-        ]
+        ],
     )
     planner = LlmPlanner(llm, settings)  # type: ignore[arg-type]
 
