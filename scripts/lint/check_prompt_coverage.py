@@ -39,10 +39,32 @@ def store() -> list[Path]:
     return sorted(p for p in PROMPTS.rglob("*") if p.is_file())
 
 
-def suite_is_red() -> bool:
-    r = subprocess.run([sys.executable, "-m", "pytest", "tests/", *PROBE],
+def interpreter() -> str:
+    """Питон, у которого ЕСТЬ pytest, — ищется, а не наследуется от вызывающего.
+
+    ⚠ Первая редакция брала `sys.executable`, и это поймала канарейка доктора, а
+    не прогон. Хук зовёт гейт венвовым питоном, доктор — системным; во втором
+    pytest'а нет, `suite_is_red()` возвращала True всегда, гейт отказывался
+    мерить, и канарейка честно уходила в SKIP «красный и без канарейки». То есть
+    гейт зависел от того, КТО его позвал, а не от состояния проекта.
+    """
+    venv = ROOT / "backend" / ".venv" / "bin" / "python"
+    return str(venv) if venv.is_file() else sys.executable
+
+
+def suite_state() -> str:
+    """`ok` · `red` · `no-pytest`. Третье — не провал, а НАЗВАННЫЙ пропуск."""
+    r = subprocess.run([interpreter(), "-m", "pytest", "tests/", *PROBE],
                        cwd=ROOT / "backend", capture_output=True, text=True)
-    return r.returncode != 0
+    if r.returncode == 0:
+        return "ok"
+    if "No module named pytest" in (r.stderr + r.stdout):
+        return "no-pytest"
+    return "red"
+
+
+def suite_is_red() -> bool:
+    return suite_state() != "ok"
 
 
 def probe(f: Path) -> bool:
@@ -84,7 +106,15 @@ def main() -> int:
     if not PROMPTS.is_dir():
         print("промпт-стора нет — охват мерить не на чем")
         return 0
-    if suite_is_red():
+    state = suite_state()
+    if state == "no-pytest":
+        # Честный пропуск с ИМЕНЕМ инструмента: гейт без pytest'а не может
+        # ответить, и выдать это за успех — ровно тот класс, что канон ловит
+        # `_probe_honest_skip`. Ноль, потому что это не нарушение проекта.
+        print("prompt-coverage: SKIP — нет pytest у "
+              f"{interpreter()}; охват мерить нечем (§14.4)")
+        return 0
+    if state == "red":
         print("быстрый набор КРАСНЫЙ на чистом дереве — охват мерить нечем: "
               "красное под порчей перестало быть признаком.\n"
               "Почини набор, потом мерь охват.", file=sys.stderr)
