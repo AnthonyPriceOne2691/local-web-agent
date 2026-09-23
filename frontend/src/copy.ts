@@ -111,7 +111,7 @@ export const pauseCopy = (
   if (kind === 'confirm_submit') {
     return {
       title: 'Send this form?',
-      body: `The agent wants to submit ${action ? `“${action}”` : 'the form on this page'}. Take a look in the open browser window and confirm — then the agent will press it.`,
+      body: `The agent wants to submit ${action || 'the form on this page'}. Take a look in the open browser window and confirm — then the agent will press it.`,
       button: 'Yes, send it',
     };
   }

@@ -112,7 +112,7 @@ async def _handoff_to_human(
 
     `None` = продолжать нельзя: человек не завершил шаг либо закрыл окно.
     """
-    desc = f"«{el.label}» на {current.url}"
+    desc = f"“{el.label}” on {current.url}"
     if gate is not None:
         # Окно человеку показываем ДО паузы: до этого прогон мог идти headless
         # (doc 24 § Видимость окна). После не прячем — человек работает со страницей.
@@ -207,7 +207,7 @@ async def act_on_element(
             capture=capture,
         )
     if action.action == "click" and el is not None and _is_submit(el):
-        desc = f"submit «{el.label or 'форма'}» на {current.url}"
+        desc = f"“{el.label or 'the form'}” on {current.url}"
         if gate is not None:
             await browser.reveal()  # человек должен видеть, что подтверждает
         if gate is None or not await gate.confirm_action(record, desc):

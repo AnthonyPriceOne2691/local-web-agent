@@ -134,7 +134,7 @@ class SynthesisValidator:
             # article пуст на 12 реальных прогонах из 13, причина ни в одном не записана).
             result.article = None
             result.not_found.append(
-                NotFound(key="article", reason=f"URL статьи не из прочитанных страниц: {article.url}")
+                NotFound(key="article", reason=f"article URL is not among the pages read: {article.url}")
             )
             return
         article.main_text_excerpt = source.main_text[:ARTICLE_TEXT_CAP]
