@@ -150,6 +150,38 @@ class Phrases:
         return first_line
 
 
+_SENTENCE_END = re.compile(r"[.!?…]+(?=\s)")
+_OPENERS = "\"'«“‘(["
+
+
+def clip_at_sentence(text: str, limit: int) -> str:
+    """Текст не длиннее `limit`, обрезанный по концу предложения, а не посреди слова.
+
+    Дефект живой сессии: проза сравнения уходила в чат срезом `narrative[:600]`, и
+    ответ заканчивался на «King Arthur's artic». Конец предложения — знак, за которым
+    после пробела идёт заглавная буква: так «approx. 964» и «e.g. the» не рвут фразу.
+    Если законченного предложения нет хотя бы на треть лимита, режем между словами
+    и ставим многоточие — обрывок слова хуже честного «…».
+    """
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = 0
+    for m in _SENTENCE_END.finditer(text, 0, limit + 1):
+        if m.end() > limit:
+            break
+        rest = text[m.end() :].lstrip().lstrip(_OPENERS)
+        if rest[:1].isupper():
+            cut = m.end()
+    if cut >= limit // 3:
+        return text[:cut]
+    head = text[: limit - 1]  # место под «…»
+    if not text[limit - 1].isspace():  # граница внутри слова — слово отбрасываем целиком
+        parts = head.rsplit(None, 1)
+        head = parts[0] if len(parts) > 1 else head
+    return head.rstrip(",;:—–- ") + "…"
+
+
 def site_name(url: str) -> str:
     """Хост без `www` — то, чем человек называет сайт (не полный URL)."""
     host = urlparse(url).netloc or url

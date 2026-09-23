@@ -21,7 +21,9 @@ from pathlib import Path
 import pytest
 
 from app.config import Settings
-from app.reporting.phrasing import Phrases, task_language
+from app.reporting.phrasing import Phrases, clip_at_sentence, task_language
+from app.research.runner import ResearchRunner
+from app.schemas.research import ComparisonResult
 from tests.conftest import REPO_ROOT
 
 PROMPTS = REPO_ROOT / "data" / "prompts"
@@ -167,6 +169,63 @@ def test_ordinary_failure_wording_is_unchanged():
     """Негативный контроль: без контекста стадии формулировка та же, что была."""
     assert say(RU_TASK).exclusion_reason("failed", None, None) == "не удалось прочитать"
     assert say(EN_TASK).exclusion_reason("blocked", "captcha", None) == "blocked us — captcha"
+
+
+# --- проза модели в чате режется по предложению, а не посреди слова ---
+
+# Форма живого дефекта: сравнение хлебных сайтов (EN, 711 символов прозы) ушло в чат
+# срезом `narrative[:600]`, и абзац закончился на «King Arthur's artic». Фикстура своя,
+# но устроена так же: 600-й символ приходится на середину слова.
+LONG_NARRATIVE = (
+    "Alpha Baking's guide gives the most thorough explanation of baking bread at home, "
+    "covering yeast science, storage and practical technique in detailed sections. "
+    "Beta Food's 'Six steps to brilliant bread' (approx. 964 words) focuses on the "
+    "fundamentals but lacks the depth of scientific explanation and the troubleshooting "
+    "found in the Alpha guide. Gamma had no relevant bread-baking content at all; its "
+    "pages focus on desserts and breakfast recipes instead of bread. Alpha's guide is "
+    "more complete thanks to its breadth, with dedicated sections on flour, hydration, "
+    "kneading, proofing and baking temperatures, and a long list of answers to common "
+    "questions from readers. Beta remains a good start for beginners."
+)
+
+
+def test_chat_reply_never_ends_the_narrative_mid_word():
+    """Целиком проза есть в панели «What we found»; в чате — законченные предложения."""
+    assert LONG_NARRATIVE[599].isalpha() and LONG_NARRATIVE[600].isalpha(), "фикстура обязана резать слово"
+    reply = ResearchRunner._chat_reply(
+        ComparisonResult(narrative=LONG_NARRATIVE), "comparison_report.md", say(EN_TASK), []
+    )
+    paragraph = next(p for p in reply.split("\n\n") if p.startswith("Alpha Baking's guide"))
+    assert LONG_NARRATIVE.startswith(paragraph)
+    assert paragraph.endswith(".")
+    assert len(paragraph) <= 600
+
+
+def test_short_narrative_reaches_the_chat_whole():
+    reply = ResearchRunner._chat_reply(
+        ComparisonResult(narrative="a.com wins overall."), "comparison_report.md", say(EN_TASK), []
+    )
+    assert "a.com wins overall." in reply.split("\n\n")
+
+
+def test_abbreviation_is_not_taken_for_the_end_of_a_sentence():
+    """«approx. 964» — точка внутри предложения: за ней не заглавная буква."""
+    text = "First point is short. Six steps to good bread (approx. 964 words) cover the basics."
+    assert clip_at_sentence(text, 60) == "First point is short."
+
+
+def test_text_without_a_sentence_end_is_cut_between_words():
+    text = "one very long clause that goes on and on without ever reaching a full stop at all"
+    clipped = clip_at_sentence(text, 40)
+    assert clipped.endswith("…")
+    head = clipped.removesuffix("…")
+    assert text.startswith(head)
+    assert text[len(head)] == " ", "обрезано посреди слова"
+
+
+def test_sentence_clipping_works_for_cyrillic():
+    text = "Первый пункт короткий. Второй пункт длиннее и продолжается дальше."
+    assert clip_at_sentence(text, 40) == "Первый пункт короткий."
 
 
 # --- промпты ---
