@@ -83,7 +83,7 @@
 
 ### FR-4 Behavioral contracts (ABC — arXiv:2602.22302)
 
-> См. [13-behavioral-contracts.md](13-behavioral-contracts.md) · источник: `/Users/anthony/Documents/2602.22302v1.pdf`
+> См. [13-behavioral-contracts.md](13-behavioral-contracts.md) · источник: [arXiv:2602.22302](https://arxiv.org/abs/2602.22302)
 
 | ID | Требование | MVP | Priority |
 |----|------------|-----|----------|

@@ -1,0 +1,15 @@
+# Файлы промпт-стора БЕЗ утверждения по содержанию (§14.4 п.2).
+# Признак — порча: изменил файл, сьют не покраснел.
+# Список обязан ТАЯТЬ. Рост — решение с записью, а не «не дошли руки».
+# охват: 8 из 19
+compare_system.txt
+compare_user.j2
+navigator_system.txt
+navigator_user.j2
+rubrics/content_completeness.txt
+rubrics/design_diff.txt
+rubrics/generic_merge.txt
+synthesizer_system.txt
+synthesizer_user.j2
+vision_system.txt
+vision_user.j2

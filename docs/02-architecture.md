@@ -111,7 +111,7 @@ AgentAction = Navigate(url) | ExtractNow() | Stop(reason)
 
 **Назначение:** runtime проверка **каждого действия** перед Playwright — реализация Agent Behavioral Contracts (Bhardwaj, arXiv:2602.22302).
 
-**См.:** [13-behavioral-contracts.md](13-behavioral-contracts.md) · PDF: `/Users/anthony/Documents/2602.22302v1.pdf`
+**См.:** [13-behavioral-contracts.md](13-behavioral-contracts.md) · статья: [arXiv:2602.22302](https://arxiv.org/abs/2602.22302)
 
 **MVP:** domain allowlist, URL ∈ snapshot links, no submit/auth, robots.txt; dual enforcement с orchestrator (max pages/depth). Recovery = replan (≤2) → link scorer. **< 10 ms/action**.
 

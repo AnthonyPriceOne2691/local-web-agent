@@ -147,7 +147,7 @@ def drop_dead_page(record: RunRecord, st: RunState, store: RunStore) -> StepOutc
             index=st.step_index,
             state=State.OBSERVE,
             url=dead.url,
-            note="not_found: страница не найдена, в содержание не берём",
+            note="not_found: page not found, left out of the content",
         )
     )
     st.current = st.snapshots[-1] if st.snapshots else None

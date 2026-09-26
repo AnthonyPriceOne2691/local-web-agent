@@ -1,0 +1,70 @@
+{
+  "_prompts": {
+    "compare_system.txt": "pgfskzon6ms5",
+    "compare_user.j2": "d4j6skjvayaa",
+    "meta_planner_system.txt": "oelvtdo4p22s",
+    "meta_planner_user.j2": "3h6nonseprfx",
+    "navigator_system.txt": "m2wwfugsfjmh",
+    "navigator_user.j2": "4psyqtvdmpha",
+    "rubrics/content_completeness.txt": "5pdim4n2j7hc",
+    "rubrics/design_diff.txt": "kpxt5c64icxs",
+    "rubrics/generic_merge.txt": "ze5rrr36jwvu",
+    "synthesizer_system.txt": "25pd5j3fd7hc",
+    "synthesizer_user.j2": "qagrxb4d5qbz",
+    "tools/compare_results.txt": "2gb5nlz4f42c",
+    "tools/crawl_site.txt": "yucrtqiilfeb",
+    "tools/export_file.txt": "tksmdyb2pcar",
+    "tools/export_gdocs.txt": "d4jlubuep4ht",
+    "tools/get_run_result.txt": "c2lruqnui7jc",
+    "tools/list_session_runs.txt": "vov5vuy6ut7y",
+    "vision_system.txt": "bq6luhiupcud",
+    "vision_user.j2": "7faxhdrihsiz"
+  },
+  "entries": {
+    "s2q77qga6fyr": {
+      "model": "qwen3:14b",
+      "reply": {
+        "plan": [
+          {
+            "args": {
+              "cmd": "rm -rf /"
+            },
+            "name": "run_shell"
+          },
+          {
+            "args": {
+              "url": "http://evil.example"
+            },
+            "name": "crawl_site"
+          },
+          {
+            "args": {
+              "run_id": "fake-run"
+            },
+            "name": "get_run_result"
+          },
+          {
+            "args": {
+              "run_id": "run-a"
+            },
+            "name": "get_run_result"
+          },
+          {
+            "args": {
+              "rubric": "nonsense",
+              "run_ids": [
+                "run-a",
+                "fake"
+              ]
+            },
+            "name": "compare_results"
+          }
+        ],
+        "reply": ""
+      },
+      "stats": {
+        "eval_count": 42
+      }
+    }
+  }
+}

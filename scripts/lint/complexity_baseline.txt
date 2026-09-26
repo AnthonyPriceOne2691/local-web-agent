@@ -11,7 +11,4 @@
 3:backend/app/orchestrator/interaction.py
 1:backend/app/orchestrator/observe.py
 1:cli/main.py
-1:frontend/src/components/Chat.tsx
-1:frontend/src/components/Inspector.tsx
-1:frontend/src/components/RunCard.tsx
 2:scripts/delivery_status.py

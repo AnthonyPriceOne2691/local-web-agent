@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.config import Settings
-from app.reporting.phrasing import Phrases
+from app.reporting.phrasing import Phrases, clip_at_sentence
 from app.reporting.phrasing import action_name as _action_name
 from app.reporting.phrasing import site_name as _site_name
 from app.research import actions
@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 COMPARABLE_STATUSES = ("completed", "partial", "not_found")  # есть result → участвует
 HOT_QUEUE_SITES = 4  # N ≥ 4 → длинный cooldown (thermal, doc 24)
+_CHAT_NARRATIVE_CHARS = 600  # проза сравнения в чате; целиком она в панели «What we found»
 
 
 def _now() -> str:
@@ -452,7 +453,7 @@ class ResearchRunner:
             scores = " · ".join(f"{_site_name(r.url)} {r.score}/100" for r in comparison.rankings)
             lines.append(say.say("scored", scores=scores))
         if comparison.narrative:
-            lines.append(comparison.narrative[:600])
+            lines.append(clip_at_sentence(comparison.narrative, _CHAT_NARRATIVE_CHARS))
         incomplete = ResearchRunner._incomplete_sites(survivors)
         if incomplete:
             lines.append(say.say("reading_cut", items=", ".join(incomplete)))

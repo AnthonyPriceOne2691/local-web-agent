@@ -1,7 +1,7 @@
 # 21 — Navigation Hints (deterministic site access)
 
 > Local Web Agent · Design doc · **v0.18** · 2026-08-07
-> **Референс (боевой опыт):** Linkbuilding CRM — [CONTACT_SCRAPER_FALLBACK_DESIGN.md](../../../Shared%20Works/internal/seo/hide-linkbuilding-application-crm/Linkbuilding%20Automatization%20P/docs/CONTACT_SCRAPER_FALLBACK_DESIGN.md) (SEOLB-499, прогон 991 GEO-донора, 2026-07-03/04)
+> **Референс (боевой опыт):** дизайн запасного сборщика контактов из продакшн-CRM (закрытый репозиторий; прогон на 991 доноре, 2026-07-03/04)
 
 ## Назначение
 
