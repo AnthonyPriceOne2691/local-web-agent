@@ -91,8 +91,8 @@ Phase 0–7 закрыты, решения D-1..D-14 закрыты (см. [06-m
 
 ## Reference
 
-- **Agent Behavioral Contracts:** Bhardwaj, arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) · локально: `/Users/anthony/Documents/2602.22302v1.pdf`
-- **Navigation hints (боевой референс):** Linkbuilding `CONTACT_SCRAPER_FALLBACK_DESIGN.md` (SEOLB-499) → [doc 21](21-navigation-hints.md)
+- **Agent Behavioral Contracts:** Bhardwaj, arXiv:[2602.22302](https://arxiv.org/abs/2602.22302)
+- **Navigation hints (боевой референс):** запасной сборщик контактов из продакшн-CRM → [doc 21](21-navigation-hints.md)
 
 ## Changelog
 

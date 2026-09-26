@@ -1,5 +1,5 @@
 # Navigation path hints — slug dictionaries for site access
-# Source: battle-tested lists from SEOLB-499 / CONTACT_SCRAPER_FALLBACK_DESIGN.md (991 GEO donors)
+# Source: field-tested lists from a production outreach CRM (991 GEO donors)
 # Used by: backend/app/navigation/path_hints.py (Phase 1)
 # version: "1.0"
 

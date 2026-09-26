@@ -1,7 +1,7 @@
 # 13 — Behavioral Contracts (ABC-lite)
 
 > Local Web Agent · Design doc · **v0.10** · 2026-08-06  
-> **Источник правды (контроль модели):** Bhardwaj, «Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents», arXiv:[2602.22302](https://arxiv.org/abs/2602.22302) — локальная копия: `/Users/anthony/Documents/2602.22302v1.pdf`  
+> **Источник правды (контроль модели):** Bhardwaj, «Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents», arXiv:[2602.22302](https://arxiv.org/abs/2602.22302)  
 > Контракт **C = (P, I, G, R)**, hard/soft split, bounded recovery, **runtime enforcement на уровне действий** (до Playwright)
 
 ## Что берём из full ABC, что нет
@@ -604,7 +604,7 @@ Post-MVP: export violation CSV; optional JSD over `{navigate, stop, extract}` ac
 - [04-crawl-orchestrator.md](04-crawl-orchestrator.md) — state machine, link scorer
 - [05-extraction-schema.md](05-extraction-schema.md) — ExtractionResult
 - [Voice Interview Coach doc 13](../../voice-interview-coach/docs/13-behavioral-contracts.md) — тот же ABC-lite паттерн (enforcer перед side-effect)
-- Paper PDF: `/Users/anthony/Documents/2602.22302v1.pdf`
+- Paper: [arXiv:2602.22302](https://arxiv.org/abs/2602.22302)
 
 ---
 
