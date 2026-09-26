@@ -20,7 +20,6 @@ export default function Inspector({ session, runs, progress }: Props) {
 
   const hasVerdict = session.comparison_result != null;
   const active = tab === 'verdict' && hasVerdict ? 'verdict' : 'sites';
-  const pending = progress != null && !session.run_ids.includes(progress.run_id);
 
   return (
     <aside className="glass-panel flex w-full min-w-0 flex-col overflow-hidden rounded-[var(--radius-glass)] xl:w-[26rem] xl:shrink-0 lg:w-80 lg:shrink-0">
@@ -39,45 +38,59 @@ export default function Inspector({ session, runs, progress }: Props) {
       </div>
 
       <div className="scroll-slim flex-1 space-y-2.5 overflow-y-auto p-3">
-        {active === 'sites' && (
-          <>
-            {pending && progress && (
-              <div className="glass-quiet rounded-2xl px-3.5 py-3">
-                <div className="flex items-center gap-2 text-[13px] font-medium">
-                  <span className="size-1.5 animate-pulse rounded-full bg-[var(--color-accent)]" />
-                  {siteName(progress.start_url)}
-                </div>
-                <p className="text-faint mt-1 text-[11.5px]">
-                  {pagesRead(progress.pages_visited, progress.max_pages)}
-                </p>
-              </div>
-            )}
-            {session.run_ids.length === 0 && !pending && (
-              <p className="text-faint px-1 py-4 text-[12px]">
-                Nothing visited yet. Sites show up here as the agent works through them.
-              </p>
-            )}
-            {[...session.run_ids].reverse().map((id) =>
-              runs[id] ? (
-                <RunCard key={id} run={runs[id]} />
-              ) : (
-                <p key={id} className="glass-quiet rounded-2xl px-3.5 py-3 text-faint text-[12px]">
-                  Loading what the agent saw…
-                </p>
-              ),
-            )}
-            {session.run_ids.length > 1 && (
-              <p className="text-faint px-1 pt-1 text-[11px]">
-                {siteCount(session.run_ids.length)} in this chat
-              </p>
-            )}
-          </>
-        )}
+        {active === 'sites' && <SitesVisited session={session} runs={runs} progress={progress} />}
         {active === 'verdict' && session.comparison_result && (
           <ComparisonView comparison={session.comparison_result} sessionId={session.id} />
         )}
       </div>
     </aside>
+  );
+}
+
+/** Сайт, который агент читает сейчас, стоит первым; пройденные — от новых к старым. */
+function SitesVisited({
+  session,
+  runs,
+  progress,
+}: {
+  session: SessionRecord;
+  runs: Record<string, RunRecord>;
+  progress: CrawlProgress | null;
+}) {
+  const pending = progress != null && !session.run_ids.includes(progress.run_id);
+  return (
+    <>
+      {pending && progress && (
+        <div className="glass-quiet rounded-2xl px-3.5 py-3">
+          <div className="flex items-center gap-2 text-[13px] font-medium">
+            <span className="size-1.5 animate-pulse rounded-full bg-[var(--color-accent)]" />
+            {siteName(progress.start_url)}
+          </div>
+          <p className="text-faint mt-1 text-[11.5px]">
+            {pagesRead(progress.pages_visited, progress.max_pages)}
+          </p>
+        </div>
+      )}
+      {session.run_ids.length === 0 && !pending && (
+        <p className="text-faint px-1 py-4 text-[12px]">
+          Nothing visited yet. Sites show up here as the agent works through them.
+        </p>
+      )}
+      {[...session.run_ids].reverse().map((id) =>
+        runs[id] ? (
+          <RunCard key={id} run={runs[id]} />
+        ) : (
+          <p key={id} className="glass-quiet rounded-2xl px-3.5 py-3 text-faint text-[12px]">
+            Loading what the agent saw…
+          </p>
+        ),
+      )}
+      {session.run_ids.length > 1 && (
+        <p className="text-faint px-1 pt-1 text-[11px]">
+          {siteCount(session.run_ids.length)} in this chat
+        </p>
+      )}
+    </>
   );
 }
 

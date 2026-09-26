@@ -2,7 +2,7 @@ import { type CSSProperties, useState } from 'react';
 
 import { api } from '../api';
 import { goalLabel, pagesRead, siteName, siteState, stepLabel, wordCount } from '../copy';
-import type { CrawlStep, RunRecord } from '../types';
+import type { CrawlStep, ExtractionResult, RunRecord } from '../types';
 
 import StatusPill from './StatusPill';
 
@@ -19,13 +19,7 @@ interface Shot {
  *  анимируется утилитами `reveal`/`clamp-soft`, а не скачком. */
 export default function RunCard({ run }: { run: RunRecord }) {
   const [open, setOpen] = useState(false);
-  const shots: Shot[] = run.steps
-    .map((step, pos) => ({ step, pos }))
-    .filter(({ step }) => Object.keys(step.screenshot_paths).length > 0);
-  // Раскрывать нечего — кнопки нет: неработающая кнопка хуже отсутствующей.
-  const expandable = Boolean(
-    run.steps.length || run.result?.article || (run.result?.summary?.length ?? 0) > 150,
-  );
+  const expandable = isExpandable(run);
 
   return (
     <div className="glass-quiet rise-in overflow-hidden rounded-2xl">
@@ -36,41 +30,68 @@ export default function RunCard({ run }: { run: RunRecord }) {
         className="focus-ring press block w-full px-3.5 py-3 text-left disabled:cursor-default"
       >
         <RunHeading run={run} open={open} expandable={expandable} />
-        {run.result?.summary && (
-          <p
-            data-open={open ? 'true' : 'false'}
-            className="text-soft clamp-soft mt-1.5 text-[12px] leading-relaxed"
-          >
-            {run.result.summary}
-          </p>
-        )}
-        {run.error_message && (
-          <p
-            data-open={open ? 'true' : 'false'}
-            className="clamp-soft mt-1.5 text-[12px] text-[var(--color-rose-warm)]"
-            style={{ '--clamp-lines': 2 } as CSSProperties}
-          >
-            {run.error_message}
-          </p>
-        )}
+        <RunOutcome run={run} open={open} />
         {!open && expandable && (
           <span className="text-faint mt-1.5 block text-[11px] font-medium">Show details</span>
         )}
       </button>
 
       <div className="reveal" data-open={open ? 'true' : 'false'} aria-hidden={!open}>
-        <div className="space-y-3 border-t border-[var(--glass-edge)] px-3.5 py-3">
-          {shots.length > 0 && <RunShots runId={run.id} shots={shots} />}
-          {run.steps.length > 0 && <RunSteps steps={run.steps} />}
-          {run.result?.article && (
-            <div className="glass rounded-xl px-3 py-2.5 text-[12px]">
-              <div className="font-medium">{run.result.article.title || 'Article found'}</div>
-              <div className="text-faint mt-0.5">
-                {wordCount(run.result.article.word_count)} · {siteName(run.result.article.url)}
-              </div>
-            </div>
-          )}
-        </div>
+        <RunDetails run={run} />
+      </div>
+    </div>
+  );
+}
+
+/** Раскрывать нечего — кнопки нет: неработающая кнопка хуже отсутствующей. */
+function isExpandable(run: RunRecord): boolean {
+  return Boolean(
+    run.steps.length || run.result?.article || (run.result?.summary?.length ?? 0) > 150,
+  );
+}
+
+/** Итог и ошибка: у свёрнутой карточки обрезаны, у раскрытой — целиком. */
+function RunOutcome({ run, open }: { run: RunRecord; open: boolean }) {
+  const dataOpen = open ? 'true' : 'false';
+  return (
+    <>
+      {run.result?.summary && (
+        <p data-open={dataOpen} className="text-soft clamp-soft mt-1.5 text-[12px] leading-relaxed">
+          {run.result.summary}
+        </p>
+      )}
+      {run.error_message && (
+        <p
+          data-open={dataOpen}
+          className="clamp-soft mt-1.5 text-[12px] text-[var(--color-rose-warm)]"
+          style={{ '--clamp-lines': 2 } as CSSProperties}
+        >
+          {run.error_message}
+        </p>
+      )}
+    </>
+  );
+}
+
+function RunDetails({ run }: { run: RunRecord }) {
+  const shots: Shot[] = run.steps
+    .map((step, pos) => ({ step, pos }))
+    .filter(({ step }) => Object.keys(step.screenshot_paths).length > 0);
+  return (
+    <div className="space-y-3 border-t border-[var(--glass-edge)] px-3.5 py-3">
+      {shots.length > 0 && <RunShots runId={run.id} shots={shots} />}
+      {run.steps.length > 0 && <RunSteps steps={run.steps} />}
+      {run.result?.article && <ArticleFound article={run.result.article} />}
+    </div>
+  );
+}
+
+function ArticleFound({ article }: { article: NonNullable<ExtractionResult['article']> }) {
+  return (
+    <div className="glass rounded-xl px-3 py-2.5 text-[12px]">
+      <div className="font-medium">{article.title || 'Article found'}</div>
+      <div className="text-faint mt-0.5">
+        {wordCount(article.word_count)} · {siteName(article.url)}
       </div>
     </div>
   );
