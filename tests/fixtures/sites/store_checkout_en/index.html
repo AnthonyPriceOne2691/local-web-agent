@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>WidgetStore — Checkout</title>
+<meta name="description" content="WidgetStore: order the WX-9 industrial widget."></head>
+<body>
+<header><nav><a href="/">Store</a></nav></header>
+<main>
+  <h1>Order: WX-9 widget</h1>
+  <p>WX-9 industrial widget — $59. Ships nationwide in 3–5 days.
+     Fill out the form and pay for your order — we'll email you a confirmation.</p>
+  <form id="order" onsubmit="event.preventDefault();
+      document.getElementById('order').style.display='none';
+      document.getElementById('done').style.display='block';">
+    <label>Name <input type="text" name="name" placeholder="Recipient's name"></label>
+    <label>Email <input type="email" name="email" placeholder="you@example.com"></label>
+    <label>Address <input type="text" name="address" placeholder="Street, city, ZIP"></label>
+    <button type="submit">Place order and pay</button>
+  </form>
+  <button onclick="document.getElementById('order').reset()">Delete cart</button>
+  <div id="done" style="display:none">
+    <h2>Order received</h2>
+    <p>Order number: WX9-1337. $59 charged. A confirmation has been sent to your email.</p>
+  </div>
+</main>
+<footer><a href="/privacy">Privacy</a></footer>
+</body>
+</html>
