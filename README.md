@@ -194,6 +194,10 @@ Also worth opening: `data/contracts/` (the contracts), `data/prompts/` (all 19 p
 - **Prompt protection is partial.** Cassettes pin 8 of 19 prompt files; the navigator, synthesis, compare and vision prompts are not pinned yet.<!-- src: scripts/lint/prompt_coverage_baseline.txt:4-15 -->
 - **Russian docs, external canons.** Design docs and most code comments are in Russian; identifiers, prompts and the UI are in English. The process canons that `delivery/` cites by version (delivery@1.80 · cqg@2.22 · okf@1.17) live outside this repo; what is here is their deployed form: configs, scripts and the records they produce.<!-- src: data/prompts/navigator_system.txt:1; delivery/CONSTITUTION.md:5-7; delivery/STACK-ACCEPTANCE.md:4-7 -->
 
+## License
+
+[MIT](LICENSE).
+
 ---
 
-Built by **Anton Aspidov**, AI / full-stack product engineer. More of his work: [portfolio-site.anthony-priceone.workers.dev](https://portfolio-site.anthony-priceone.workers.dev)
+Built by **Anton Aspidov**, AI / full-stack product engineer. More work: [portfolio-site.anthony-priceone.workers.dev](https://portfolio-site.anthony-priceone.workers.dev)
