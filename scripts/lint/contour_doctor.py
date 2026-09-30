@@ -43,8 +43,9 @@
     doctor_area_verdicts.py  вердикт о площади: просмотрено N из M (1.80/1.88)
     doctor_canaries.py   данные проб и объявления проекта
     doctor_probes.py     сами пробы исполнением
+    doctor_deployment.py состав контура: что канон объявил против того, что лежит
 
-Развёртывание копирует ВСЕ девять файлов: без любого из них доктор не стартует —
+Развёртывание копирует ВСЕ десять файлов: без любого из них доктор не стартует —
 и это лучше, чем стартовать без части проверок (§5.0 инвентарь). Число здесь
 сверяется механикой (`test_ts_stack_coverage`): до `cqg@2.02` стояло «шесть» при
 восьми — счётчик разъехался на `cqg@1.98` и пережил две правки, потому что
@@ -71,6 +72,7 @@ from doctor_area_verdicts import AreaVerdicts
 from doctor_areas import AreaChecks
 from doctor_canaries import CanaryData
 from doctor_core import ABSENT, AUTO, COLOR, DEAD, ORDER, RESET, SKIP, TOOL, WEAK, run
+from doctor_deployment import DeploymentScreen
 from doctor_hooks import HookReaders
 from doctor_layout import LayoutChecks
 from doctor_versions import VersionChecks
@@ -78,10 +80,15 @@ from doctor_probes import ProbeChecks
 
 
 class Doctor(VersionChecks, LayoutChecks, HookReaders, AreaChecks, AreaVerdicts,
-             CanaryData, ProbeChecks):
+             CanaryData, ProbeChecks, DeploymentScreen):
     def __init__(self, root: Path) -> None:
         self.root = root
         self.rows: list[tuple[str, str, str]] = []
+        #: Гейты, промолчавшие на своей канарейке. Заполняется пробами и читается
+        #: суждением о площади: маска гейта, который НЕ судит, покрытием не
+        #: считается. Данными, а не разбором собственных напечатанных строк —
+        #: второй парсер своего же вывода это `one-notion-one-place`.
+        self.dead_gates: set[str] = set()
         self.own = self._read_own_canaries()
 
     def add(self, verdict: str, point: str, detail: str) -> None:
@@ -154,8 +161,12 @@ def main() -> int:
         root = Path(out.strip()) if code == 0 and out.strip() else Path.cwd()
 
     doc = Doctor(root.resolve())
+    doc.check_deployment_completeness()
+    doc.check_snapshot_integrity()
+    doc.check_white_spots()
     doc.check_canons()
     doc.check_stack_records()
+    doc.check_model_surface_claim()
     doc.check_enforcement()
     doc.check_tools()
     doc.check_snapshots()

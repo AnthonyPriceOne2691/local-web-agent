@@ -35,7 +35,16 @@ def check_archive_index(args, errors: list[str], warnings: list[str]) -> None:
     # --- §2.2a: архив без индекса не читается, а отставший индекс врёт о полноте.
     # Обе проверки не зависят от фазы и от наличия diff-base: они про сам архив.
     if ARCHIVE.is_dir():
-        shipments = sorted(d.name for d in ARCHIVE.iterdir() if d.is_dir())
+        # Каталог-ШАБЛОН пропускается, и это не поблажка: канон сам
+        # поставляет `archive/<slug>/observed.md` как образец записи
+        # наблюдения (§13). Без пропуска `delivery_check` краснеет сразу
+        # после развёртывания на ЧИСТОМ проекте — гейт объявляет
+        # неиндексированной поставкой файл, который положил сам канон.
+        # Найдено развёртыванием в пустой проект (2026-08-17): тот же
+        # класс, что `cqg@2.16` — канон не попадает в раскладку, которую
+        # сам предписывает.
+        shipments = sorted(d.name for d in ARCHIVE.iterdir()
+                           if d.is_dir() and not d.name.startswith("<"))
         idx_text = read(ARCHIVE / "INDEX.md")
         if shipments and not idx_text:
             errors.append(

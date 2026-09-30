@@ -192,31 +192,47 @@ def check_concept_sync(files, concepts: dict, errors: list[str],
             )
 
 
-def report(args, root, concepts: dict, errors: list[str],
-           warnings: list[str]) -> int:
-    """Печать итога и код возврата.
+def refuse(refusals: list[str]) -> int:
+    """Прибор не судил — и это НЕ покрывается ничем (`okf@1.18`, поле).
 
-    Шов `main` (`okf@1.13`): вывод отделён от суждения — так `main` остаётся
-    диспетчером, а советы не мешают читать логику.
+    Отказ судить и расхождение концепта лежали в одном списке, а ветвь waiver'а
+    в `report` стоит ДО всякой классификации и возвращает 0 на любом его
+    элементе. Следствие замерено на `local-web-agent` 2026-09-26: push в main
+    с пустым диффом был зелёным, потому что в STATUS лежал `canon_drift_waiver`
+    ЧУЖОЙ поставки от 17.08 — разрешение на drift концепта погасило сообщение
+    о том, что суда не было вовсе.
+
+    Разрешение снимает правило, ради которого написано, и только его. Здесь
+    правило другое: «гейт, вышедший 0 и не посмотревший ни одного файла, хуже
+    отсутствующего» (Delivery §3.1a). Отменить его waiver'ом нельзя — иначе
+    строка в STATUS выключает не проверку, а САМ ПРИБОР, и выключает молча.
+    Поэтому ветвь стоит выше waiver'а, `ALLOW_CANON_DRIFT` и `STRICT=0`.
     """
-    for w in warnings:
-        print(f"WARNING: {w}")
-    for e in errors:
-        print(f"ERROR: {e}", file=sys.stderr)
+    print(
+        f"okf_sync_gate: FAIL — прибор не судил ({len(refusals)} причин(ы)).\n"
+        "Это НЕ расхождение concept'а с кодом, и waiver его не покрывает:\n"
+        "  • на push в main база, равная HEAD, даёт пустой дифф — бери\n"
+        "    `github.event.before` (CQG §8, шаг «Diff base»);\n"
+        "  • прогон до коммита — коммить и повтори;\n"
+        "  • нет базы вовсе — передай --base <ref> или --staged.\n"
+        "Строка `canon_drift_waiver:` разрешает drift concept'а и не может\n"
+        "разрешить отказ гейта работать (§4.3a).",
+        file=sys.stderr,
+    )
+    return 1
 
-    if not errors:
-        # ⚠ Слово `OK` — это то, что уезжает в таблицу прогонов verify-report'а,
-        # и до `okf@1.16` оно было одинаковым у «проверил и сошлось» и у
-        # «проверять было нечем». Пустой дифф теперь ошибка (см. `judge_sync`),
-        # а вторая инертность — карта без единого `implementation:` — законна на
-        # развёртывании и остаётся warning'ом; но в СТРОКЕ ИТОГА она называется,
-        # иначе снова попадёт в отчёт неотличимой от проверки.
-        inert = "" if concepts else " — INERT: 0 concepts mapped, судить нечем"
-        print(
-            f"okf_sync_gate: OK ({len(concepts)} mapped concepts, "
-            f"{len(warnings)} warning(s)){inert}"
-        )
-        return 0
+
+def soften(args, root, errors: list[str]) -> int | None:
+    """Разрешения, снимающие расхождение concept'а с кодом. `None` — не сняли.
+
+    Шов `okf@1.18`: три ступени смягчения (waiver из STATUS, env-обход,
+    `STRICT=0`) вынесены из `report` целиком. Причина не в длине — в том, что
+    ступени эти про ОДИН предмет: «расхождение есть, и человек его разрешил».
+    Пока они стояли вперемешку с печатью итога, к ним по соседству прилип
+    четвёртый случай — отказ прибора судить, — и waiver начал гасить его тоже
+    (см. `refuse`). Отдельная функция делает предмет разрешения видимым: всё,
+    что она смягчает, приходит одним аргументом `errors`.
+    """
     # Waiver из STATUS — основной механизм: виден в диффе, живёт одну поставку.
     # На --check-stale не действует: просроченный concept — это не «код тронут без
     # смены смысла», а отдельная проблема (§7.2).
@@ -244,6 +260,41 @@ def report(args, root, concepts: dict, errors: list[str],
     if not STRICT:
         print(f"okf_sync_gate: WARNING (STRICT=0) — {len(errors)} finding(s)", file=sys.stderr)
         return 0
+    return None
+
+
+def report(args, root, concepts: dict, errors: list[str],
+           warnings: list[str], refusals: list[str]) -> int:
+    """Печать итога и код возврата.
+
+    Шов `main` (`okf@1.13`): вывод отделён от суждения — так `main` остаётся
+    диспетчером, а советы не мешают читать логику.
+    """
+    for w in warnings:
+        print(f"WARNING: {w}")
+    for e in refusals + errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+
+    if refusals:
+        return refuse(refusals)
+
+    if not errors:
+        # ⚠ Слово `OK` — это то, что уезжает в таблицу прогонов verify-report'а,
+        # и до `okf@1.16` оно было одинаковым у «проверил и сошлось» и у
+        # «проверять было нечем». Пустой дифф теперь ошибка (см. `judge_sync`),
+        # а вторая инертность — карта без единого `implementation:` — законна на
+        # развёртывании и остаётся warning'ом; но в СТРОКЕ ИТОГА она называется,
+        # иначе снова попадёт в отчёт неотличимой от проверки.
+        inert = "" if concepts else " — INERT: 0 concepts mapped, судить нечем"
+        print(
+            f"okf_sync_gate: OK ({len(concepts)} mapped concepts, "
+            f"{len(warnings)} warning(s)){inert}"
+        )
+        return 0
+
+    softened = soften(args, root, errors)
+    if softened is not None:
+        return softened
     if args.check_stale:
         print(
             f"okf_sync_gate: FAIL — {len(errors)} concept(s) past stale_after.\n"
@@ -304,7 +355,7 @@ def judge_freshness(concepts: dict, stale: list, errors: list[str]) -> None:
 
 
 def judge_sync(args, concepts: dict, stale: list, errors: list[str],
-               warnings: list[str]) -> None:
+               warnings: list[str], refusals: list[str]) -> None:
     """Sync-режим: дифф против базы против карты `implementation:` (§4.1).
 
     Вторая половина той же развилки. Шов здесь потому, что режимы делят только
@@ -325,7 +376,7 @@ def judge_sync(args, concepts: dict, stale: list, errors: list[str],
         # ноль. Отдельно от этого база теперь берётся и из окружения BASE —
         # у гейтов CQG конвенция именно такая, и расхождение конвенций само
         # приводило к «забыл флаг».
-        errors.append(
+        refusals.append(
             f"cannot compute diff: {i} — передай --base <ref> (или BASE=<ref>) "
             "либо --staged; иначе гейт не проверяет ничего"
         )
@@ -351,7 +402,7 @@ def judge_sync(args, concepts: dict, stale: list, errors: list[str],
         # origin/main был пуст, гейт напечатал inert, и два расхождения нашёл
         # потом CI. «Локально зелено» и «CI зелёный» разошлись не окружением, а
         # МОМЕНТОМ прогона, и различить это может только сам гейт.
-        errors.append(
+        refusals.append(
             f"diff vs '{args.base or 'staged'}' is empty — gate judged NOTHING. "
             "Прогон до коммита либо база, совпадающая с HEAD: возьми базу, "
             "против которой поставка мержится (`--base origin/main`), и уже "
@@ -368,6 +419,10 @@ def main() -> int:
     bundle = root / BUNDLE
     errors: list[str] = []
     warnings: list[str] = []
+    #: Отказы ПРИБОРА судить (пустой дифф, невычислимая база) — отдельно от
+    #: расхождений концепта с кодом. Списка два не ради порядка: waiver
+    #: разрешает второе и не имеет права разрешать первое (`okf@1.18`).
+    refusals: list[str] = []
 
     if not bundle.is_dir():
         print(f"okf_sync_gate: no bundle at {BUNDLE}/ — skip (deploy OKF first)")
@@ -378,9 +433,9 @@ def main() -> int:
     if args.check_stale:
         judge_freshness(concepts, stale, errors)
     else:
-        judge_sync(args, concepts, stale, errors, warnings)
+        judge_sync(args, concepts, stale, errors, warnings, refusals)
 
-    return report(args, root, concepts, errors, warnings)
+    return report(args, root, concepts, errors, warnings, refusals)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,48 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0      # нужен для BASE-диффа: diff-coverage и baseline-ratchet
+      # §8.3a: база диффа определяется ОДИН раз на джобу и называет отказ вслух.
+      #
+      # ⚠ Прежняя форма стояла в каждом шаге:
+      # `BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}`.
+      # На событии **push** `base_ref` пуст, фолбэк даёт `origin/main`, а на push
+      # в main это САМ HEAD — дифф пуст. Четыре проверки судили пустоту: с
+      # `okf@1.16` гейт канона краснел (и main краснел после КАЖДОГО слияния), а
+      # breakers, ratchet и diff-coverage проходили ТРИВИАЛЬНО и молча, что хуже:
+      # их зелёное уезжало в отчёт как «проверено». Замерено на `local-web-agent`
+      # 2026-09-26, прогоны 36260966608 и 36260992795.
+      #
+      # Лестница без молчаливой ступени: PR — ветка назначения; push — состояние
+      # ДО толчка (`github.event.before`); ни то ни другое недостижимо — отказ с
+      # названной причиной, а не тихий фолбэк на HEAD.
+      - name: Diff base (одна на джобу, отказ — вслух)
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            before="${{ github.event.before }}"
+            zero="0000000000000000000000000000000000000000"
+            if [ -n "$before" ] && [ "$before" != "$zero" ] \
+               && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+              base="$before"
+            else
+              # Новая ветка (before = нули) или переписанная история: прошлого
+              # состояния в дереве нет. Берём общую базу с веткой по умолчанию —
+              # и только если она НЕ равна HEAD, иначе это снова «судить ничего».
+              default="${{ github.event.repository.default_branch }}"
+              base="$(git merge-base "origin/$default" HEAD 2>/dev/null || true)"
+              if [ -z "$base" ] || [ "$base" = "$(git rev-parse HEAD)" ]; then
+                echo "::error::база диффа не определима (before=$before, default=$default):"\
+                     "первый push репозитория или переписанная история." \
+                     "Открой PR или сделай второй коммит — гейт не имеет права судить пустоту."
+                exit 1
+              fi
+            fi
+          fi
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "база диффа: $base"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -54,13 +96,10 @@ jobs:
             $(git ls-files | grep -vE '^(\.secrets\.baseline|uv\.lock|frontend/package-lock\.json)$')
 
       - name: Baseline ratchet (снимки только вниз)
-        env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
         run: bash scripts/lint/check_baseline_ratchet.sh
 
       - name: Diff coverage
         env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
           MIN_PCT: "70"
         run: bash scripts/lint/check_diff_coverage.sh
 
@@ -70,6 +109,48 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0      # breakers и метрики считаются по merge-base..HEAD
+      # §8.3a: база диффа определяется ОДИН раз на джобу и называет отказ вслух.
+      #
+      # ⚠ Прежняя форма стояла в каждом шаге:
+      # `BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}`.
+      # На событии **push** `base_ref` пуст, фолбэк даёт `origin/main`, а на push
+      # в main это САМ HEAD — дифф пуст. Четыре проверки судили пустоту: с
+      # `okf@1.16` гейт канона краснел (и main краснел после КАЖДОГО слияния), а
+      # breakers, ratchet и diff-coverage проходили ТРИВИАЛЬНО и молча, что хуже:
+      # их зелёное уезжало в отчёт как «проверено». Замерено на `local-web-agent`
+      # 2026-09-26, прогоны 36260966608 и 36260992795.
+      #
+      # Лестница без молчаливой ступени: PR — ветка назначения; push — состояние
+      # ДО толчка (`github.event.before`); ни то ни другое недостижимо — отказ с
+      # названной причиной, а не тихий фолбэк на HEAD.
+      - name: Diff base (одна на джобу, отказ — вслух)
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            before="${{ github.event.before }}"
+            zero="0000000000000000000000000000000000000000"
+            if [ -n "$before" ] && [ "$before" != "$zero" ] \
+               && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+              base="$before"
+            else
+              # Новая ветка (before = нули) или переписанная история: прошлого
+              # состояния в дереве нет. Берём общую базу с веткой по умолчанию —
+              # и только если она НЕ равна HEAD, иначе это снова «судить ничего».
+              default="${{ github.event.repository.default_branch }}"
+              base="$(git merge-base "origin/$default" HEAD 2>/dev/null || true)"
+              if [ -z "$base" ] || [ "$base" = "$(git rev-parse HEAD)" ]; then
+                echo "::error::база диффа не определима (before=$before, default=$default):"\
+                     "первый push репозитория или переписанная история." \
+                     "Открой PR или сделай второй коммит — гейт не имеет права судить пустоту."
+                exit 1
+              fi
+            fi
+          fi
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "база диффа: $base"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -82,8 +163,6 @@ jobs:
           cd backend && uv sync --extra dev --extra gdocs
 
       - name: Delivery phase gate + circuit breakers
-        env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
         run: |
           if [ -f delivery/active/STATUS.md ]; then
             python scripts/delivery_check.py --require-ci --diff-base "$BASE"
@@ -92,8 +171,6 @@ jobs:
           fi
 
       - name: Canon sync gate (code <-> knowledge)
-        env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
         run: |
           if [ -f scripts/okf_sync_gate.py ]; then
             python scripts/okf_sync_gate.py --base "$BASE"
@@ -102,8 +179,6 @@ jobs:
           fi
 
       - name: Harness metrics (report only, never fails)
-        env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
         run: |
           if [ -f scripts/delivery_metrics.py ]; then
             python scripts/delivery_metrics.py --base "$BASE" >> "$GITHUB_STEP_SUMMARY"
