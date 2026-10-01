@@ -9,9 +9,10 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
-from doctor_core import SKIP, run
+from doctor_core import AUTO, DEAD, SKIP, run
 
 CANARIES: dict[str, tuple[str, str]] = {
     # grep-правила
@@ -141,6 +142,106 @@ DIRECT_SETUP = {
 
 
 class CanaryData:
+    #: Признак «продукт зовёт языковую модель» берётся по ПРИНЦИПУ: пакет, у
+    #: которого нет другого применения, кроме вызова модели. Список неполон по
+    #: построению — завтра появится провайдер, которого тут нет, — и сказано это
+    #: здесь, а не в голове: `list-without-its-principle` лежит в собственном
+    #: реестре классов восемью местами, и девятое заводить незачем. Цена ошибки
+    #: несимметрична: пропущенный пакет даёт молчание там, где могло быть
+    #: замечание, лишний — ложное `DEAD`, поэтому список узкий.
+    LLM_PACKAGES = ("anthropic", "openai", "ollama", "mistralai", "cohere",
+                    "langchain", "llama-index", "litellm", "google-generativeai")
+    #: Второй признак ловит проект, который зовёт модель по HTTP без всякого SDK:
+    #: пакета нет, а промпт-стор есть. Один признак из двух был бы у́же обещания.
+    PROMPT_RE = re.compile(r"(^|/)prompts?/")
+    MANIFEST_RE = re.compile(
+        r"(^|/)(pyproject\.toml|requirements[^/]*\.txt|package\.json|"
+        r"Cargo\.toml|go\.mod|Package\.swift)$")
+
+    def _model_signs(self) -> list[str]:
+        """Улики того, что продукт зовёт модель: пакет в манифесте, промпт-стор.
+
+        Считается по `git ls-files`, как судят гейты: неотслеживаемый venv с
+        `openai` внутри — не признак продукта, а установленное окружение, и
+        обход дерева нашёл бы его первым.
+        """
+        code, listing = run(["git", "ls-files"], self.root)
+        if code != 0:
+            return []
+        signs: list[str] = []
+        for rel in listing.splitlines():
+            if self.PROMPT_RE.search(rel):
+                top = rel[:rel.lower().rindex("prompt")] + "prompts/"
+                if top not in signs:
+                    signs.append(top)
+                continue
+            if not self.MANIFEST_RE.search(rel):
+                continue
+            try:
+                text = (self.root / rel).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for pkg in self.LLM_PACKAGES:
+                if re.search(rf"[\"'\s]{re.escape(pkg)}[\"'\s@<>=~^,\]]", text):
+                    signs.append(f"{pkg} в {rel}")
+        return signs
+
+    def check_model_surface_claim(self) -> None:
+        """Заявление о поверхности модели против ДЕРЕВА (Delivery §14.1).
+
+        Разделение труда то же, что во всём контуре: гейт поставки спрашивает,
+        объявлена ли поверхность, и принимает `n/a reason=…` — отказ с причиной
+        законен, требовать иного значило бы краснеть на каждом проекте без
+        модели. Проверить сам ОТВЕТ гейт не может: он смотрит в STATUS, а не в
+        дерево. Ложь ловит доктор — это его единственная работа.
+
+        ⚠ `SKIP` с причиной, а не тишина, когда судить нечем: `delivery/active/`
+        пуст между поставками ШТАТНО (§2.3a Delivery), и молчание в этом
+        состоянии — ровно тот `green-without-the-thing`, который доктор у себя
+        уже дважды чинил. Признаки при этом печатаются: «объявления нет, а модель
+        зовут» — самое полезное, что тут можно сказать человеку.
+        """
+        signs = self._model_signs()
+        point = "поверхность модели"
+        raw = ""
+        st = self.root / "delivery" / "active" / "STATUS.md"
+        if st.is_file():
+            for line in self._prose_lines(st):
+                # `:` и звёздочки вокруг него — как в остальных читалках STATUS
+                # (`baseline_growth_waiver` у мета-гейта): форма канона —
+                # `- **model_surface:** значение`, и жирные метки стоят ПОСЛЕ
+                # двоеточия. Первая редакция ждала их до него и отдавала `**` в
+                # значении — отказ `n/a` переставал распознаваться, то есть
+                # проверка молчала ровно на том входе, ради которого написана.
+                m = re.match(r"\s*[-*]?\s*\**model_surface\**\s*:\**\s*(.*)", line)
+                if m:
+                    raw = m.group(1).split("<!--")[0].strip()
+                    break
+        if not raw or raw.startswith("<"):
+            # Ни объявления, ни признаков — ПРЕДМЕТА нет, и строка была бы шумом
+            # на каждом проекте без модели; шумный инструмент снимают первым
+            # (§4.3b). Тот же ход, что у `check_stack_records`: «слоя delivery в
+            # проекте нет — предмета нет».
+            #
+            # ⚠ Названный предел: признаки неполны по построению (список
+            # пакетов + промпт-стор), поэтому проект, зовущий модель по HTTP из
+            # кода с инлайновыми инструкциями, здесь выглядит безмодельным.
+            # Это молчание купленное, а не забытое: объявление у него всё равно
+            # спросит гейт поставки, а доктор судит ОТВЕТ, которого пока нет.
+            if signs:
+                self.add(SKIP, point, "объявления нет, а модель зовут: "
+                         + ", ".join(signs[:4]) + " — спросит гейт поставки (§14.1)")
+            return
+        if re.match(r"(?i)^(none|n/a)\b", raw):
+            if signs:
+                self.add(DEAD, point,
+                         f"объявлено «{raw[:40]}», а модель зовут: "
+                         + ", ".join(signs[:4]))
+            else:
+                self.add(AUTO, point, "отказ объявлен и совпал с деревом")
+            return
+        self.add(AUTO, point, "объявлена: " + raw[:60])
+
     def _read_own_canaries(self) -> dict[str, list[tuple[str | None, str, str]]]:
         """Канарейки, объявленные проектом. Битый файл — НАЗВАТЬ, а не пропустить.
 

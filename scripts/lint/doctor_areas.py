@@ -158,10 +158,18 @@ class AreaChecks:
                      "судить не на чем (bootstrap: контур есть, кода ещё нет)")
             return
         off_commit: list[str] = []
+        self._blind_pending: list = []
+        #: Маски гейтов, которые ДЕЙСТВИТЕЛЬНО судят: попадают сюда только те,
+        #: что просмотрели хоть один файл и не промолчали на своей канарейке.
+        #: Слепой или мёртвый гейт покрытием не считается — иначе объединение
+        #: масок оправдывало бы файл ссылкой на того, кто его не судит, а это
+        #: ровно та ложь, против которой вся проверка площади.
+        self._live_masks: list[str] = []
         for script in sorted(d.glob("check_*")):
             label = self._judge_gate(script, text, files)
             if label:
                 off_commit.append(label)
+        self._judge_blindness_together()
 
         if off_commit:
             self.add(WEAK, "область: не на коммите",
@@ -208,9 +216,11 @@ class AreaChecks:
             self._judge_zero(point, out, mine, multi_rule=multi_rule)
             return None
         mask_m = self.MASK_RE.search(out)
+        mask = mask_m.group(1).split() if mask_m else []
+        if name not in self.dead_gates:
+            self._live_masks.extend(mask)
         self._judge_area(point, n, unit, files, mine, multi_rule=multi_rule,
-                         files_re=self._hook_files_re(text, name),
-                         mask=(mask_m.group(1).split() if mask_m else []))
+                         files_re=self._hook_files_re(text, name), mask=mask)
         return None
 
     def _scanned(self, out: str) -> tuple[int, str] | None:

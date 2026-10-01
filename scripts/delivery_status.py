@@ -16,8 +16,10 @@ from delivery_base import (ACTIVE, ActiveCtx, field,
 from delivery_decisions import signature_verdict
 from delivery_diff import diff_identifiers, diff_stats
 from delivery_risk import risk_review_gaps, risky_classes
-from delivery_runtime import (breaker_value, runtime_proof_gaps,
-                              runtime_surfaces, runtime_touched)
+from delivery_runtime import (breaker_value, declared_surfaces,
+                              model_surface_gaps, rule_enforcer_gaps,
+                              runtime_proof_gaps, runtime_touched,
+                              unsigned_irreversible_gaps)
 
 def check_phase_and_class(raw_phase: str, raw_class: str, phase: str,
                           klass: str, allowed: set[str], errors: list[str],
@@ -120,6 +122,14 @@ def check_risky_diff(status: str, args, phase: str, verify,
                 )
 
     check_runtime_paths(status, args, phase, verify, errors, warnings)
+    check_model_surface(status, args, phase, verify, errors, warnings)
+    # §3.4a. Зовётся БЕЗУСЛОВНО, не внутри соседа: красная черта не зависит
+    # ни от модели, ни от объявленных runtime_paths — проект может не иметь
+    # ни того, ни другого и всё равно дотягиваться до необратимого.
+    for g in unsigned_irreversible_gaps(status):
+        (errors if phase == "handoff" else warnings).append(
+            f"необратимое без человека: {g}"
+        )
 
 
 def check_runtime_paths(status: str, args, phase: str, verify,
@@ -138,7 +148,7 @@ def check_runtime_paths(status: str, args, phase: str, verify,
         return                    # ⚠ ВТОРАЯ охрана: блок жил и под непустым диффом
     # --- §12.6: путь, проверяемый только исполнением. Та же лестница
     # (предупреждение на verify, отказ на handoff) и по той же причине.
-    surfaces, declared = runtime_surfaces(status)
+    surfaces, declared = declared_surfaces(status, "runtime_paths")
     if not declared:
         (errors if phase == "handoff" else warnings).append(
             "нет строки `runtime_paths:` в STATUS (§12.6) — назови "
@@ -154,6 +164,41 @@ def check_runtime_paths(status: str, args, phase: str, verify,
                 f"исполнение: {g}"
             )
         check_surface_breaker(status, phase, touched, errors, warnings)
+
+
+def check_model_surface(status: str, args, phase: str, verify,
+                        errors: list[str], warnings: list[str]) -> None:
+    """Поверхность поведения модели объявлена, и правка по ней не молчит (§14).
+
+    Обе охраны — фазы и непустого диффа — стоят явными `return`, как у соседа:
+    значение, посчитанное в ветке, за границу шва не выносится (`delivery@1.60`).
+
+    ⚠ Контур здесь СПРАШИВАЕТ, а не судит. «Сколько оракулов» и «что показал
+    дифференциальный прогон» — содержание, и §14.4 сама запрещает ставить его
+    механикой раньше работающей порчи промпта.
+    """
+    if phase not in {"verify", "converge", "handoff"}:
+        return
+    rstats = diff_stats(args.diff_base or "HEAD~1")
+    if not (rstats and rstats[4]):
+        return
+    # Лестница §12.6 выбирается ОДИН раз: три инлайновых выбора подряд подняли
+    # сложность за порог §2.1 (cx 11), а правило одно — отказ только на handoff.
+    sink = errors if phase == "handoff" else warnings
+    surfaces, declared = declared_surfaces(status, "model_surface")
+    if not declared:
+        sink.append(
+            "нет строки `model_surface:` в STATUS (§14.1) — назови промпты, пин "
+            "модели, параметры сэмплирования, схемы инструментов, конфиг "
+            "извлечения, схему выхода, пин судьи и версию провайдера, либо "
+            "`n/a reason=…`. Молчание читается как «модель не зовём», а замер "
+            "полигона дал обратное: правка промпта проезжает мимо всех гейтов"
+        )
+        return
+    for g in model_surface_gaps(read(verify), runtime_touched(rstats[4], surfaces)):
+        sink.append(f"поверхность модели: {g}")
+    for g in rule_enforcer_gaps(status, surfaces):
+        sink.append(f"двойник ниже модели: {g}")
 
 
 def check_spec_signature(status: str, klass: str, phase: str, spec, plan, tasks,
