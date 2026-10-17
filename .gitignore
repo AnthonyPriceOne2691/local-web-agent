@@ -46,3 +46,6 @@ Gdocs-tabs editor/
 # Следствие (AGENT_STACK §7.1 вариант B): CI канонов не видит → stack_selftest
 # гоняется вручную здесь же; записано в delivery/STACK-ACCEPTANCE.md и STATUS.
 Prepare/
+# Снимок канонов для инструментов наката флота (plan_update/apply_update) — только
+# локально: репозиторий публичный, тексты канонов в нём не публикуются (тот же вариант B).
+docs/canon/

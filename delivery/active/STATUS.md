@@ -1,7 +1,7 @@
 # Active delivery status
 
 - **slug:** visit-memory
-- **stack:** delivery@1.80, cqg@2.22, okf@1.17
+- **stack:** delivery@2.01, cqg@2.55, okf@1.19
 - **class:** M
 - **phase:** implement
 - **builder:** agent:claude-code
@@ -14,6 +14,8 @@
 - **worktree:** none
 - **hooks:** claude
 - **stack-selftest:** external (Prepare/)
+- **parallel_sessions:** merge-guard
+- **baseline_growth_waiver:** reason=смена формата снимка prompt_coverage_baseline.txt (накат cqg@2.55, 2026-10-17): те же 11 файлов, голые имена → «1:<файл>»; прежний формат ратчет не читал и считал снимок пустым, роста нет by=human:anthony
 - **branch:** `trials/visit-memory`
 - **blockers:** —
 - **waivers:**

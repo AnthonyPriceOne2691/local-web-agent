@@ -239,6 +239,7 @@ class ProbeChecks:
         elif any(w in after_out for w in SKIP_WORDS):
             self.add(WEAK, point, after_out.strip().splitlines()[0][:80])
         else:
+            self.dead_gates.add(script.name)
             self.add(DEAD, point, "МОЛЧИТ на объявленной канарейке (exit 0): "
                                   f"{after_out.strip()[:60]!r}")
 
@@ -315,6 +316,7 @@ class ProbeChecks:
             elif named_skip:
                 self.add(WEAK, point, out.strip().splitlines()[0][:80])
             else:
+                self.dead_gates.add(script.name)
                 self.add(DEAD, point,
                          f"МОЛЧИТ на своём же нарушении (exit 0): {out.strip()[:70]!r}")
 
