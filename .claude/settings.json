@@ -13,16 +13,7 @@
       "Read(./Gdocs-tabs*/config*.json)"
     ],
     "ask": [
-      "Bash(git push origin main:*)",
-      "Bash(uv add:*)",
-      "Bash(uv pip install:*)",
-      "Bash(pip install:*)",
-      "Bash(npm install:*)",
-      "Bash(ollama run:*)",
-      "Bash(ollama pull:*)",
-      "Bash(backend/.venv/bin/python -m cli.main crawl:*)",
-      "Bash(backend/.venv/bin/python -m cli.main research:*)",
-      "WebFetch"
+      "Bash(git push origin main:*)"
     ]
   },
   "hooks": {
