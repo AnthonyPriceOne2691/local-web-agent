@@ -16,6 +16,10 @@
 #     `Gdocs-tabs editor/`), но хук нужен; в backlog STATUS: shape-oracles.
 
 default_install_hook_types: [pre-commit, pre-push]
+# Хук без `stages:` идёт на КАЖДОЙ установленной стадии, а pre-push здесь ставится
+# строкой выше. Без этой строки все гейты коммита повторялись на push — та же
+# работа дважды. На push идёт только то, у чего стоит `stages: [pre-push]` (`cqg@2.47`).
+default_stages: [pre-commit]
 fail_fast: false
 
 repos:
@@ -44,12 +48,23 @@ repos:
   # cli/ и scripts/ — из корневого ruff.toml, который его `extend`-ит: без
   # конфига в корне эти каталоги линтовались ДЕФОЛТНЫМ набором ruff (E4/E7/E9/F),
   # то есть канонные правила там не работали никогда, а хук был зелёным.
+  #
+  # ruff — ИЗ VENV ПРОЕКТА (`cqg@2.55`). Прежде здесь стоял
+  # `astral-sh/ruff-pre-commit` со своим `rev: v0.15.13`, а CI-шаги, редактор и
+  # команды из CLAUDE.md брали ruff из lock (0.15.22): две версии одного
+  # инструмента по построению. Версия теперь одна, из backend/uv.lock; venv
+  # ищется той же лестницей, что у mypy в каноне. Запуск — из корня репо, как и
+  # прежде: правила для cli/ и scripts/ даёт корневой ruff.toml.
   # -------------------------------------------------------------------------
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        name: ruff check (версия из lock проекта)
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+        entry: |-
+          bash -c 'R="$(git rev-parse --show-toplevel)" || exit 1; B="${LINT_BE_DIR:-backend}"; V="${LINT_VENV:-.venv}"; X=""; for c in "$R/$B/$V/bin/ruff" "$R/$V/bin/ruff" "$R/$B/.venv/bin/ruff"; do [ -x "$c" ] && { X="$c"; break; }; done; [ -n "$X" ] || { printf "\033[31mruff не найден — искал %s и %s. Версия хука — из lock проекта (cqg@2.55); правится LINT_VENV / LINT_BE_DIR или установкой ruff в venv проекта\033[0m\n" "$B/$V/bin/ruff" "$V/bin/ruff"; exit 1; }; exec "$X" check --force-exclude --fix --exit-non-zero-on-fix "$@"' --
         # Механика контура — не продуктовый код проекта (см. ruff.toml).
         # Через `files` (а не `extend-exclude`): pre-commit передаёт пути
         # ЯВНО, и ruff применяет исключения к таким только с --force-exclude.
@@ -59,6 +74,12 @@ repos:
       # legacy-debt): до этого он переформатировал бы 71 файл на первом коммите.
       # Стилевой коммит — в .git-blame-ignore-revs.
       - id: ruff-format
+        name: ruff format (версия из lock проекта)
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+        entry: |-
+          bash -c 'R="$(git rev-parse --show-toplevel)" || exit 1; B="${LINT_BE_DIR:-backend}"; V="${LINT_VENV:-.venv}"; X=""; for c in "$R/$B/$V/bin/ruff" "$R/$V/bin/ruff" "$R/$B/.venv/bin/ruff"; do [ -x "$c" ] && { X="$c"; break; }; done; [ -n "$X" ] || { printf "\033[31mruff не найден — искал %s и %s. Версия хука — из lock проекта (cqg@2.55); правится LINT_VENV / LINT_BE_DIR или установкой ruff в venv проекта\033[0m\n" "$B/$V/bin/ruff" "$V/bin/ruff"; exit 1; }; exec "$X" format --force-exclude "$@"' --
         # Механика контура — не продуктовый код проекта (см. ruff.toml).
         # Через `files` (а не `extend-exclude`): pre-commit передаёт пути
         # ЯВНО, и ruff применяет исключения к таким только с --force-exclude.
@@ -214,7 +235,9 @@ repos:
         name: DRY — рост копипаста (jscpd clone-count ratchet)
         language: system
         entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_jscpd_gate.sh'
-        files: ^(backend|cli)/.*\.py$
+        # `pass_filenames: false`: гейт судит всё дерево, а `files:` решает лишь, пойдёт
+        # ли он. Без маски фронта правка одного `.tsx` видела «Skipped» (`cqg@2.53`).
+        files: ^((backend|cli)/.*\.py|frontend/src/.*\.(ts|tsx))$
         pass_filenames: false
 
   # -------------------------------------------------------------------------
@@ -289,7 +312,8 @@ repos:
         name: complexity — сложность и вложенность под порогом
         language: system
         entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && LINT_PY_SRC=. bash scripts/lint/check_complexity_gate.sh'
-        files: ^(backend|cli)/.*\.py$
+        # Маска фронта — как у jscpd выше (`cqg@2.53`).
+        files: ^((backend|cli)/.*\.py|frontend/src/.*\.(ts|tsx))$
         pass_filenames: false
         stages: [pre-push]
       - id: deps-audit-gate
