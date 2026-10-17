@@ -48,6 +48,42 @@
 ### Recovery
 - On oracle red: fix ≤ retry budget, else escalate in STATUS.md.
 
+## Agent permissions (§4.5)
+
+Источник истины по **действиям** агента. Строки ниже обязаны совпадать с
+`.claude/settings.json` (`permissions.deny` / `permissions.ask`) — сверяет
+`delivery_check` в обе стороны: правило здесь и не в настройках — запрет, который не
+работает; в настройках и не здесь — граница, сдвинутая без ревью. `allow` тут не
+перечисляется: это накопительный список конкретных команд, его место — настройки.
+
+Блок переводит в механизм то, что выше записано прозой: запрет force-push и утечки
+секретов (Invariants) и мерж только через `scripts/merge_guard.sh`. Ветки пушатся без
+подтверждения — push после зелёных гейтов делегирован агенту; окном спрашивается только
+публикация в публичный `main`. Инференс, живые прогоны, новые зависимости и сеть окном
+НЕ спрашиваются — решение владельца 2026-10-17; правила о них остаются прозой выше
+(«дождаться „запускай“» — Preconditions, HITL на живых прогонах — Governance).
+Права ограничивают инструмент, а не намерение: это забор от случайного (§4.5).
+
+```text
+agent-permissions
+# Необратимое: подтверждение здесь не защита, а соучастие.
+deny: Bash(git push --force:*)
+deny: Bash(git push -f:*)
+deny: Bash(git push:* --force-with-lease)
+deny: Bash(rm -rf /:*)
+# Мерж — только через merge_guard: кнопка и `gh pr merge` обходят проверку слитого состояния.
+deny: Bash(gh pr merge:*)
+# Секреты: OAuth Google Docs и токены телеграм-ботов — утечку в вывод не отозвать.
+deny: Read(./.env)
+deny: Read(./**/.env)
+deny: Read(./Gdocs-tabs*/credentials.json)
+deny: Read(./Gdocs-tabs*/token.json)
+deny: Read(./Gdocs-tabs*/config*.json)
+# Обратимо, но платит человек своим временем: публикация в публичный main.
+ask: Bash(git push origin main:*)
+# Переведено из HITL в автономию (§4.6) — только вместе с оракулом. Пока ничего.
+```
+
 ## Pointers to sibling layers (fill if deployed)
 
 - Code shape oracles: `CODE_QUALITY_GATES.md` (в `Prepare/`, вне репо) — [x] deployed

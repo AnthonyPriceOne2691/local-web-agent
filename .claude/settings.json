@@ -1,4 +1,21 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push:* --force-with-lease)",
+      "Bash(rm -rf /:*)",
+      "Bash(gh pr merge:*)",
+      "Read(./.env)",
+      "Read(./**/.env)",
+      "Read(./Gdocs-tabs*/credentials.json)",
+      "Read(./Gdocs-tabs*/token.json)",
+      "Read(./Gdocs-tabs*/config*.json)"
+    ],
+    "ask": [
+      "Bash(git push origin main:*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
