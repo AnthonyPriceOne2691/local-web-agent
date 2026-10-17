@@ -102,6 +102,12 @@ def measure() -> tuple[list[str], list[str]]:
     return covered, blind
 
 
+def entry(line: str) -> str:
+    """Имя файла из строки снимка: «1:<файл>»; голое имя — прежний формат."""
+    count, sep, name = line.strip().partition(":")
+    return name if sep and count.isdigit() else line.strip()
+
+
 def main() -> int:
     if not PROMPTS.is_dir():
         print("промпт-стора нет — охват мерить не на чем")
@@ -126,14 +132,16 @@ def main() -> int:
             "# Файлы промпт-стора БЕЗ утверждения по содержанию (§14.4 п.2).\n"
             "# Признак — порча: изменил файл, сьют не покраснел.\n"
             "# Список обязан ТАЯТЬ. Рост — решение с записью, а не «не дошли руки».\n"
+            "# Формат «1:<файл>» — тот, что читает ратчет снимков: голые имена он\n"
+            "# не разбирал, и рост списка не охранял никто, кроме этого гейта.\n"
             f"# охват: {len(covered)} из {total}\n"
-            + "".join(f"{b}\n" for b in blind), encoding="utf-8")
+            + "".join(f"1:{b}\n" for b in blind), encoding="utf-8")
         print(f"baseline снят: охват {len(covered)} из {total}")
         return 0
     if not BASELINE.is_file():
         print(f"нет {BASELINE.name} — сними: --generate", file=sys.stderr)
         return 1
-    was = {ln.strip() for ln in BASELINE.read_text(encoding="utf-8").splitlines()
+    was = {entry(ln) for ln in BASELINE.read_text(encoding="utf-8").splitlines()
            if ln.strip() and not ln.startswith("#")}
     now = set(blind)
     grew = sorted(now - was)

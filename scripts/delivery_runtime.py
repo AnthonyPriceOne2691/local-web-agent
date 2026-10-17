@@ -11,7 +11,7 @@ import fnmatch
 import re
 from pathlib import Path
 
-from delivery_base import (BREAKER_EXCLUDE, DEFAULT_BREAKERS, ROOT, field,
+from delivery_base import (BREAKER_EXCLUDE, DEFAULT_BREAKERS, ROOT, field, git,
                            is_placeholder)
 
 # --- §12.6: путь, который проверяется только исполнением ---------------------
@@ -33,8 +33,9 @@ from delivery_base import (BREAKER_EXCLUDE, DEFAULT_BREAKERS, ROOT, field,
 def declared_surfaces(status: str, key: str) -> tuple[set[str], bool]:
     """(объявленные пути, объявлено ли осознанно) из поля-объявления поверхности.
 
-    Один разбор на два поля — `runtime_paths` (§12.6) и `model_surface` (§14.1).
-    Форма у них одна по построению: список глобов либо отказ с причиной. Второй
+    Один разбор на все поля-объявления — `runtime_paths` (§12.6), `model_surface`
+    (§14.1), `irreversible_surfaces` (§3.4a), `parallel_sessions` (§5.1a). Форма
+    у них одна по построению: список через запятую либо отказ с причиной. Второй
     парсер той же формы разъехался бы на первой правке — `one-notion-one-place`,
     класс, который в этом каноне уже стоил ревизии.
 
@@ -55,7 +56,10 @@ def declared_surfaces(status: str, key: str) -> tuple[set[str], bool]:
         # Слово отказа без причины — то же, что его отсутствие: см. `n/a reason=`
         # у `diagnosis:`. Само по себе оно ничего не сообщает.
         return set(), bool(re.search(r"(?i)reason\s*=\s*\S", raw))
-    return {p.strip() for p in raw.split(",") if p.strip()}, True
+    # Бэктик — разметка, а не часть пути: `a/b/` в STATUS пишут естественно, а с
+    # бэктиком элемент не совпадал ни с одним путём диффа (`delivery@2.00`).
+    items = (p.strip().strip("`").strip() for p in raw.split(","))
+    return {p for p in items if p}, True
 
 
 def breaker_value(status: str, name: str) -> int:
@@ -94,6 +98,40 @@ def runtime_touched(paths: list[str], surfaces: set[str]) -> set[str]:
                 hit.add(s)
                 break
     return hit
+
+
+def dead_surfaces(surfaces: set[str]) -> set[str]:
+    """Объявленные элементы, которые не совпадают ни с одним файлом дерева.
+
+    Такой элемент проверка не увидит никогда: `runtime_touched` сверяет пути диффа
+    с элементом как с префиксом или глобом. Проза, бэктик или имя переменной
+    вместо пути — зелёное без взгляда на правку (`green-without-the-thing`). Поле
+    `outreach-donors` 07.10: строка `model_surface` прозой резалась по запятым на
+    одиннадцать обрывков, и правка промпта продаж прошла без вопроса.
+    Нет git — пустое множество: молчать честнее, чем назвать мёртвым всё.
+    """
+    files = git("ls-files").splitlines()
+    if not files:
+        return set()
+    return {s for s in surfaces if not runtime_touched(files, {s})}
+
+
+def report_dead_surfaces(key: str, surfaces: set[str], sink: list[str],
+                         warnings: list[str]) -> None:
+    """Мёртвые элементы поля называются вслух — одна формулировка на все поля.
+
+    Мертвы ВСЕ — это то же, что поля нет, и сообщение идёт по лестнице §12.6
+    (`sink`). Мертва часть — среди них бывает ключ, а не файл: предупреждение
+    с именами, не отказ.
+    """
+    dead = dead_surfaces(surfaces)
+    if not dead:
+        return
+    (sink if dead == surfaces else warnings).append(
+        f"`{key}`: {len(dead)} из {len(surfaces)} элемент(ов) не совпадают ни с одним "
+        f"файлом дерева — правку по ним проверка не увидит: {', '.join(sorted(dead))}. "
+        "Форма поля — пути от корня и глобы через запятую, без бэктиков и прозы; "
+        "пояснения — в <!-- … --> на той же строке или строкой ниже")
 
 
 def surface_named(surface: str, low: str) -> bool:
@@ -259,6 +297,52 @@ def rule_enforcer_gaps(status: str, surfaces: set[str], root: Path = ROOT) -> li
         return [f"`rule_enforcers: {path}` — файла нет. Объявленный реестр без файла "
                 "это снятая проверка с видом усиления (§4.6)"]
     return []
+
+
+# --- §5.1a: несколько сессий на одном репозитории ----------------------------
+# Worktree изолирует рабочий каталог, индекс и HEAD — и не изолирует
+# интегрирующую ветку, состав выката, общие счётчики и ресурсы прогона. Очередь
+# на интеграцию — гейт мержа CQG §8.5, и контур СПРАШИВАЕТ, чем она принуждается.
+# Судится форма ответа и одно опровержимое утверждение: `merge-guard` лежит файлом.
+#
+# ⚠ Значения `hook` в наборе НЕТ, и это замер, а не вкус. В проекте с CQG pre-push
+# стоит всегда (на нём живут гейты поставки, §8.5.1 ③): флот 2026-10-17 — восемь
+# проектов из девяти, и ни один хук не отбивает зелёный прямой пуш в `main`.
+# «Хук есть по факту» было бы зелёным у всех — `green-without-the-thing`.
+QUEUE_GUARDS = {"merge-guard", "server", "manual-deploy"}
+
+
+def parallel_session_gaps(status: str, root: Path = ROOT) -> tuple[list[str], list[str]]:
+    """(молчание, неверное утверждение) про очередь на интегрирующую ветку (§5.1a).
+
+    Половины разведены, потому что у них разная лестница. Молчание — «ещё не
+    дошли»: предупреждение на verify, отказ на handoff. Опечатка в значении или
+    `merge-guard` без скрипта — неверное утверждение о защите, и оно опаснее
+    молчания (§4.6): отказ уже на verify.
+
+    Диффом НЕ ограждается, в отличие от соседей: число сессий — свойство
+    репозитория, а не поставки. `server` и `manual-deploy` живут вне репозитория
+    (CQG §8.5.3) и проверки не рождают — предупреждение, срабатывающее всегда,
+    снимут вместе с правилом (§4.3b).
+    """
+    guards, declared = declared_surfaces(status, "parallel_sessions")
+    if not declared:
+        return ["нет строки `parallel_sessions:` в STATUS (§5.1a) — назови, чем "
+                "принуждается очередь на интегрирующую ветку (`merge-guard`, "
+                "`server`, `manual-deploy`), либо `n/a reason=…`. Молчание "
+                "читается как «сессия одна», а от двух проверка, интеграция и "
+                "выкат идут вперемешку"], []
+    wrong: list[str] = []
+    unknown = sorted(guards - QUEUE_GUARDS)
+    if unknown:
+        wrong.append(f"`parallel_sessions`: неизвестные значения {', '.join(unknown)} — "
+                     f"допустимы {', '.join(sorted(QUEUE_GUARDS))} (§5.1a). Опечатка "
+                     "здесь читается как объявленная защита")
+    if "merge-guard" in guards and not (root / "scripts" / "merge_guard.sh").is_file():
+        wrong.append("`parallel_sessions: merge-guard` объявлен, а `scripts/merge_guard.sh` "
+                     "нет — объявленная очередь без гейта это снятая проверка с видом "
+                     "усиления (§4.6). Разверни гейт мержа (CQG §8.5.2) или убери значение")
+    return [], wrong
 
 
 # --- §3.4a: красная черта, а не переключатель --------------------------------

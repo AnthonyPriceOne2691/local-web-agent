@@ -26,11 +26,15 @@ extend = "backend/pyproject.toml"
 # молча разошёлся бы с источником и следующее обновление начиналось бы
 # с раскопок. Свои скрипты проекта (`scripts/spike`, прочее) под линтером
 # остаются — исключены ровно канонные пути.
+# ⚠ Шаблоны — glob, а не префикс: `scripts/delivery_` без звёздочки не совпадал
+# ни с одним файлом, и `ruff check backend cli scripts` из CLAUDE.md был красным
+# на main (33 находки в канонных delivery_*/okf_*), хотя pre-commit молчал — у
+# хука своя маска `files:`. Найдено при накате cqg@2.55 (2026-10-17).
 extend-exclude = [
     "scripts/spike",
     "scripts/lint",
-    "scripts/delivery_",
-    "scripts/okf_",
+    "scripts/delivery_*",
+    "scripts/okf_*",
     "scripts/merge_guard.sh",
 ]
 
